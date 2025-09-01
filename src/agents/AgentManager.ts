@@ -144,12 +144,27 @@ export class AgentManager {
             terminal.sendText(`cd "${workspaceFolder.uri.fsPath}"`);
         }
 
-        // Create agent-specific prompt
-        terminal.sendText(`export PS1="[${agent.name}] $ "`);
-        
-        // Show agent is ready
-        terminal.sendText(`echo "🤖 ${agent.name} (${agent.type}) ready for tasks"`);
+        // Show agent info
+        terminal.sendText(`echo "🤖 Initializing ${agent.name} (${agent.type})"`);
         terminal.sendText(`echo "Agent ID: ${agent.id}"`);
+        terminal.sendText(`echo "Starting Claude with agent specialization..."`);
+        terminal.sendText(`echo ""`);
+        
+        // Start Claude immediately with the agent's system prompt
+        const claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
+        terminal.sendText(claudePath);
+        
+        // Send the system prompt after Claude starts
+        setTimeout(() => {
+            if (agent.template && agent.template.systemPrompt) {
+                console.log(`[NofX] Sending system prompt to ${agent.name}`);
+                terminal.sendText(agent.template.systemPrompt);
+                terminal.sendText(''); // Empty line
+                terminal.sendText(`I am ${agent.name}, ready to help with ${agent.template.specialization || agent.type} tasks. What would you like me to work on?`);
+            } else {
+                terminal.sendText(`I am ${agent.name}, a ${agent.type} specialist. Ready for tasks.`);
+            }
+        }, 3000); // Give Claude time to initialize
     }
 
     async executeTask(agentId: string, task: any) {
@@ -194,89 +209,19 @@ export class AgentManager {
         // Build a simple, clean prompt
         const taskPrompt = `${task.title}: ${task.description}`;
         
-        console.log(`[NofX AgentManager.executeTask] Preparing Claude command`);
+        console.log(`[NofX AgentManager.executeTask] Sending task to agent`);
         
-        const claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
-        
-        // Clear terminal and show task info
-        terminal.sendText('clear');
-        terminal.sendText(`echo "=== NofX Task Assignment ==="`);
-        terminal.sendText(`echo "Agent: ${agent.name}"`);
+        // Show task assignment
+        terminal.sendText(''); // Empty line for clarity
+        terminal.sendText(`echo "=== New Task Assignment ==="`);
         terminal.sendText(`echo "Task: ${task.title}"`);
-        terminal.sendText(`echo "Starting Claude Code..."`);
-        terminal.sendText(`echo ""`);
+        terminal.sendText(`echo "==========================="`);
+        terminal.sendText('');
         
-        // Get command style from config
-        const commandStyle = vscode.workspace.getConfiguration('nofx').get<string>('claudeCommandStyle') || 'simple';
-        
-        console.log(`[NofX AgentManager.executeTask] Using ${commandStyle} command style`);
-        
-        if (commandStyle === 'simple') {
-            // Simplest possible approach - just send the prompt as a single line
-            const simplePrompt = taskPrompt.replace(/'/g, "'\\'''"); // Escape single quotes
-            terminal.sendText(`echo '${simplePrompt}' | ${claudePath}`);
-            console.log(`[NofX AgentManager.executeTask] Sent simple pipe command`);
-            
-        } else if (commandStyle === 'interactive') {
-            // Start Claude and then send prompt (for interactive mode)
-            terminal.sendText(claudePath);
-            // Wait for Claude to start
-            setTimeout(() => {
-                // First send the system prompt if available
-                if (agent.template && agent.template.systemPrompt) {
-                    console.log(`[NofX AgentManager.executeTask] Sending system prompt for ${agent.name}`);
-                    terminal.sendText(agent.template.systemPrompt);
-                    terminal.sendText(''); // Empty line for clarity
-                    
-                    // Then send the task after a short delay
-                    setTimeout(() => {
-                        terminal.sendText(`Now, please complete this task: ${taskPrompt}`);
-                        console.log(`[NofX AgentManager.executeTask] Sent task to interactive Claude`);
-                    }, 1000);
-                } else {
-                    terminal.sendText(taskPrompt);
-                    console.log(`[NofX AgentManager.executeTask] Sent prompt to interactive Claude`);
-                }
-            }, 3000); // Give Claude more time to fully initialize
-            
-        } else if (commandStyle === 'heredoc') {
-            // Use heredoc for multi-line
-            terminal.sendText(`${claudePath} << 'EOF'`);
-            terminal.sendText(taskPrompt);
-            if (agent.template && agent.template.systemPrompt) {
-                terminal.sendText('');
-                terminal.sendText(agent.template.systemPrompt);
-            }
-            terminal.sendText('EOF');
-            console.log(`[NofX AgentManager.executeTask] Sent heredoc command`);
-            
-        } else if (commandStyle === 'file') {
-            // Write to file first
-            const tempFile = `/tmp/nofx-${Date.now()}.txt`;
-            terminal.sendText(`echo '${taskPrompt.replace(/'/g, "'\\''")}' > ${tempFile}`);
-            setTimeout(() => {
-                terminal.sendText(`${claudePath} < ${tempFile}`);
-                setTimeout(() => terminal.sendText(`rm ${tempFile}`), 3000);
-            }, 500);
-            console.log(`[NofX AgentManager.executeTask] Sent file-based command`);
-            
-        } else {
-            // Fallback to basic echo pipe
-            terminal.sendText(`echo "${taskPrompt.replace(/"/g, '\\"')}" | ${claudePath}`);
-        }
-        
-        console.log(`[NofX AgentManager.executeTask] Command sent to terminal`);
-        
-        // Alternative methods to try if the above doesn't work:
-        // Method 2: Use printf (handles newlines better)
-        // const command = `printf "${escapedPrompt}" | ${claudePath}`;
-        
-        // Method 3: Use heredoc (most complex but handles multi-line well)
-        // terminal.sendText(`${claudePath} << 'EOF'`);
-        // terminal.sendText(fullPrompt);
-        // terminal.sendText('EOF');
-        
-        console.log(`[NofX AgentManager.executeTask] Claude command sent`);
+        // Since Claude is already running in the agent's terminal with system prompt,
+        // we can just send the task directly
+        terminal.sendText(`Please complete this task: ${taskPrompt}`);
+        console.log(`[NofX AgentManager.executeTask] Sent task directly to already-running Claude instance`);
         
         // Show notification
         vscode.window.showInformationMessage(
