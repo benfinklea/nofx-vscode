@@ -212,6 +212,88 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         })
     );
+    
+    // Agent Template Commands
+    let templateManager: any;
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (workspaceFolder) {
+        const { AgentTemplateManager } = await import('./agents/AgentTemplateManager');
+        templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
+    }
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.browseAgentTemplates', async () => {
+            if (!templateManager) {
+                vscode.window.showErrorMessage('No workspace open. Cannot browse templates.');
+                return;
+            }
+            const { AgentTemplateBrowser } = await import('./views/AgentTemplateBrowser');
+            const browser = new AgentTemplateBrowser(templateManager, agentManager);
+            await browser.showTemplateBrowser();
+        })
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.createAgentTemplate', async () => {
+            if (!templateManager) {
+                vscode.window.showErrorMessage('No workspace open. Cannot create templates.');
+                return;
+            }
+            const { AgentTemplateEditor } = await import('./panels/AgentTemplateEditor');
+            AgentTemplateEditor.createOrShow(context, templateManager);
+        })
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.editAgentTemplate', async () => {
+            if (!templateManager) {
+                vscode.window.showErrorMessage('No workspace open. Cannot edit templates.');
+                return;
+            }
+            
+            const templates = templateManager.getTemplates();
+            const items = templates.map((t: any) => ({
+                label: `${t.icon} ${t.name}`,
+                description: t.description,
+                id: t.id
+            }));
+            
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select a template to edit'
+            });
+            
+            if (selected) {
+                const { AgentTemplateEditor } = await import('./panels/AgentTemplateEditor');
+                AgentTemplateEditor.createOrShow(context, templateManager, (selected as any).id);
+            }
+        })
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.importAgentTemplate', async () => {
+            if (!templateManager) {
+                vscode.window.showErrorMessage('No workspace open. Cannot import templates.');
+                return;
+            }
+            
+            const fileUri = await vscode.window.showOpenDialog({
+                canSelectFiles: true,
+                canSelectFolders: false,
+                canSelectMany: false,
+                filters: {
+                    'JSON files': ['json']
+                },
+                title: 'Select Agent Template to Import'
+            });
+            
+            if (fileUri && fileUri[0]) {
+                const success = await templateManager.importTemplate(fileUri[0]);
+                if (success) {
+                    vscode.window.showInformationMessage('Template imported successfully');
+                }
+            }
+        })
+    );
 
     // Auto-start conductor if configured
     const config = vscode.workspace.getConfiguration('nofx');
