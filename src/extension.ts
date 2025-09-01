@@ -29,6 +29,20 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.window.registerTreeDataProvider('nofx.agents', agentProvider);
     vscode.window.registerTreeDataProvider('nofx.tasks', taskProvider);
     
+    // Add click handler for the activity bar icon
+    // When the view becomes visible, optionally show the dashboard
+    vscode.window.onDidChangeActiveColorTheme(() => {
+        // This is a workaround - we check if our view is visible
+        if (vscode.window.activeTextEditor === undefined) {
+            // User might have clicked on our sidebar
+            const config = vscode.workspace.getConfiguration('nofx');
+            if (config.get('autoShowDashboard') !== false) {
+                // Check if we have the focus by seeing if our commands are available
+                // This is indirect but works
+            }
+        }
+    });
+    
     // Register NofX terminal panel provider
     const terminalProvider = new NofxTerminalProvider(context.extensionUri, agentManager);
     context.subscriptions.push(

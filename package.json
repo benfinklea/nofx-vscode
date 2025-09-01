@@ -102,6 +102,30 @@
         "icon": "$(history)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "nofx.showOrchestrator",
+          "when": "view == nofx.agents",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nofx.startConductor",
+          "when": "view == nofx.agents",
+          "group": "navigation@2"
+        },
+        {
+          "command": "nofx.addAgent",
+          "when": "view == nofx.agents",
+          "group": "navigation@3"
+        },
+        {
+          "command": "nofx.createTask",
+          "when": "view == nofx.tasks",
+          "group": "navigation@1"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -144,7 +168,13 @@
     "viewsWelcome": [
       {
         "view": "nofx.agents",
-        "contents": "No agents running.\n[Start Conductor](command:nofx.startConductor)\n[Add Agent](command:nofx.addAgent)"
+        "contents": "Welcome to NofX Conductor!\n\n[$(dashboard) Open Dashboard](command:nofx.showOrchestrator)\n[$(play) Start Conductor](command:nofx.startConductor)\n[$(add) Add Agent](command:nofx.addAgent)\n[$(history) Restore Saved Agents](command:nofx.restoreAgents)",
+        "when": "!nofx.hasAgents"
+      },
+      {
+        "view": "nofx.agents",
+        "contents": "[$(dashboard) Open Dashboard](command:nofx.showOrchestrator)",
+        "when": "nofx.hasAgents"
       },
       {
         "view": "nofx.tasks",
