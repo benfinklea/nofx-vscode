@@ -51,13 +51,12 @@ export class SuperSmartConductor {
         this.terminal.sendText('echo "Senior Engineering VP with Deep Intelligence"');
         this.terminal.sendText('echo "==========================================="');
         
-        // Start Claude with VP-level prompt
-        this.terminal.sendText(this.claudePath);
+        // Start Claude with VP-level prompt using --append-system-prompt
+        const systemPrompt = this.getVPSystemPrompt().replace(/'/g, "'\\''"); // Escape single quotes for shell
+        this.terminal.sendText(`${this.claudePath} --append-system-prompt '${systemPrompt}'`);
         
         setTimeout(() => {
             if (this.terminal) {
-                this.terminal.sendText(this.getVPSystemPrompt());
-                this.terminal.sendText('');
                 this.terminal.sendText('Greetings! I am your VP of Engineering. I will:');
                 this.terminal.sendText('- Architect your entire system before we write code');
                 this.terminal.sendText('- Ensure quality and prevent technical debt');

@@ -34,17 +34,16 @@ export class ConductorChat {
         this.terminal.sendText('echo "================================================"');
         this.terminal.sendText('echo ""');
         
-        // Start Claude with the conductor system prompt
+        // Start Claude with the conductor system prompt using --append-system-prompt
         const conductorPrompt = this.getConductorSystemPrompt();
+        const escapedPrompt = conductorPrompt.replace(/'/g, "'\\''"); // Escape single quotes for shell
         
-        // Start Claude in conductor mode
-        this.terminal.sendText(this.claudePath);
+        // Start Claude in conductor mode with system prompt
+        this.terminal.sendText(`${this.claudePath} --append-system-prompt '${escapedPrompt}'`);
         
-        // Send the conductor system prompt after Claude starts
+        // Send the initial greeting after Claude starts
         setTimeout(() => {
             if (this.terminal) {
-                this.terminal.sendText(conductorPrompt);
-                this.terminal.sendText('');
                 this.terminal.sendText('Hello! I am the NofX Conductor. I manage a team of specialized AI agents. Tell me what you want to build or fix, and I will orchestrate the agents to complete your request. What would you like to work on today?');
             }
         }, 2000);

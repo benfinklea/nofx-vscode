@@ -58,14 +58,13 @@ export class IntelligentConductor {
         this.terminal.sendText('echo "========================================"');
         this.terminal.sendText('echo ""');
         
-        // Start Claude with the enhanced conductor prompt
-        this.terminal.sendText(this.claudePath);
+        // Start Claude with the enhanced conductor prompt using --append-system-prompt
+        const systemPrompt = this.getEnhancedSystemPrompt().replace(/'/g, "'\\''"); // Escape single quotes for shell
+        this.terminal.sendText(`${this.claudePath} --append-system-prompt '${systemPrompt}'`);
         
-        // Send the enhanced system prompt
+        // Send the initial greeting
         setTimeout(() => {
             if (this.terminal) {
-                this.terminal.sendText(this.getEnhancedSystemPrompt());
-                this.terminal.sendText('');
                 this.terminal.sendText('Hello! I am the NofX Intelligent Conductor. I can:');
                 this.terminal.sendText('- See all active agents and their status');
                 this.terminal.sendText('- Create and assign tasks automatically');
