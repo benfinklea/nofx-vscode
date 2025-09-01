@@ -5,3 +5,6 @@ node_modules
 *.vsix
 .DS_Store
 *.log
+
+# NofX persistence data
+.nofx/

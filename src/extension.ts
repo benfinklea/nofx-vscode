@@ -106,6 +106,84 @@ export function activate(context: vscode.ExtensionContext) {
             await openConductorChat();
         })
     );
+    
+    // Persistence commands
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.exportSessions', async () => {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                vscode.window.showErrorMessage('No workspace open. Cannot export sessions.');
+                return;
+            }
+            
+            const { AgentPersistence } = await import('./persistence/AgentPersistence');
+            const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
+            const exportPath = await persistence.exportSessionsAsMarkdown();
+            
+            vscode.window.showInformationMessage(
+                `Sessions exported to: ${exportPath}`,
+                'Open File'
+            ).then(selection => {
+                if (selection === 'Open File') {
+                    vscode.workspace.openTextDocument(exportPath).then(doc => {
+                        vscode.window.showTextDocument(doc);
+                    });
+                }
+            });
+        })
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.archiveSessions', async () => {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                vscode.window.showErrorMessage('No workspace open. Cannot archive sessions.');
+                return;
+            }
+            
+            const days = await vscode.window.showInputBox({
+                prompt: 'Archive sessions older than how many days?',
+                value: '7',
+                validateInput: (value) => {
+                    const num = parseInt(value);
+                    if (isNaN(num) || num < 1) {
+                        return 'Please enter a positive number';
+                    }
+                    return null;
+                }
+            });
+            
+            if (days) {
+                const { AgentPersistence } = await import('./persistence/AgentPersistence');
+                const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
+                await persistence.archiveOldSessions(parseInt(days));
+                vscode.window.showInformationMessage(`Sessions older than ${days} days archived`);
+            }
+        })
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.clearPersistence', async () => {
+            const confirm = await vscode.window.showWarningMessage(
+                'This will remove all saved agent states and sessions. Are you sure?',
+                'Yes, Clear All',
+                'Cancel'
+            );
+            
+            if (confirm === 'Yes, Clear All') {
+                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                if (!workspaceFolder) {
+                    vscode.window.showErrorMessage('No workspace open.');
+                    return;
+                }
+                
+                const { AgentPersistence } = await import('./persistence/AgentPersistence');
+                const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
+                await persistence.cleanup();
+                vscode.window.showInformationMessage('All agent persistence data cleared');
+            }
+        })
+    );
 
     // Auto-start conductor if configured
     const config = vscode.workspace.getConfiguration('nofx');

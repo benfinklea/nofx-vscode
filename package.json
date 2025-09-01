@@ -80,6 +80,21 @@
         "command": "nofx.openConductorChat",
         "title": "NofX: Open Conductor Chat",
         "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "nofx.exportSessions",
+        "title": "NofX: Export Agent Sessions",
+        "icon": "$(export)"
+      },
+      {
+        "command": "nofx.archiveSessions",
+        "title": "NofX: Archive Old Sessions",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "nofx.clearPersistence",
+        "title": "NofX: Clear All Persistence Data",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
