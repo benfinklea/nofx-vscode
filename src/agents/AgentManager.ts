@@ -40,7 +40,7 @@ export class AgentManager {
         });
     }
 
-    async initialize() {
+    async initialize(showSetupDialog: boolean = false) {
         // Check if Claude Code is available
         const claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
         
@@ -49,35 +49,40 @@ export class AgentManager {
         // Try to restore agents from persistence
         await this.restoreAgentsFromPersistence();
         
-        // Show instructions for Claude setup
-        const selection = await vscode.window.showInformationMessage(
-            '🎸 NofX Conductor ready. Using Claude command: ' + claudePath,
-            'Test Claude',
-            'Change Path',
-            'Restore Session'
-        );
-        
-        if (selection === 'Test Claude') {
-            const terminal = vscode.window.createTerminal('Claude Test');
-            terminal.show();
-            terminal.sendText(`${claudePath} --version || echo "Claude not found. Please check installation."`);            
-        } else if (selection === 'Change Path') {
-            const newPath = await vscode.window.showInputBox({
-                prompt: 'Enter Claude command or path',
-                value: claudePath,
-                placeHolder: 'e.g., claude, /usr/local/bin/claude'
-            });
-            if (newPath) {
-                await vscode.workspace.getConfiguration('nofx').update('claudePath', newPath, vscode.ConfigurationTarget.Global);
-                vscode.window.showInformationMessage(`Claude path updated to: ${newPath}`);
+        // Only show setup dialog if explicitly requested (e.g., when starting conductor)
+        if (showSetupDialog) {
+            const selection = await vscode.window.showInformationMessage(
+                '🎸 NofX Conductor ready. Using Claude command: ' + claudePath,
+                'Test Claude',
+                'Change Path',
+                'Restore Session'
+            );
+            
+            if (selection === 'Test Claude') {
+                const terminal = vscode.window.createTerminal('Claude Test');
+                terminal.show();
+                terminal.sendText(`${claudePath} --version || echo "Claude not found. Please check installation."`);            
+            } else if (selection === 'Change Path') {
+                const newPath = await vscode.window.showInputBox({
+                    prompt: 'Enter Claude command or path',
+                    value: claudePath,
+                    placeHolder: 'e.g., claude, /usr/local/bin/claude'
+                });
+                if (newPath) {
+                    await vscode.workspace.getConfiguration('nofx').update('claudePath', newPath, vscode.ConfigurationTarget.Global);
+                    vscode.window.showInformationMessage(`Claude path updated to: ${newPath}`);
+                }
+            } else if (selection === 'Restore Session') {
+                await this.restoreAgentsFromPersistence(true);
             }
-        } else if (selection === 'Restore Session') {
-            await this.restoreAgentsFromPersistence(true);
         }
     }
     
     private async restoreAgentsFromPersistence(userRequested: boolean = false) {
+        console.log('[NofX] Checking for saved agents to restore...');
+        
         if (!this.persistence) {
+            console.log('[NofX] No persistence available (no workspace open)');
             if (userRequested) {
                 vscode.window.showWarningMessage('No workspace open. Cannot restore agents.');
             }
@@ -85,6 +90,8 @@ export class AgentManager {
         }
         
         const savedAgents = await this.persistence.loadAgentState();
+        console.log(`[NofX] Found ${savedAgents.length} saved agent(s)`);
+        
         if (savedAgents.length === 0) {
             if (userRequested) {
                 vscode.window.showInformationMessage('No saved agents found.');
@@ -93,7 +100,7 @@ export class AgentManager {
         }
         
         // Ask user if they want to restore
-        const restore = userRequested || await vscode.window.showInformationMessage(
+        const restore = userRequested ? 'Yes, Restore' : await vscode.window.showInformationMessage(
             `Found ${savedAgents.length} saved agent(s). Restore them?`,
             'Yes, Restore',
             'No, Start Fresh'

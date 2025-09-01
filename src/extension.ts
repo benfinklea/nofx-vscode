@@ -12,12 +12,15 @@ let agentManager: AgentManager;
 let taskQueue: TaskQueue;
 let conductorChat: ConductorChat | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     console.log('🎸 n of x Multi-Agent Orchestrator is now active!');
 
     // Initialize core components
     agentManager = new AgentManager(context);
     taskQueue = new TaskQueue(agentManager);
+    
+    // Initialize agent manager (this will check for saved agents)
+    await agentManager.initialize();
 
     // Register tree data providers for sidebar views
     const agentProvider = new AgentTreeProvider(agentManager);
@@ -214,8 +217,8 @@ async function openConductorChat() {
 }
 
 async function quickStartWithChat(context: vscode.ExtensionContext) {
-    // Initialize agent manager if needed
-    await agentManager.initialize();
+    // Initialize agent manager if needed (don't show dialog for quick start)
+    await agentManager.initialize(false);
     
     // Spawn 3 general purpose agents quickly
     vscode.window.showInformationMessage('🚀 Starting NofX with 3 agents and conductor chat...');
@@ -281,7 +284,7 @@ async function startConductor(context: vscode.ExtensionContext) {
     if (!selected) return;
     
     vscode.window.showInformationMessage('🎼 Starting NofX Conductor...');
-    await agentManager.initialize();
+    await agentManager.initialize(true); // Show setup dialog when starting conductor
     
     if (selected.value === 'quick-start') {
         // Start 3 general purpose agents

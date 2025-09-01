@@ -26,9 +26,11 @@ export class AgentPersistence {
     private ensureDirectories() {
         if (!fs.existsSync(this.persistenceDir)) {
             fs.mkdirSync(this.persistenceDir, { recursive: true });
+            console.log(`[NofX Persistence] Created persistence directory: ${this.persistenceDir}`);
         }
         if (!fs.existsSync(this.agentSessionsDir)) {
             fs.mkdirSync(this.agentSessionsDir, { recursive: true });
+            console.log(`[NofX Persistence] Created sessions directory: ${this.agentSessionsDir}`);
         }
     }
     
@@ -60,14 +62,17 @@ export class AgentPersistence {
      * Load saved agent state
      */
     async loadAgentState(): Promise<any[]> {
+        console.log(`[NofX Persistence] Looking for state file: ${this.stateFile}`);
+        
         if (!fs.existsSync(this.stateFile)) {
+            console.log('[NofX Persistence] No state file found');
             return [];
         }
         
         try {
             const content = fs.readFileSync(this.stateFile, 'utf-8');
             const state = JSON.parse(content);
-            console.log(`[NofX Persistence] Loaded state for ${state.agents.length} agents`);
+            console.log(`[NofX Persistence] Loaded state for ${state.agents.length} agents from ${this.stateFile}`);
             return state.agents;
         } catch (error) {
             console.error('[NofX Persistence] Error loading state:', error);
