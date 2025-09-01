@@ -124,15 +124,23 @@ export class EnhancedConductorPanel {
 
     private showAgentPrompt(agentId: string) {
         const agent = this.agentManager.getAgent(agentId);
-        if (!agent || !agent.template) return;
+        if (!agent) {
+            vscode.window.showWarningMessage('Agent not found');
+            return;
+        }
+        
+        if (!agent.template || !agent.template.systemPrompt) {
+            vscode.window.showInformationMessage('This agent has no custom prompt configured');
+            return;
+        }
 
         const prompt = agent.template.systemPrompt;
-        const doc = vscode.workspace.openTextDocument({
+        vscode.workspace.openTextDocument({
             content: prompt,
             language: 'markdown'
+        }).then(doc => {
+            vscode.window.showTextDocument(doc);
         });
-        
-        doc.then(d => vscode.window.showTextDocument(d));
     }
 
     private toggleTheme(theme: string) {

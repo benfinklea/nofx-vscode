@@ -37,6 +37,11 @@
         "icon": "$(play)"
       },
       {
+        "command": "nofx.quickStartChat",
+        "title": "NofX: Quick Start with Conductor Chat",
+        "icon": "$(rocket)"
+      },
+      {
         "command": "nofx.addAgent",
         "title": "NofX: Add Agent",
         "icon": "$(add)"
@@ -70,6 +75,11 @@
         "command": "nofx.testClaude",
         "title": "NofX: Test Claude Command",
         "icon": "$(beaker)"
+      },
+      {
+        "command": "nofx.openConductorChat",
+        "title": "NofX: Open Conductor Chat",
+        "icon": "$(comment-discussion)"
       }
     ],
     "viewsContainers": {

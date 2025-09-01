@@ -5,10 +5,12 @@ import { TaskQueue } from './tasks/TaskQueue';
 import { AgentTreeProvider } from './views/AgentTreeProvider';
 import { TaskTreeProvider } from './views/TaskTreeProvider';
 import { NofxTerminalProvider } from './views/NofxTerminalProvider';
+import { ConductorChat } from './conductor/ConductorChat';
 
 let conductorPanel: EnhancedConductorPanel | undefined;
 let agentManager: AgentManager;
 let taskQueue: TaskQueue;
+let conductorChat: ConductorChat | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('🎸 n of x Multi-Agent Orchestrator is now active!');
@@ -48,6 +50,12 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('nofx.startConductor', () => {
             startConductor(context);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.quickStartChat', async () => {
+            await quickStartWithChat(context);
         })
     );
 
@@ -93,6 +101,12 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.openConductorChat', async () => {
+            await openConductorChat();
+        })
+    );
+
     // Auto-start conductor if configured
     const config = vscode.workspace.getConfiguration('nofx');
     if (config.get('autoStart')) {
@@ -109,6 +123,42 @@ export function activate(context: vscode.ExtensionContext) {
     statusBarItem.command = 'nofx.showOrchestrator';
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
+}
+
+async function openConductorChat() {
+    // Make sure we have a conductor chat instance
+    if (!conductorChat) {
+        conductorChat = new ConductorChat(agentManager, taskQueue);
+    }
+    
+    // Start or show the conductor chat
+    await conductorChat.start();
+}
+
+async function quickStartWithChat(context: vscode.ExtensionContext) {
+    // Initialize agent manager if needed
+    await agentManager.initialize();
+    
+    // Spawn 3 general purpose agents quickly
+    vscode.window.showInformationMessage('🚀 Starting NofX with 3 agents and conductor chat...');
+    
+    for (let i = 1; i <= 3; i++) {
+        await agentManager.spawnAgent({
+            type: 'general',
+            name: `Agent-${i}`,
+            template: {
+                name: `General Agent ${i}`,
+                type: 'general',
+                specialization: 'Full-Stack Development',
+                systemPrompt: 'You are a versatile developer who can handle any task.',
+                capabilities: ['Frontend', 'Backend', 'Testing', 'DevOps'],
+                icon: '🤖'
+            }
+        });
+    }
+    
+    // Open conductor chat immediately
+    await openConductorChat();
 }
 
 async function startConductor(context: vscode.ExtensionContext) {
@@ -209,12 +259,22 @@ async function startConductor(context: vscode.ExtensionContext) {
         }
     }
     
-    vscode.window.showInformationMessage(
-        `✅ NofX Conductor started with ${agentManager.getActiveAgents().length} agents!`
+    const agentCount = agentManager.getActiveAgents().length;
+    
+    // Ask user how they want to interact
+    const interaction = await vscode.window.showInformationMessage(
+        `✅ NofX Conductor started with ${agentCount} agents!`,
+        'Open Conductor Chat',
+        'Show Dashboard'
     );
     
-    // Auto-open the orchestrator panel
-    showOrchestrator(context);
+    if (interaction === 'Open Conductor Chat') {
+        // Open the conductor chat for natural language interaction
+        await openConductorChat();
+    } else if (interaction === 'Show Dashboard') {
+        // Show the visual dashboard
+        showOrchestrator(context);
+    }
 }
 
 async function addAgent() {

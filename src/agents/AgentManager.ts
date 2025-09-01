@@ -222,9 +222,22 @@ export class AgentManager {
             terminal.sendText(claudePath);
             // Wait for Claude to start
             setTimeout(() => {
-                terminal.sendText(taskPrompt);
-                console.log(`[NofX AgentManager.executeTask] Sent prompt to interactive Claude`);
-            }, 2000);
+                // First send the system prompt if available
+                if (agent.template && agent.template.systemPrompt) {
+                    console.log(`[NofX AgentManager.executeTask] Sending system prompt for ${agent.name}`);
+                    terminal.sendText(agent.template.systemPrompt);
+                    terminal.sendText(''); // Empty line for clarity
+                    
+                    // Then send the task after a short delay
+                    setTimeout(() => {
+                        terminal.sendText(`Now, please complete this task: ${taskPrompt}`);
+                        console.log(`[NofX AgentManager.executeTask] Sent task to interactive Claude`);
+                    }, 1000);
+                } else {
+                    terminal.sendText(taskPrompt);
+                    console.log(`[NofX AgentManager.executeTask] Sent prompt to interactive Claude`);
+                }
+            }, 3000); // Give Claude more time to fully initialize
             
         } else if (commandStyle === 'heredoc') {
             // Use heredoc for multi-line
@@ -284,9 +297,8 @@ export class AgentManager {
             `🤖 ${agent.name} is working on: ${task.title}`
         );
 
-        // Monitor terminal for Claude completion
-        // We'll check periodically if the terminal is still active
-        this.monitorTaskExecution(agentId, task);
+        // Don't monitor - let the conductor or user decide when tasks are done
+        // this.monitorTaskExecution(agentId, task);
     }
 
     private createDetailedTaskPrompt(agent: Agent, task: any): string {
