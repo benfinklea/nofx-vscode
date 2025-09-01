@@ -6,14 +6,19 @@ import { AgentTreeProvider } from './views/AgentTreeProvider';
 import { TaskTreeProvider } from './views/TaskTreeProvider';
 import { NofxTerminalProvider } from './views/NofxTerminalProvider';
 import { ConductorChat } from './conductor/ConductorChat';
+import { ConductorChatWebview } from './conductor/ConductorChatWebview';
 
 let conductorPanel: EnhancedConductorPanel | undefined;
 let agentManager: AgentManager;
 let taskQueue: TaskQueue;
 let conductorChat: ConductorChat | undefined;
+let conductorWebview: ConductorChatWebview | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('🎸 n of x Multi-Agent Orchestrator is now active!');
+
+    // Store context globally for access in helper functions
+    (global as any).extensionContext = context;
 
     // Initialize core components
     agentManager = new AgentManager(context);
@@ -120,7 +125,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('nofx.openConductorChat', async () => {
-            await openConductorChat();
+            await openConductorChatWebview();
         })
     );
     
@@ -313,6 +318,18 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(statusBarItem);
 }
 
+async function openConductorChatWebview() {
+    // Make sure we have a conductor webview instance
+    if (!conductorWebview) {
+        const context = (global as any).extensionContext;
+        conductorWebview = new ConductorChatWebview(context, agentManager, taskQueue);
+    }
+    
+    // Show the conductor webview chat
+    await conductorWebview.show();
+}
+
+// Legacy terminal-based conductor (kept for backwards compatibility)
 async function openConductorChat() {
     // Make sure we have a conductor chat instance
     if (!conductorChat) {
@@ -345,8 +362,8 @@ async function quickStartWithChat(context: vscode.ExtensionContext) {
         });
     }
     
-    // Open conductor chat immediately
-    await openConductorChat();
+    // Open conductor chat webview immediately
+    await openConductorChatWebview();
 }
 
 async function startConductor(context: vscode.ExtensionContext) {
@@ -458,7 +475,7 @@ async function startConductor(context: vscode.ExtensionContext) {
     
     if (interaction === 'Open Conductor Chat') {
         // Open the conductor chat for natural language interaction
-        await openConductorChat();
+        await openConductorChatWebview();
     } else if (interaction === 'Show Dashboard') {
         // Show the visual dashboard
         showOrchestrator(context);

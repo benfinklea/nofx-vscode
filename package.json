@@ -125,24 +125,26 @@
     "menus": {
       "view/title": [
         {
-          "command": "nofx.showOrchestrator",
-          "when": "view == nofx.agents",
-          "group": "navigation@1"
-        },
-        {
-          "command": "nofx.startConductor",
-          "when": "view == nofx.agents",
-          "group": "navigation@2"
-        },
-        {
           "command": "nofx.addAgent",
           "when": "view == nofx.agents",
-          "group": "navigation@3"
+          "group": "navigation"
         },
         {
           "command": "nofx.createTask",
           "when": "view == nofx.tasks",
-          "group": "navigation@1"
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "nofx.deleteAgent",
+          "when": "view == nofx.agents && viewItem == agent",
+          "group": "inline"
+        },
+        {
+          "command": "nofx.editAgent",
+          "when": "view == nofx.agents && viewItem == agent",
+          "group": "inline"
         }
       ]
     },
@@ -233,7 +235,12 @@
         "nofx.claudeCommandStyle": {
           "type": "string",
           "default": "simple",
-          "enum": ["simple", "interactive", "heredoc", "file"],
+          "enum": [
+            "simple",
+            "interactive",
+            "heredoc",
+            "file"
+          ],
           "description": "How to pass prompts to Claude CLI (simple: echo | claude, interactive: claude then prompt, heredoc: claude << EOF, file: via temp file)"
         }
       }
@@ -245,33 +252,7 @@
         "mac": "cmd+shift+o",
         "when": "editorTextFocus"
       }
-    ],
-    "menus": {
-      "view/title": [
-        {
-          "command": "nofx.addAgent",
-          "when": "view == nofx.agents",
-          "group": "navigation"
-        },
-        {
-          "command": "nofx.createTask",
-          "when": "view == nofx.tasks",
-          "group": "navigation"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "nofx.deleteAgent",
-          "when": "view == nofx.agents && viewItem == agent",
-          "group": "inline"
-        },
-        {
-          "command": "nofx.editAgent",
-          "when": "view == nofx.agents && viewItem == agent",
-          "group": "inline"
-        }
-      ]
-    }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -282,10 +263,11 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/node": "20.x",
+    "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
+    "@vscode/vsce": "^3.6.0",
     "eslint": "^8.56.0",
     "typescript": "^5.3.3"
   },
