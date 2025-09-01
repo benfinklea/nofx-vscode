@@ -100,6 +100,26 @@
         "command": "nofx.restoreAgents",
         "title": "NofX: Restore Saved Agents",
         "icon": "$(history)"
+      },
+      {
+        "command": "nofx.createAgentTemplate",
+        "title": "NofX: Create Agent Template",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "nofx.editAgentTemplate",
+        "title": "NofX: Edit Agent Template",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "nofx.importAgentTemplate",
+        "title": "NofX: Import Agent Template",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "nofx.browseAgentTemplates",
+        "title": "NofX: Browse Agent Templates",
+        "icon": "$(library)"
       }
     ],
     "menus": {
