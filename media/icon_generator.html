@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Icon Generator</title>
+</head>
+<body>
+    <canvas id="canvas" width="128" height="128"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set background
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(0, 0, 128, 128);
+        
+        // Draw guitar emoji
+        ctx.font = '80px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🎸', 64, 55);
+        
+        // Draw text
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillStyle = '#333';
+        ctx.fillText('n of x', 64, 105);
+        
+        // Convert to PNG (copy data URL from console)
+        console.log(canvas.toDataURL('image/png'));
+    </script>
+</body>
+</html>
