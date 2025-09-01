@@ -166,6 +166,17 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     
     context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.restoreAgents', async () => {
+            const restored = await agentManager.restoreAgents();
+            if (restored > 0) {
+                vscode.window.showInformationMessage(`✅ Restored ${restored} agent(s)`);
+            } else {
+                vscode.window.showInformationMessage('No saved agents to restore');
+            }
+        })
+    );
+    
+    context.subscriptions.push(
         vscode.commands.registerCommand('nofx.clearPersistence', async () => {
             const confirm = await vscode.window.showWarningMessage(
                 'This will remove all saved agent states and sessions. Are you sure?',

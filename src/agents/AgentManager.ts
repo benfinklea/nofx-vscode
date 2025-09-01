@@ -16,8 +16,13 @@ export class AgentManager {
         
         // Initialize persistence if we have a workspace
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        console.log(`[NofX] Workspace folder: ${workspaceFolder?.uri.fsPath || 'None'}`);
+        
         if (workspaceFolder) {
             this.persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
+            console.log('[NofX] Persistence initialized');
+        } else {
+            console.log('[NofX] No workspace folder - persistence disabled');
         }
 
         // Listen for terminal close events
@@ -78,7 +83,11 @@ export class AgentManager {
         }
     }
     
-    private async restoreAgentsFromPersistence(userRequested: boolean = false) {
+    public async restoreAgents(): Promise<number> {
+        return this.restoreAgentsFromPersistence(true);
+    }
+    
+    private async restoreAgentsFromPersistence(userRequested: boolean = false): Promise<number> {
         console.log('[NofX] Checking for saved agents to restore...');
         
         if (!this.persistence) {
@@ -86,7 +95,7 @@ export class AgentManager {
             if (userRequested) {
                 vscode.window.showWarningMessage('No workspace open. Cannot restore agents.');
             }
-            return;
+            return 0;
         }
         
         const savedAgents = await this.persistence.loadAgentState();
@@ -96,7 +105,7 @@ export class AgentManager {
             if (userRequested) {
                 vscode.window.showInformationMessage('No saved agents found.');
             }
-            return;
+            return 0;
         }
         
         // Ask user if they want to restore
@@ -107,35 +116,48 @@ export class AgentManager {
         );
         
         if (restore === 'Yes, Restore' || userRequested) {
+            let restoredCount = 0;
             for (const savedAgent of savedAgents) {
-                // Recreate agent with saved data
-                const config: AgentConfig = {
-                    name: savedAgent.name,
-                    type: savedAgent.type,
-                    template: savedAgent.template
-                };
-                
-                const agent = await this.spawnAgent(config, savedAgent.id);
-                
-                // Restore state
-                agent.status = savedAgent.status === 'working' ? 'idle' : savedAgent.status; // Reset working to idle
-                agent.tasksCompleted = savedAgent.tasksCompleted || 0;
-                
-                // Restore session context if available
-                const sessionContext = await this.persistence.getAgentContextSummary(savedAgent.id);
-                if (sessionContext) {
-                    const terminal = this.terminals.get(agent.id);
-                    if (terminal) {
-                        terminal.sendText(`# Restored from previous session`);
-                        terminal.sendText(`# ${sessionContext.split('\n').slice(0, 5).join('\n# ')}`);
+                try {
+                    // Recreate agent with saved data
+                    const config: AgentConfig = {
+                        name: savedAgent.name,
+                        type: savedAgent.type,
+                        template: savedAgent.template
+                    };
+                    
+                    const agent = await this.spawnAgent(config, savedAgent.id);
+                    
+                    // Restore state
+                    agent.status = savedAgent.status === 'working' ? 'idle' : savedAgent.status; // Reset working to idle
+                    agent.tasksCompleted = savedAgent.tasksCompleted || 0;
+                    
+                    // Restore session context if available
+                    const sessionContext = await this.persistence.getAgentContextSummary(savedAgent.id);
+                    if (sessionContext) {
+                        const terminal = this.terminals.get(agent.id);
+                        if (terminal) {
+                            terminal.sendText(`# Restored from previous session`);
+                            terminal.sendText(`# ${sessionContext.split('\n').slice(0, 5).join('\n# ')}`);
+                        }
                     }
+                    
+                    restoredCount++;
+                } catch (error) {
+                    console.error(`[NofX] Failed to restore agent ${savedAgent.name}:`, error);
                 }
             }
             
-            vscode.window.showInformationMessage(
-                `✅ Restored ${savedAgents.length} agent(s) from previous session`
-            );
+            if (restoredCount > 0) {
+                vscode.window.showInformationMessage(
+                    `✅ Restored ${restoredCount} agent(s) from previous session`
+                );
+            }
+            
+            return restoredCount;
         }
+        
+        return 0;
     }
 
     async spawnAgent(config: AgentConfig, restoredId?: string): Promise<Agent> {

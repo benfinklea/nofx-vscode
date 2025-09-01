@@ -95,6 +95,11 @@
         "command": "nofx.clearPersistence",
         "title": "NofX: Clear All Persistence Data",
         "icon": "$(trash)"
+      },
+      {
+        "command": "nofx.restoreAgents",
+        "title": "NofX: Restore Saved Agents",
+        "icon": "$(history)"
       }
     ],
     "viewsContainers": {
