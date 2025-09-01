@@ -3,6 +3,13 @@ import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import { AgentManager } from '../agents/AgentManager';
 import { TaskQueue } from '../tasks/TaskQueue';
+import { WebSocket } from 'ws';
+import { 
+    createMessage, 
+    MessageType, 
+    extractJsonFromClaudeOutput,
+    OrchestratorMessage
+} from '../orchestration/MessageProtocol';
 
 export class ConductorChatWebview {
     private panel: vscode.WebviewPanel | undefined;
@@ -15,6 +22,9 @@ export class ConductorChatWebview {
     private conductorLevel: 'basic' | 'smart' | 'vp' = 'smart';
     private isProcessing = false;
     private currentResponse = '';
+    private wsClient: WebSocket | undefined;
+    private orchestrationPort = 7777;
+    private isConnectedToOrchestrator = false;
 
     constructor(
         context: vscode.ExtensionContext,
@@ -113,6 +123,13 @@ export class ConductorChatWebview {
             const text = data.toString();
             this.currentResponse += text;
             
+            // Check for JSON commands in the output
+            const command = extractJsonFromClaudeOutput(text);
+            if (command && this.isConnectedToOrchestrator) {
+                // Send command through WebSocket
+                this.sendToOrchestrator(command);
+            }
+            
             // Send partial response to webview
             this.panel?.webview.postMessage({
                 command: 'streamResponse',
@@ -142,12 +159,125 @@ export class ConductorChatWebview {
         // Send initial greeting
         const greeting = this.getGreeting();
         this.addMessage('conductor', greeting);
+        
+        // Connect to orchestration server
+        await this.connectToOrchestrator();
     }
 
     private stopClaude() {
         if (this.claudeProcess) {
             this.claudeProcess.kill();
             this.claudeProcess = undefined;
+        }
+        
+        // Disconnect from orchestrator
+        this.disconnectFromOrchestrator();
+    }
+    
+    /**
+     * Connect to the orchestration server
+     */
+    private async connectToOrchestrator(): Promise<void> {
+        try {
+            this.wsClient = new WebSocket(`ws://localhost:${this.orchestrationPort}`);
+            
+            this.wsClient.on('open', () => {
+                console.log('Conductor connected to orchestration server');
+                this.isConnectedToOrchestrator = true;
+                
+                // Register as conductor
+                const registration = {
+                    type: 'register',
+                    id: 'conductor',
+                    name: 'NofX Conductor',
+                    clientType: 'conductor',
+                    role: this.conductorLevel
+                };
+                this.wsClient?.send(JSON.stringify(registration));
+                
+                // Notify UI
+                this.panel?.webview.postMessage({
+                    command: 'orchestratorConnected',
+                    status: true
+                });
+            });
+            
+            this.wsClient.on('message', (data: Buffer) => {
+                const message = JSON.parse(data.toString());
+                this.handleOrchestratorMessage(message);
+            });
+            
+            this.wsClient.on('close', () => {
+                console.log('Conductor disconnected from orchestration server');
+                this.isConnectedToOrchestrator = false;
+                this.panel?.webview.postMessage({
+                    command: 'orchestratorConnected',
+                    status: false
+                });
+            });
+            
+            this.wsClient.on('error', (error) => {
+                console.error('WebSocket error:', error);
+                this.isConnectedToOrchestrator = false;
+            });
+            
+        } catch (error) {
+            console.error('Failed to connect to orchestrator:', error);
+            // Continue without orchestration
+        }
+    }
+    
+    /**
+     * Disconnect from orchestrator
+     */
+    private disconnectFromOrchestrator(): void {
+        if (this.wsClient) {
+            this.wsClient.close();
+            this.wsClient = undefined;
+            this.isConnectedToOrchestrator = false;
+        }
+    }
+    
+    /**
+     * Send message to orchestrator
+     */
+    private sendToOrchestrator(message: OrchestratorMessage): void {
+        if (this.wsClient && this.wsClient.readyState === WebSocket.OPEN) {
+            this.wsClient.send(JSON.stringify(message));
+        }
+    }
+    
+    /**
+     * Handle message from orchestrator
+     */
+    private handleOrchestratorMessage(message: any): void {
+        // Handle different message types
+        switch (message.type) {
+            case MessageType.CONNECTION_ESTABLISHED:
+                console.log('Conductor registered with orchestrator');
+                break;
+                
+            case MessageType.AGENT_READY:
+                // Inform Claude that an agent is ready
+                this.claudeProcess?.stdin?.write(`[AGENT READY] ${message.payload.name} is now available\n`);
+                break;
+                
+            case MessageType.TASK_COMPLETE:
+                // Inform Claude about task completion
+                const taskInfo = message.payload;
+                this.claudeProcess?.stdin?.write(`[TASK COMPLETE] Agent ${message.from} completed: ${taskInfo.output}\n`);
+                break;
+                
+            case MessageType.AGENT_STATUS:
+                // Forward status to Claude
+                this.claudeProcess?.stdin?.write(`[STATUS UPDATE] ${JSON.stringify(message.payload)}\n`);
+                break;
+                
+            case MessageType.AGENT_QUERY:
+                // Agent is asking conductor a question
+                const query = message.payload;
+                this.claudeProcess?.stdin?.write(`[AGENT QUESTION] ${message.from}: ${query.question}\n`);
+                break;
         }
     }
 
@@ -212,6 +342,27 @@ Your role:
 4. Monitor progress and handle conflicts
 5. Report back to the user
 
+ORCHESTRATION COMMANDS:
+You can control agents by outputting JSON commands in your responses. Include these naturally in your conversation:
+
+To spawn a new agent:
+{"type": "spawn", "role": "frontend-specialist", "name": "Frontend Agent"}
+
+To assign a task to an agent:
+{"type": "assign", "agentId": "agent-1", "task": "Create login component", "priority": "high"}
+
+To query agent status:
+{"type": "status", "agentId": "all"}
+
+To terminate an agent:
+{"type": "terminate", "agentId": "agent-1"}
+
+Example usage:
+"I'll spawn a frontend specialist to handle the UI work."
+{"type": "spawn", "role": "frontend-specialist", "name": "UI Expert"}
+"Now assigning the login form task..."
+{"type": "assign", "agentId": "agent-1", "task": "Create a React login form with validation"}
+
 Current agents:
 ${agentList}
 
@@ -225,6 +376,8 @@ Available agent types:
 - mobile-developer: iOS, Android, React Native
 - security-expert: Security audits, penetration testing
 - database-architect: Schema design, optimization
+
+IMPORTANT: Always include JSON commands when you want to control agents. The system will parse these commands and execute them automatically.
 
 Always be helpful, clear, and proactive in managing the development team.`;
     }

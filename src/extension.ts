@@ -7,12 +7,17 @@ import { TaskTreeProvider } from './views/TaskTreeProvider';
 import { NofxTerminalProvider } from './views/NofxTerminalProvider';
 import { ConductorChat } from './conductor/ConductorChat';
 import { ConductorChatWebview } from './conductor/ConductorChatWebview';
+import { OrchestrationServer } from './orchestration/OrchestrationServer';
+import { MessageFlowDashboard } from './dashboard/MessageFlowDashboard';
+import { MessageType, OrchestratorMessage } from './orchestration/MessageProtocol';
 
 let conductorPanel: EnhancedConductorPanel | undefined;
 let agentManager: AgentManager;
 let taskQueue: TaskQueue;
 let conductorChat: ConductorChat | undefined;
 let conductorWebview: ConductorChatWebview | undefined;
+let orchestrationServer: OrchestrationServer | undefined;
+let messageFlowDashboard: MessageFlowDashboard | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('🎸 n of x Multi-Agent Orchestrator is now active!');
@@ -26,6 +31,13 @@ export async function activate(context: vscode.ExtensionContext) {
     
     // Initialize agent manager (this will check for saved agents)
     await agentManager.initialize();
+    
+    // Start orchestration server
+    orchestrationServer = new OrchestrationServer();
+    await orchestrationServer.start();
+    
+    // Set up message handling for agent commands
+    setupOrchestrationHandlers();
 
     // Register tree data providers for sidebar views
     const agentProvider = new AgentTreeProvider(agentManager);
@@ -126,6 +138,19 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('nofx.openConductorChat', async () => {
             await openConductorChatWebview();
+        })
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.openMessageFlow', async () => {
+            if (!orchestrationServer) {
+                vscode.window.showErrorMessage('Orchestration server not running');
+                return;
+            }
+            if (!messageFlowDashboard) {
+                messageFlowDashboard = new MessageFlowDashboard(context, orchestrationServer);
+            }
+            await messageFlowDashboard.show();
         })
     );
     
@@ -869,7 +894,125 @@ function getRelevantFiles(): string[] {
     return files;
 }
 
+/**
+ * Set up handlers for orchestration messages
+ */
+function setupOrchestrationHandlers() {
+    if (!orchestrationServer) return;
+    
+    // Listen for agent spawn commands
+    const wsServer = (orchestrationServer as any).wss;
+    if (!wsServer) return;
+    
+    wsServer.on('connection', (ws: any) => {
+        ws.on('message', async (data: string) => {
+            try {
+                const message = JSON.parse(data);
+                
+                // Handle spawn agent commands from conductor
+                if (message.type === MessageType.SPAWN_AGENT && message.from === 'conductor') {
+                    const { role, name, template } = message.payload;
+                    
+                    // Find the template
+                    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                    if (workspaceFolder) {
+                        const { AgentTemplateManager } = await import('./agents/AgentTemplateManager');
+                        const templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
+                        const templates = await templateManager.getTemplates();
+                        const selectedTemplate = templates.find(t => t.id === role || t.name.toLowerCase().includes(role));
+                        
+                        if (selectedTemplate) {
+                            // Spawn the agent
+                            const agent = await agentManager.spawnAgent({
+                                type: role,
+                                name: name || `${role}-agent`,
+                                template: selectedTemplate
+                            });
+                            
+                            // Send confirmation back
+                            const confirmMessage = {
+                                id: Date.now().toString(),
+                                timestamp: new Date().toISOString(),
+                                from: 'system',
+                                to: 'conductor',
+                                type: MessageType.AGENT_READY,
+                                payload: {
+                                    agentId: agent.id,
+                                    name: agent.name,
+                                    role: agent.type
+                                }
+                            };
+                            
+                            ws.send(JSON.stringify(confirmMessage));
+                        }
+                    }
+                }
+                
+                // Handle task assignment
+                if (message.type === MessageType.ASSIGN_TASK && message.from === 'conductor') {
+                    const { agentId, taskId, title, description, priority } = message.payload;
+                    
+                    // Create and assign task
+                    const task = {
+                        id: taskId,
+                        title,
+                        description,
+                        priority,
+                        agentId,
+                        status: 'pending' as const
+                    };
+                    
+                    taskQueue.addTask(task);
+                    
+                    // Send confirmation
+                    const confirmMessage = {
+                        id: Date.now().toString(),
+                        timestamp: new Date().toISOString(),
+                        from: 'system',
+                        to: 'conductor',
+                        type: MessageType.TASK_ACCEPTED,
+                        payload: { taskId, agentId }
+                    };
+                    
+                    ws.send(JSON.stringify(confirmMessage));
+                }
+                
+                // Handle status query
+                if (message.type === MessageType.QUERY_STATUS) {
+                    const agents = agentManager.getActiveAgents();
+                    const statusMessage = {
+                        id: Date.now().toString(),
+                        timestamp: new Date().toISOString(),
+                        from: 'system',
+                        to: message.from,
+                        type: MessageType.AGENT_STATUS,
+                        payload: {
+                            agents: agents.map(a => ({
+                                agentId: a.id,
+                                name: a.name,
+                                status: a.status,
+                                currentTask: a.currentTask,
+                                completedTasks: a.tasksCompleted
+                            }))
+                        }
+                    };
+                    
+                    ws.send(JSON.stringify(statusMessage));
+                }
+                
+            } catch (error) {
+                console.error('Error handling orchestration message:', error);
+            }
+        });
+    });
+}
+
 export function deactivate() {
+    // Stop orchestration server
+    if (orchestrationServer) {
+        orchestrationServer.stop();
+    }
+    
     // Clean up agents
     if (agentManager) {
         agentManager.dispose();
