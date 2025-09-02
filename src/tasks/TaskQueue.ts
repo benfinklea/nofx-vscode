@@ -234,6 +234,14 @@ export class TaskQueue {
     getTasks(): Task[] {
         return Array.from(this.tasks.values());
     }
+    
+    getPendingTasks(): Task[] {
+        return Array.from(this.tasks.values()).filter(t => t.status === 'queued');
+    }
+    
+    getActiveTasks(): Task[] {
+        return Array.from(this.tasks.values()).filter(t => t.status === 'in-progress');
+    }
 
     getQueuedTasks(): Task[] {
         return this.queue.map(id => this.tasks.get(id)).filter(Boolean) as Task[];

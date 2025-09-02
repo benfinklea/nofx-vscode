@@ -5,7 +5,7 @@
     const messagesContainer = document.getElementById('chat-messages');
     const chatInput = document.getElementById('chat-input');
     const sendButton = document.getElementById('send-button');
-    const conductorLevel = document.getElementById('conductor-level');
+    // Level selector removed - only one conductor level now
     const clearButton = document.getElementById('clear-chat');
     const exportButton = document.getElementById('export-chat');
     const agentList = document.getElementById('agent-list');
@@ -15,14 +15,17 @@
     
     // Initialize
     function init() {
+        console.log('[Chat] Initializing webview');
+        
         // Set up event listeners
         sendButton.addEventListener('click', sendMessage);
         chatInput.addEventListener('keydown', handleKeyDown);
-        conductorLevel.addEventListener('change', changeLevel);
+        // Level changing removed
         clearButton.addEventListener('click', clearChat);
         exportButton.addEventListener('click', exportChat);
         
         // Request initial state
+        console.log('[Chat] Sending ready message to extension');
         vscode.postMessage({ command: 'ready' });
     }
     
@@ -39,6 +42,8 @@
         const text = chatInput.value.trim();
         if (!text || isProcessing) return;
         
+        console.log('[Chat] Sending message:', text);
+        
         isProcessing = true;
         sendButton.disabled = true;
         
@@ -52,18 +57,11 @@
             text: text
         });
         
-        // Show typing indicator
-        showTypingIndicator();
+        // Don't show typing indicator - causes issues
+        // The extension will handle showing messages
     }
     
-    // Change conductor level
-    function changeLevel() {
-        const level = conductorLevel.value;
-        vscode.postMessage({
-            command: 'changeLevel',
-            level: level
-        });
-    }
+    // Level changing removed - only one conductor level now
     
     // Clear chat
     function clearChat() {
@@ -80,6 +78,8 @@
     
     // Add message to chat
     function addMessage(sender, text, timestamp) {
+        console.log('[Chat] addMessage called:', sender, text.substring(0, 30) + '...');
+        
         // Remove typing indicator if present
         if (currentTypingIndicator) {
             currentTypingIndicator.remove();
@@ -112,6 +112,7 @@
         
         // Re-enable input if conductor message
         if (sender === 'conductor') {
+            console.log('[Chat] Re-enabling input after conductor message');
             isProcessing = false;
             sendButton.disabled = false;
             chatInput.focus();
@@ -181,9 +182,11 @@
     // Handle messages from extension
     window.addEventListener('message', event => {
         const message = event.data;
+        console.log('[Chat] Received message from extension:', message.command);
         
         switch (message.command) {
             case 'addMessage':
+                console.log('[Chat] Adding message:', message.message.sender, message.message.text.substring(0, 50) + '...');
                 addMessage(
                     message.message.sender,
                     message.message.text,
@@ -207,9 +210,7 @@
                 if (message.state.agents) {
                     updateAgentList(message.state.agents);
                 }
-                if (message.state.level) {
-                    conductorLevel.value = message.state.level;
-                }
+                // Level setting removed
                 if (message.state.history) {
                     messagesContainer.innerHTML = '';
                     message.state.history.forEach(msg => {
@@ -218,9 +219,7 @@
                 }
                 break;
                 
-            case 'levelChanged':
-                conductorLevel.value = message.level;
-                break;
+            // Level changing removed
                 
             case 'clearChat':
                 messagesContainer.innerHTML = '';

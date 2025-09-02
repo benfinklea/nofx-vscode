@@ -15,10 +15,12 @@ export class OrchestrationServer {
     private clients: Map<string, ClientConnection> = new Map();
     private messageHistory: OrchestratorMessage[] = [];
     private port: number;
+    private actualPort: number = 0;
     private outputChannel: vscode.OutputChannel;
     private dashboardCallback?: (message: OrchestratorMessage) => void;
     private maxHistorySize = 1000;
     private heartbeatInterval: NodeJS.Timeout | undefined;
+    private isRunning = false;
     
     constructor(port: number = 7777) {
         this.port = port;
@@ -29,52 +31,106 @@ export class OrchestrationServer {
      * Start the WebSocket server
      */
     async start(): Promise<void> {
-        if (this.wss) {
-            this.log('Server already running');
+        if (this.isRunning) {
+            this.log('Server already running on port ' + this.actualPort);
             return;
         }
         
-        try {
-            this.wss = new WebSocketServer({ 
-                port: this.port,
-                host: 'localhost'
-            });
-            
-            this.wss.on('connection', (ws: WebSocket, req) => {
-                this.handleConnection(ws, req);
-            });
-            
-            this.wss.on('error', (error) => {
-                this.log(`Server error: ${error.message}`, 'error');
-                vscode.window.showErrorMessage(`Orchestration server error: ${error.message}`);
-            });
-            
-            // Start heartbeat checking
-            this.startHeartbeatMonitor();
-            
-            this.log(`🚀 Orchestration server started on ws://localhost:${this.port}`);
-            this.outputChannel.show();
-            
-            // Send system message
-            this.broadcastSystemMessage('Orchestration server online');
-            
-        } catch (error: any) {
-            this.log(`Failed to start server: ${error.message}`, 'error');
-            throw error;
+        // Try multiple ports if default is taken
+        const portsToTry = [this.port, 7778, 7779, 7780, 8888, 8889, 9999];
+        let started = false;
+        
+        for (const port of portsToTry) {
+            try {
+                await this.tryStartOnPort(port);
+                this.actualPort = port;
+                started = true;
+                break;
+            } catch (error: any) {
+                if (error.code === 'EADDRINUSE') {
+                    this.log(`Port ${port} in use, trying next...`, 'warn');
+                    continue;
+                }
+                // Other errors, stop trying
+                this.log(`Failed to start on port ${port}: ${error.message}`, 'error');
+                throw error;
+            }
         }
+        
+        if (!started) {
+            const errorMsg = 'Could not find available port for orchestration server';
+            this.log(errorMsg, 'error');
+            vscode.window.showErrorMessage(errorMsg);
+            throw new Error(errorMsg);
+        }
+        
+        this.isRunning = true;
+        
+        // Start heartbeat checking
+        this.startHeartbeatMonitor();
+        
+        this.log(`🚀 Orchestration server started on ws://localhost:${this.actualPort}`);
+        this.outputChannel.show();
+        
+        // Send system message
+        this.broadcastSystemMessage('Orchestration server online');
+    }
+    
+    /**
+     * Try to start server on specific port
+     */
+    private async tryStartOnPort(port: number): Promise<void> {
+        return new Promise((resolve, reject) => {
+            try {
+                this.wss = new WebSocketServer({ 
+                    port: port,
+                    host: 'localhost'
+                });
+                
+                this.wss.on('connection', (ws: WebSocket, req) => {
+                    this.handleConnection(ws, req);
+                });
+                
+                this.wss.on('error', (error: any) => {
+                    // Only show error if not EADDRINUSE (we handle that silently)
+                    if (error.code !== 'EADDRINUSE') {
+                        this.log(`Server error on port ${port}: ${error.message}`, 'error');
+                    }
+                    this.wss?.close();
+                    this.wss = undefined;
+                    reject(error);
+                });
+                
+                this.wss.on('listening', () => {
+                    resolve();
+                });
+                
+            } catch (error) {
+                reject(error);
+            }
+        });
     }
     
     /**
      * Stop the WebSocket server
      */
     stop(): void {
+        if (!this.isRunning) {
+            return;
+        }
+        
         if (this.heartbeatInterval) {
             clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = undefined;
         }
         
         // Close all connections
         this.connections.forEach((ws, id) => {
-            ws.close(1000, 'Server shutting down');
+            try {
+                ws.close(1000, 'Server shutting down');
+            } catch (e) {
+                // Ignore errors during shutdown
+            }
         });
         
         if (this.wss) {
@@ -86,6 +142,15 @@ export class OrchestrationServer {
         
         this.connections.clear();
         this.clients.clear();
+        this.isRunning = false;
+        this.actualPort = 0;
+    }
+    
+    /**
+     * Get the actual port the server is running on
+     */
+    getPort(): number {
+        return this.actualPort;
     }
     
     /**
@@ -108,7 +173,7 @@ export class OrchestrationServer {
             { 
                 clientId,
                 serverTime: new Date().toISOString(),
-                orchestrationPort: this.port
+                orchestrationPort: this.actualPort
             }
         );
         

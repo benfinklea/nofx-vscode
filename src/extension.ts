@@ -3,10 +3,12 @@ import { EnhancedConductorPanel } from './panels/EnhancedConductorPanel';
 import { AgentManager } from './agents/AgentManager';
 import { TaskQueue } from './tasks/TaskQueue';
 import { AgentTreeProvider } from './views/AgentTreeProvider';
-import { TaskTreeProvider } from './views/TaskTreeProvider';
+import { NofxDevTreeProvider } from './views/NofxDevTreeProvider';
+// TaskTreeProvider no longer needed - tasks shown in AgentTreeProvider
 import { NofxTerminalProvider } from './views/NofxTerminalProvider';
 import { ConductorChat } from './conductor/ConductorChat';
 import { ConductorChatWebview } from './conductor/ConductorChatWebview';
+import { ConductorTerminal } from './conductor/ConductorTerminal';
 import { OrchestrationServer } from './orchestration/OrchestrationServer';
 import { MessageFlowDashboard } from './dashboard/MessageFlowDashboard';
 import { MessageType, OrchestratorMessage } from './orchestration/MessageProtocol';
@@ -16,13 +18,18 @@ let agentManager: AgentManager;
 let taskQueue: TaskQueue;
 let conductorChat: ConductorChat | undefined;
 let conductorWebview: ConductorChatWebview | undefined;
+let conductorTerminal: ConductorTerminal | undefined;
 let orchestrationServer: OrchestrationServer | undefined;
 let messageFlowDashboard: MessageFlowDashboard | undefined;
+let extensionContext: vscode.ExtensionContext;
+let currentTeamName: string = 'Active Agents';  // Track the current team name
+let agentProvider: AgentTreeProvider;  // Make this global so we can update team names
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('🎸 n of x Multi-Agent Orchestrator is now active!');
 
     // Store context globally for access in helper functions
+    extensionContext = context;
     (global as any).extensionContext = context;
 
     // Initialize core components
@@ -40,25 +47,30 @@ export async function activate(context: vscode.ExtensionContext) {
     setupOrchestrationHandlers();
 
     // Register tree data providers for sidebar views
-    const agentProvider = new AgentTreeProvider(agentManager);
-    const taskProvider = new TaskTreeProvider(taskQueue);
+    const nofxDevProvider = new NofxDevTreeProvider();
+    agentProvider = new AgentTreeProvider(agentManager, taskQueue);  // Use global variable
     
+    vscode.window.registerTreeDataProvider('nofx.dev', nofxDevProvider);
     vscode.window.registerTreeDataProvider('nofx.agents', agentProvider);
-    vscode.window.registerTreeDataProvider('nofx.tasks', taskProvider);
+    // Task provider no longer needed - tasks shown in agent tree
     
-    // Add click handler for the activity bar icon
-    // When the view becomes visible, optionally show the dashboard
-    vscode.window.onDidChangeActiveColorTheme(() => {
-        // This is a workaround - we check if our view is visible
-        if (vscode.window.activeTextEditor === undefined) {
-            // User might have clicked on our sidebar
-            const config = vscode.workspace.getConfiguration('nofx');
-            if (config.get('autoShowDashboard') !== false) {
-                // Check if we have the focus by seeing if our commands are available
-                // This is indirect but works
-            }
-        }
+    // Auto-open conductor chat when NofX view becomes visible for the first time
+    let hasShownConductor = false;
+    const agentTreeView = vscode.window.createTreeView('nofx.agents', {
+        treeDataProvider: agentProvider,
+        showCollapseAll: true
     });
+    
+    // COMMENTED OUT - No auto-opening of chat when clicking NofX icon
+    // agentTreeView.onDidChangeVisibility(async (e) => {
+    //     if (e.visible && !hasShownConductor) {
+    //         hasShownConductor = true;
+    //         // Auto-open conductor chat when user clicks on NofX icon
+    //         await openConductorChatWebview();
+    //     }
+    // });
+    
+    context.subscriptions.push(agentTreeView);
     
     // Register NofX terminal panel provider
     const terminalProvider = new NofxTerminalProvider(context.extensionUri, agentManager);
@@ -122,6 +134,12 @@ export async function activate(context: vscode.ExtensionContext) {
             await editAgent(agentId);
         })
     );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.focusAgentTerminal', async (agentId?: string) => {
+            await focusAgentTerminal(agentId);
+        })
+    );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('nofx.deleteAgent', async (agentId?: string) => {
@@ -138,6 +156,15 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('nofx.openConductorChat', async () => {
             await openConductorChatWebview();
+        })
+    );
+    
+    context.subscriptions.push(
+        vscode.commands.registerCommand('nofx.openConductorTerminal', async () => {
+            if (!conductorTerminal) {
+                conductorTerminal = new ConductorTerminal(agentManager, taskQueue);
+            }
+            await conductorTerminal.start();
         })
     );
     
@@ -370,7 +397,7 @@ async function quickStartWithChat(context: vscode.ExtensionContext) {
     await agentManager.initialize(false);
     
     // Spawn 3 general purpose agents quickly
-    vscode.window.showInformationMessage('🚀 Starting NofX with 3 agents and conductor chat...');
+    vscode.window.showInformationMessage('🚀 Starting NofX with 3 agents and conductor terminal...');
     
     for (let i = 1; i <= 3; i++) {
         await agentManager.spawnAgent({
@@ -387,8 +414,11 @@ async function quickStartWithChat(context: vscode.ExtensionContext) {
         });
     }
     
-    // Open conductor chat webview immediately
-    await openConductorChatWebview();
+    // Open conductor terminal instead of chat webview
+    if (!conductorTerminal) {
+        conductorTerminal = new ConductorTerminal(agentManager, taskQueue);
+    }
+    await conductorTerminal.start();
 }
 
 async function startConductor(context: vscode.ExtensionContext) {
@@ -433,10 +463,13 @@ async function startConductor(context: vscode.ExtensionContext) {
     if (!selected) return;
     
     vscode.window.showInformationMessage('🎼 Starting NofX Conductor...');
-    await agentManager.initialize(true); // Show setup dialog when starting conductor
+    // agentManager is already initialized at extension startup - no need to reinitialize
     
     if (selected.value === 'quick-start') {
         // Start 3 general purpose agents
+        currentTeamName = 'Quick Start Team';
+        agentProvider.setTeamName(currentTeamName);
+        
         for (let i = 1; i <= 3; i++) {
             await agentManager.spawnAgent({
                 type: 'general',
@@ -453,6 +486,9 @@ async function startConductor(context: vscode.ExtensionContext) {
         }
     } else if (selected.value === 'custom') {
         // Let user pick individual agents
+        currentTeamName = 'Custom Team';
+        agentProvider.setTeamName(currentTeamName);
+        
         const agentOptions = Object.entries(AGENT_TEMPLATES).map(([key, template]) => ({
             label: `${template.icon} ${template.name}`,
             description: template.specialization,
@@ -479,6 +515,9 @@ async function startConductor(context: vscode.ExtensionContext) {
         // Spawn selected team
         const group = AGENT_GROUPS[selected.value];
         if (group) {
+            currentTeamName = group.name;
+            agentProvider.setTeamName(currentTeamName);
+            
             for (const template of group.agents) {
                 await agentManager.spawnAgent({
                     type: template.type,
@@ -499,8 +538,11 @@ async function startConductor(context: vscode.ExtensionContext) {
     );
     
     if (interaction === 'Open Conductor Chat') {
-        // Open the conductor chat for natural language interaction
-        await openConductorChatWebview();
+        // Open the terminal conductor (works better with Claude)
+        if (!conductorTerminal) {
+            conductorTerminal = new ConductorTerminal(agentManager, taskQueue);
+        }
+        await conductorTerminal.start();
     } else if (interaction === 'Show Dashboard') {
         // Show the visual dashboard
         showOrchestrator(context);
@@ -508,29 +550,105 @@ async function startConductor(context: vscode.ExtensionContext) {
 }
 
 async function addAgent() {
-    const config = vscode.workspace.getConfiguration('nofx');
-    const agentTypes = config.get<string[]>('agentTypes') || [];
+    // Import templates
+    const { AGENT_GROUPS, AGENT_TEMPLATES } = await import('./agents/templates');
     
-    const agentType = await vscode.window.showQuickPick(agentTypes, {
-        placeHolder: 'Select agent specialization',
-        title: 'Add New Agent'
+    // First ask: individual agent or team preset?
+    const choice = await vscode.window.showQuickPick([
+        {
+            label: '$(person) Individual Agent',
+            description: 'Select a specific agent to add',
+            value: 'individual'
+        },
+        {
+            label: '$(organization) Team Preset',
+            description: 'Add a pre-configured team of agents',
+            value: 'team'
+        }
+    ], {
+        placeHolder: 'Add individual agent or team preset?',
+        title: 'Add Agent(s)'
     });
-
-    if (agentType) {
-        const agentName = await vscode.window.showInputBox({
-            prompt: 'Agent name',
-            value: `${agentType}-${Date.now().toString(36)}`
+    
+    if (!choice) return;
+    
+    if (choice.value === 'individual') {
+        // Show individual agent options
+        const agentOptions = Object.entries(AGENT_TEMPLATES).map(([key, template]) => ({
+            label: `${template.icon} ${template.name}`,
+            description: template.specialization,
+            value: key,
+            template
+        }));
+        
+        const selectedAgent = await vscode.window.showQuickPick(agentOptions, {
+            placeHolder: 'Select agent to add',
+            title: 'Choose Agent'
         });
-
-        if (agentName) {
-            const agent = await agentManager.spawnAgent({
-                type: agentType,
-                name: agentName
+        
+        if (selectedAgent) {
+            await agentManager.spawnAgent({
+                type: selectedAgent.template.type,
+                name: selectedAgent.template.name,
+                template: selectedAgent.template
             });
-
+            
             vscode.window.showInformationMessage(
-                `✅ Spawned ${agentType} agent: ${agentName}`
+                `✅ Spawned ${selectedAgent.template.name}`
             );
+        }
+    } else {
+        // Show team preset options
+        const teamOptions = [
+            {
+                label: '$(rocket) Quick Start Team',
+                description: '3 general purpose agents',
+                value: 'quick-start'
+            },
+            ...Object.entries(AGENT_GROUPS).map(([key, group]) => ({
+                label: `$(organization) ${group.name}`,
+                description: group.description,
+                value: key
+            }))
+        ];
+        
+        const selectedTeam = await vscode.window.showQuickPick(teamOptions, {
+            placeHolder: 'Select team preset',
+            title: 'Choose Team'
+        });
+        
+        if (!selectedTeam) return;
+        
+        if (selectedTeam.value === 'quick-start') {
+            // Start 3 general purpose agents
+            for (let i = 1; i <= 3; i++) {
+                await agentManager.spawnAgent({
+                    type: 'general',
+                    name: `Agent-${i}`,
+                    template: {
+                        name: `General Agent ${i}`,
+                        type: 'general',
+                        specialization: 'Full-Stack Development',
+                        systemPrompt: 'You are a versatile developer who can handle any task.',
+                        capabilities: ['Frontend', 'Backend', 'Testing', 'DevOps'],
+                        icon: '🤖'
+                    }
+                });
+            }
+            vscode.window.showInformationMessage('✅ Spawned Quick Start team (3 agents)');
+        } else {
+            // Spawn selected team
+            const group = AGENT_GROUPS[selectedTeam.value];
+            if (group) {
+                for (const template of group.agents) {
+                    await agentManager.spawnAgent({
+                        type: template.type,
+                        name: template.name,
+                        template: template
+                    });
+                }
+                vscode.window.showInformationMessage(`✅ Spawned ${group.name} (${group.agents.length} agents)`);
+            }
         }
     }
 }
@@ -840,6 +958,45 @@ To interact with this agent, switch to the terminal named: "${agent.name}"
     }
 }
 
+async function focusAgentTerminal(agentId?: string) {
+    const agents = agentManager.getActiveAgents();
+    
+    if (agents.length === 0) {
+        vscode.window.showInformationMessage('No agents are currently running');
+        return;
+    }
+    
+    let agent;
+    if (agentId) {
+        agent = agents.find(a => a.id === agentId);
+    } else {
+        // Let user select an agent
+        const items = agents.map(a => ({
+            label: `${a.template?.icon || '🤖'} ${a.name}`,
+            description: `${a.template?.specialization || a.type} - ${a.status}`,
+            agent: a
+        }));
+        
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select agent terminal to focus'
+        });
+        
+        if (selected) {
+            agent = selected.agent;
+        }
+    }
+    
+    if (!agent) return;
+    
+    // Show the agent's terminal
+    const terminal = agentManager.getAgentTerminal(agent.id);
+    if (terminal) {
+        terminal.show();
+    } else {
+        vscode.window.showWarningMessage(`Terminal for ${agent.name} not found`);
+    }
+}
+
 async function testClaudeCommand() {
     const terminal = vscode.window.createTerminal('Claude Test');
     terminal.show();
@@ -1021,5 +1178,77 @@ export function deactivate() {
     // Close conductor panel
     if (conductorPanel) {
         conductorPanel.dispose();
+    }
+}
+
+/**
+ * Reset NofX to clean state
+ */
+async function resetNofX() {
+    const answer = await vscode.window.showWarningMessage(
+        'This will reset NofX completely: stop all agents, clear persistence, and restart the orchestration server. Continue?',
+        'Yes, Reset',
+        'Cancel'
+    );
+    
+    if (answer !== 'Yes, Reset') {
+        return;
+    }
+    
+    vscode.window.showInformationMessage('Resetting NofX...');
+    
+    try {
+        // Stop orchestration server
+        if (orchestrationServer) {
+            orchestrationServer.stop();
+            orchestrationServer = undefined;
+        }
+        
+        // Clean up agents
+        if (agentManager) {
+            const agents = agentManager.getActiveAgents();
+            for (const agent of agents) {
+                await agentManager.removeAgent(agent.id);
+            }
+            agentManager.dispose();
+        }
+        
+        // Clear conductor chat
+        // Note: conductorChatWebview is created on demand, not stored globally
+        
+        // Clear message flow dashboard
+        if (messageFlowDashboard) {
+            // MessageFlowDashboard doesn't have dispose yet, just clear reference
+            messageFlowDashboard = undefined;
+        }
+        
+        // Clear persistence
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (workspaceFolder) {
+            const { AgentPersistence } = await import('./persistence/AgentPersistence');
+            const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
+            // Clear persistence files
+            await persistence.saveAgentState([]);
+            await persistence.cleanup();
+        }
+        
+        // Re-initialize managers
+        agentManager = new AgentManager(extensionContext);
+        taskQueue = new TaskQueue(agentManager);
+        
+        // Restart orchestration server
+        orchestrationServer = new OrchestrationServer();
+        await orchestrationServer.start().catch(error => {
+            console.error('Failed to restart orchestration server:', error);
+        });
+        
+        // Update tree views
+        // agentProvider is not in scope here, need to refresh via command
+        vscode.commands.executeCommand('workbench.action.reloadWindow');
+        
+        vscode.window.showInformationMessage('🎸 NofX has been reset successfully!');
+        
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`Failed to reset NofX: ${error.message}`);
     }
 }

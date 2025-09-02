@@ -251,21 +251,22 @@ export class AgentManager {
         terminal.sendText(`echo "Starting Claude with agent specialization..."`);
         terminal.sendText(`echo ""`);
         
-        // Start Claude immediately with the agent's system prompt
+        // Start Claude with --append-system-prompt flag (same as conductor)
         const claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
-        terminal.sendText(claudePath);
         
-        // Send the system prompt after Claude starts
-        setTimeout(() => {
-            if (agent.template && agent.template.systemPrompt) {
-                console.log(`[NofX] Sending system prompt to ${agent.name}`);
-                terminal.sendText(agent.template.systemPrompt);
-                terminal.sendText(''); // Empty line
-                terminal.sendText(`I am ${agent.name}, ready to help with ${agent.template.specialization || agent.type} tasks. What would you like me to work on?`);
-            } else {
-                terminal.sendText(`I am ${agent.name}, a ${agent.type} specialist. Ready for tasks.`);
-            }
-        }, 3000); // Give Claude time to initialize
+        if (agent.template && agent.template.systemPrompt) {
+            console.log(`[NofX] Starting ${agent.name} with system prompt`);
+            // Combine the template prompt with team instructions
+            const fullPrompt = agent.template.systemPrompt + '\n\nYou are part of a NofX.dev coding team. Please wait for further instructions. Don\'t do anything yet. Just wait.';
+            // Escape single quotes for shell
+            const escapedPrompt = fullPrompt.replace(/'/g, "'\\''");
+            // Start Claude with the system prompt
+            terminal.sendText(`${claudePath} --append-system-prompt '${escapedPrompt}'`);
+        } else {
+            // No template, just basic prompt
+            const basicPrompt = 'You are a general purpose agent, part of a NofX.dev coding team. Please wait for instructions.';
+            terminal.sendText(`${claudePath} --append-system-prompt '${basicPrompt}'`);
+        }
     }
 
     async executeTask(agentId: string, task: any) {

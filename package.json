@@ -42,6 +42,11 @@
         "icon": "$(rocket)"
       },
       {
+        "command": "nofx.resetNofX",
+        "title": "NofX: Reset Everything",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "nofx.addAgent",
         "title": "NofX: Add Agent",
         "icon": "$(add)"
@@ -80,6 +85,16 @@
         "command": "nofx.openConductorChat",
         "title": "NofX: Open Conductor Chat",
         "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "nofx.openSimpleConductor",
+        "title": "NofX: Open Simple Conductor (No Permissions)",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "nofx.openConductorTerminal",
+        "title": "NofX: Open Conductor Terminal",
+        "icon": "$(terminal)"
       },
       {
         "command": "nofx.openMessageFlow",
@@ -133,11 +148,6 @@
           "command": "nofx.addAgent",
           "when": "view == nofx.agents",
           "group": "navigation"
-        },
-        {
-          "command": "nofx.createTask",
-          "when": "view == nofx.tasks",
-          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -165,16 +175,16 @@
     "views": {
       "nofx-conductor": [
         {
-          "id": "nofx.agents",
-          "name": "Agents",
-          "icon": "$(person)",
-          "contextualTitle": "Active Agents"
+          "id": "nofx.dev",
+          "name": "NofX.dev",
+          "icon": "$(rocket)",
+          "contextualTitle": "NofX.dev"
         },
         {
-          "id": "nofx.tasks",
-          "name": "Task Queue",
-          "icon": "$(checklist)",
-          "contextualTitle": "Task Queue"
+          "id": "nofx.agents",
+          "name": "Agents & Tasks",
+          "icon": "$(person)",
+          "contextualTitle": "Active Agents"
         },
         {
           "id": "nofx.activity",
@@ -194,18 +204,13 @@
     },
     "viewsWelcome": [
       {
+        "view": "nofx.dev",
+        "contents": "🎸 **NofX Conductor**\n\n**Quick Actions:**\n[$(play) Start New Session](command:nofx.startConductor)\n[$(history) Restore Previous Session](command:nofx.restoreAgents)\n[$(save) Save Current Session](command:nofx.exportSessions)\n\n**Agent Management:**\n[$(add) Add Agent(s)](command:nofx.addAgent)\n[$(graph) Messages Dashboard](command:nofx.openMessageFlow)"
+      },
+      {
         "view": "nofx.agents",
-        "contents": "Welcome to NofX Conductor!\n\n[$(dashboard) Open Dashboard](command:nofx.showOrchestrator)\n[$(play) Start Conductor](command:nofx.startConductor)\n[$(add) Add Agent](command:nofx.addAgent)\n[$(history) Restore Saved Agents](command:nofx.restoreAgents)",
+        "contents": "No active agents yet.\n\n[$(add) Add Agent](command:nofx.addAgent)\n[$(play) Start Conductor](command:nofx.startConductor)",
         "when": "!nofx.hasAgents"
-      },
-      {
-        "view": "nofx.agents",
-        "contents": "[$(dashboard) Open Dashboard](command:nofx.showOrchestrator)",
-        "when": "nofx.hasAgents"
-      },
-      {
-        "view": "nofx.tasks",
-        "contents": "No tasks in queue.\n[Create Task](command:nofx.createTask)\n[Add Multiple Tasks](command:nofx.createTask)"
       }
     ],
     "configuration": {
@@ -265,7 +270,10 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js"
+    "test": "node ./out/test/runTest.js",
+    "build": "npm run compile && vsce package",
+    "build:clean": "rm -f nofx-*.vsix && npm run build",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "20.x",
