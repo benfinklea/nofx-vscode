@@ -26,18 +26,44 @@ export interface Task {
     title: string;
     description: string;
     priority: 'high' | 'medium' | 'low';
+    numericPriority?: number;
     status: TaskStatus;
     assignedTo?: string;
     files?: string[];
     createdAt: Date;
     completedAt?: Date;
+    dependsOn?: string[];
+    prefers?: string[];
+    blockedBy?: string[];
+    tags?: string[];
+    estimatedDuration?: number;
+    requiredCapabilities?: string[];
+    conflictsWith?: string[];
+    agentMatchScore?: number; // Transient field for UI display
 }
 
-export type TaskStatus = 'queued' | 'assigned' | 'in-progress' | 'completed' | 'failed';
+export type TaskStatus = 'queued' | 'validated' | 'ready' | 'assigned' | 'in-progress' | 'completed' | 'failed' | 'blocked';
+
+export interface TaskValidationError {
+    field: string;
+    message: string;
+    code: string;
+}
+
+export interface TaskDependency {
+    taskId: string;
+    type: 'blocks' | 'requires' | 'prefers';
+    reason?: string;
+}
 
 export interface TaskConfig {
     title: string;
     description: string;
     priority?: 'high' | 'medium' | 'low';
     files?: string[];
+    dependsOn?: string[];
+    prefers?: string[];
+    tags?: string[];
+    estimatedDuration?: number;
+    requiredCapabilities?: string[];
 }

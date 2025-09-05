@@ -1,32 +1,70 @@
 import * as vscode from 'vscode';
 import { Agent, AgentConfig, AgentStatus } from './types';
 import { AgentPersistence } from '../persistence/AgentPersistence';
+import { IAgentLifecycleManager, ITerminalManager, IWorktreeService, IConfigurationService, INotificationService, ILoggingService, IEventBus, IErrorHandler, IAgentReader } from '../services/interfaces';
+import { DOMAIN_EVENTS } from '../services/EventConstants';
 
-export class AgentManager {
+export class AgentManager implements IAgentReader {
     private agents: Map<string, Agent> = new Map();
-    private terminals: Map<string, vscode.Terminal> = new Map();
-    private outputChannels: Map<string, vscode.OutputChannel> = new Map();
     private context: vscode.ExtensionContext;
     private persistence: AgentPersistence | undefined;
     private _onAgentUpdate = new vscode.EventEmitter<void>();
     public readonly onAgentUpdate = this._onAgentUpdate.event;
+    private disposables: vscode.Disposable[] = [];
+
+    private agentLifecycleManager?: IAgentLifecycleManager;
+    private terminalManager?: ITerminalManager;
+    private worktreeService?: IWorktreeService;
+    private configService?: IConfigurationService;
+    private notificationService?: INotificationService;
+    private loggingService?: ILoggingService;
+    private eventBus?: IEventBus;
+    private errorHandler?: IErrorHandler;
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         
         // Initialize persistence if we have a workspace
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        console.log(`[NofX] Workspace folder: ${workspaceFolder?.uri.fsPath || 'None'}`);
+        if (this.loggingService) {
+            this.loggingService.debug(`Workspace folder: ${workspaceFolder?.uri.fsPath || 'None'}`);
+        }
         
         if (workspaceFolder) {
             this.persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
-            console.log('[NofX] Persistence initialized');
+            if (this.loggingService) {
+                this.loggingService.debug('Persistence initialized');
+            }
         } else {
-            console.log('[NofX] No workspace folder - persistence disabled');
+            if (this.loggingService) {
+                this.loggingService.warn('No workspace folder - persistence disabled');
+            }
         }
 
-        // Listen for terminal close events
-        vscode.window.onDidCloseTerminal((terminal) => {
+        // Terminal close event listener will be set up after dependencies are injected
+    }
+
+    setDependencies(
+        agentLifecycleManager: IAgentLifecycleManager,
+        terminalManager: ITerminalManager,
+        worktreeService: IWorktreeService,
+        configService: IConfigurationService,
+        notificationService: INotificationService,
+        loggingService?: ILoggingService,
+        eventBus?: IEventBus,
+        errorHandler?: IErrorHandler
+    ) {
+        this.agentLifecycleManager = agentLifecycleManager;
+        this.terminalManager = terminalManager;
+        this.worktreeService = worktreeService;
+        this.configService = configService;
+        this.notificationService = notificationService;
+        this.loggingService = loggingService;
+        this.eventBus = eventBus;
+        this.errorHandler = errorHandler;
+
+        // Set up terminal close event listener
+        const terminalCloseDisposable = this.terminalManager.onTerminalClosed((terminal) => {
             const agent = this.findAgentByTerminal(terminal);
             if (agent) {
                 // If agent was working, mark as idle and task as interrupted
@@ -36,27 +74,41 @@ export class AgentManager {
                     agent.currentTask = null;
                     this._onAgentUpdate.fire();
                     
-                    vscode.window.showWarningMessage(
+                    // Publish event to EventBus
+                    if (this.eventBus) {
+                        this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, { agentId: agent.id, status: 'idle' });
+                        this.eventBus.publish('agent.task.interrupted', { agentId: agent.id, task });
+                    }
+                    
+                    this.notificationService?.showWarning(
                         `⚠️ Agent ${agent.name} stopped. Task "${task.title}" interrupted.`
                     );
                 }
                 this.removeAgent(agent.id);
             }
         });
+        this.disposables.push(terminalCloseDisposable);
     }
 
     async initialize(showSetupDialog: boolean = false) {
-        // Check if Claude Code is available
-        const claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
+        if (!this.agentLifecycleManager || !this.configService) {
+            throw new Error('AgentManager dependencies not set. Call setDependencies() first.');
+        }
         
-        console.log(`[NofX] AgentManager initialized. Claude path: ${claudePath}`);
+        // Initialize the agent lifecycle manager
+        await this.agentLifecycleManager.initialize();
+        
+        // Check if Claude Code is available
+        const claudePath = this.configService.getClaudePath();
+        
+        this.loggingService?.info(`AgentManager initialized. Claude path: ${claudePath}`);
         
         // Try to restore agents from persistence
         await this.restoreAgentsFromPersistence();
         
         // Only show setup dialog if explicitly requested (e.g., when starting conductor)
         if (showSetupDialog) {
-            const selection = await vscode.window.showInformationMessage(
+            const selection = await this.notificationService.showInformation(
                 '🎸 NofX Conductor ready. Using Claude command: ' + claudePath,
                 'Test Claude',
                 'Change Path',
@@ -68,14 +120,14 @@ export class AgentManager {
                 terminal.show();
                 terminal.sendText(`${claudePath} --version || echo "Claude not found. Please check installation."`);            
             } else if (selection === 'Change Path') {
-                const newPath = await vscode.window.showInputBox({
+                const newPath = await this.notificationService.showInputBox({
                     prompt: 'Enter Claude command or path',
                     value: claudePath,
                     placeHolder: 'e.g., claude, /usr/local/bin/claude'
                 });
                 if (newPath) {
-                    await vscode.workspace.getConfiguration('nofx').update('claudePath', newPath, vscode.ConfigurationTarget.Global);
-                    vscode.window.showInformationMessage(`Claude path updated to: ${newPath}`);
+                    await this.configService.update('claudePath', newPath, vscode.ConfigurationTarget.Global);
+                    this.notificationService.showInformation(`Claude path updated to: ${newPath}`);
                 }
             } else if (selection === 'Restore Session') {
                 await this.restoreAgentsFromPersistence(true);
@@ -88,28 +140,28 @@ export class AgentManager {
     }
     
     private async restoreAgentsFromPersistence(userRequested: boolean = false): Promise<number> {
-        console.log('[NofX] Checking for saved agents to restore...');
+        this.loggingService?.debug('Checking for saved agents to restore...');
         
         if (!this.persistence) {
-            console.log('[NofX] No persistence available (no workspace open)');
+            this.loggingService?.warn('No persistence available (no workspace open)');
             if (userRequested) {
-                vscode.window.showWarningMessage('No workspace open. Cannot restore agents.');
+                this.notificationService?.showWarning('No workspace open. Cannot restore agents.');
             }
             return 0;
         }
         
         const savedAgents = await this.persistence.loadAgentState();
-        console.log(`[NofX] Found ${savedAgents.length} saved agent(s)`);
+        this.loggingService?.info(`Found ${savedAgents.length} saved agent(s)`);
         
         if (savedAgents.length === 0) {
             if (userRequested) {
-                vscode.window.showInformationMessage('No saved agents found.');
+                this.notificationService?.showInformation('No saved agents found.');
             }
             return 0;
         }
         
         // Ask user if they want to restore
-        const restore = userRequested ? 'Yes, Restore' : await vscode.window.showInformationMessage(
+        const restore = userRequested ? 'Yes, Restore' : await this.notificationService?.showInformation(
             `Found ${savedAgents.length} saved agent(s). Restore them?`,
             'Yes, Restore',
             'No, Start Fresh'
@@ -135,7 +187,7 @@ export class AgentManager {
                     // Restore session context if available
                     const sessionContext = await this.persistence.getAgentContextSummary(savedAgent.id);
                     if (sessionContext) {
-                        const terminal = this.terminals.get(agent.id);
+                        const terminal = this.terminalManager?.getTerminal(agent.id);
                         if (terminal) {
                             terminal.sendText(`# Restored from previous session`);
                             terminal.sendText(`# ${sessionContext.split('\n').slice(0, 5).join('\n# ')}`);
@@ -144,12 +196,13 @@ export class AgentManager {
                     
                     restoredCount++;
                 } catch (error) {
-                    console.error(`[NofX] Failed to restore agent ${savedAgent.name}:`, error);
+                    const err = error instanceof Error ? error : new Error(String(error));
+                    this.errorHandler?.handleError(err, `Failed to restore agent ${savedAgent.name}`);
                 }
             }
             
             if (restoredCount > 0) {
-                vscode.window.showInformationMessage(
+                this.notificationService?.showInformation(
                     `✅ Restored ${restoredCount} agent(s) from previous session`
                 );
             }
@@ -161,149 +214,80 @@ export class AgentManager {
     }
 
     async spawnAgent(config: AgentConfig, restoredId?: string): Promise<Agent> {
-        const agentId = restoredId || `agent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        if (!this.agentLifecycleManager) {
+            throw new Error('AgentLifecycleManager not available');
+        }
         
-        // Get icon based on agent type/template
-        const iconMap: { [key: string]: string } = {
-            'frontend': 'symbol-color',
-            'backend': 'server',
-            'fullstack': 'layers',
-            'mobile': 'device-mobile',
-            'database': 'database',
-            'devops': 'cloud',
-            'testing': 'beaker',
-            'ai': 'hubot',
-            'general': 'person'
-        };
+        // Delegate to AgentLifecycleManager
+        const agent = await this.agentLifecycleManager.spawnAgent(config, restoredId);
         
-        const terminalIcon = iconMap[config.type] || 'person';
+        // Store agent in our map
+        this.agents.set(agent.id, agent);
         
-        // Create a dedicated terminal for this agent
-        const terminal = vscode.window.createTerminal({
-            name: `${config.template?.icon || '🤖'} ${config.name}`,
-            iconPath: new vscode.ThemeIcon(terminalIcon),
-            env: {
-                NOFX_AGENT_ID: agentId,
-                NOFX_AGENT_TYPE: config.type,
-                NOFX_AGENT_NAME: config.name
-            }
-        });
-
-        // Create output channel for agent logs
-        const outputChannel = vscode.window.createOutputChannel(
-            `n of x: ${config.name}`,
-            'nofx-agent'
-        );
-
-        // Create agent object
-        const agent: Agent = {
-            id: agentId,
-            name: config.name,
-            type: config.type,
-            status: 'idle' as AgentStatus,
-            terminal: terminal,
-            currentTask: null,
-            startTime: new Date(),
-            tasksCompleted: 0,
-            template: config.template // Store template for prompts and capabilities
-        };
-
-        console.log(`[NofX AgentManager] Created agent ${agentId} with status: ${agent.status}`);
-
-        // Store agent and associated resources
-        this.agents.set(agentId, agent);
-        this.terminals.set(agentId, terminal);
-        this.outputChannels.set(agentId, outputChannel);
-
-        // Initialize agent in terminal
-        this.initializeAgentTerminal(agent);
-
         // Notify listeners
         this._onAgentUpdate.fire();
 
-        outputChannel.appendLine(`✅ Agent ${config.name} (${config.type}) initialized`);
-        outputChannel.appendLine(`ID: ${agentId}`);
-        outputChannel.appendLine(`Status: ${agent.status}`);
-        outputChannel.appendLine(`Ready to receive tasks...`);
+        // Publish event to EventBus
+        if (this.eventBus) {
+            this.eventBus.publish(DOMAIN_EVENTS.AGENT_CREATED, { agentId: agent.id, name: agent.name, type: agent.type });
+        }
 
-        console.log(`[NofX AgentManager] Agent ${config.name} ready. Total agents: ${this.agents.size}`);
-        console.log(`[NofX AgentManager] Agent statuses:`, Array.from(this.agents.values()).map(a => `${a.name}: ${a.status}`));
-
-        // Save agent state to persistence
+        // Save agent state after adding
         await this.saveAgentState();
+
+        this.loggingService?.info(`Agent ${config.name} ready. Total agents: ${this.agents.size}`);
+        this.loggingService?.debug(`Agent statuses:`, Array.from(this.agents.values()).map(a => `${a.name}: ${a.status}`));
 
         return agent;
     }
 
-    private initializeAgentTerminal(agent: Agent) {
-        const terminal = this.terminals.get(agent.id);
-        if (!terminal) return;
-
-        // Set up the agent's working environment
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (workspaceFolder) {
-            terminal.sendText(`cd "${workspaceFolder.uri.fsPath}"`);
-        }
-
-        // Show agent info
-        terminal.sendText(`echo "🤖 Initializing ${agent.name} (${agent.type})"`);
-        terminal.sendText(`echo "Agent ID: ${agent.id}"`);
-        terminal.sendText(`echo "Starting Claude with agent specialization..."`);
-        terminal.sendText(`echo ""`);
-        
-        // Start Claude with --append-system-prompt flag (same as conductor)
-        const claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
-        
-        if (agent.template && agent.template.systemPrompt) {
-            console.log(`[NofX] Starting ${agent.name} with system prompt`);
-            // Combine the template prompt with team instructions
-            const fullPrompt = agent.template.systemPrompt + '\n\nYou are part of a NofX.dev coding team. Please wait for further instructions. Don\'t do anything yet. Just wait.';
-            // Escape single quotes for shell
-            const escapedPrompt = fullPrompt.replace(/'/g, "'\\''");
-            // Start Claude with the system prompt
-            terminal.sendText(`${claudePath} --append-system-prompt '${escapedPrompt}'`);
-        } else {
-            // No template, just basic prompt
-            const basicPrompt = 'You are a general purpose agent, part of a NofX.dev coding team. Please wait for instructions.';
-            terminal.sendText(`${claudePath} --append-system-prompt '${basicPrompt}'`);
-        }
-    }
 
     async executeTask(agentId: string, task: any) {
-        console.log(`[NofX AgentManager.executeTask] Called for agent ${agentId} with task:`, task.title);
+        this.loggingService?.debug(`Called for agent ${agentId} with task:`, task.title);
         
         const agent = this.agents.get(agentId);
         if (!agent) {
-            console.error(`[NofX AgentManager.executeTask] Agent ${agentId} not found!`);
-            throw new Error(`Agent ${agentId} not found`);
+            const error = new Error(`Agent ${agentId} not found`);
+            this.errorHandler?.handleError(error, 'executeTask');
+            throw error;
         }
-        console.log(`[NofX AgentManager.executeTask] Found agent: ${agent.name}, status: ${agent.status}`);
+        this.loggingService?.debug(`Found agent: ${agent.name}, status: ${agent.status}`);
 
-        const terminal = this.terminals.get(agentId);
-        const outputChannel = this.outputChannels.get(agentId);
+        if (!this.terminalManager) {
+            const error = new Error('TerminalManager not available');
+            this.errorHandler?.handleError(error, 'executeTask');
+            throw error;
+        }
         
-        if (!terminal || !outputChannel) {
-            console.error(`[NofX AgentManager.executeTask] Agent ${agentId} resources not found!`);
-            throw new Error(`Agent ${agentId} resources not found`);
+        const terminal = this.terminalManager.getTerminal(agentId);
+        
+        if (!terminal) {
+            const error = new Error(`Agent ${agentId} terminal not found`);
+            this.errorHandler?.handleError(error, 'executeTask');
+            throw error;
         }
 
-        console.log(`[NofX AgentManager.executeTask] Updating agent status from ${agent.status} to working`);
+        this.loggingService?.debug(`Updating agent status from ${agent.status} to working`);
         
         // Update agent status
         agent.status = 'working';
         agent.currentTask = task;
         this._onAgentUpdate.fire();
         
+        // Publish event to EventBus
+        if (this.eventBus) {
+            this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, { agentId: agent.id, status: 'working' });
+            this.eventBus.publish('agent.task.assigned', { agentId: agent.id, task });
+        }
+        
         // Save state after update
         this.saveAgentState();
 
-        outputChannel.appendLine(`\n📋 Starting task: ${task.title}`);
-        outputChannel.appendLine(`Description: ${task.description}`);
-        outputChannel.appendLine(`Priority: ${task.priority}`);
-        outputChannel.appendLine(`Task ID: ${task.id}`);
-        outputChannel.show(true);
-        
-        console.log(`[NofX AgentManager.executeTask] Task details written to output channel`);
+        // Log task start
+        this.loggingService?.info(`Starting task: ${task.title}`);
+        this.loggingService?.debug(`Description: ${task.description}`);
+        this.loggingService?.debug(`Priority: ${task.priority}`);
+        this.loggingService?.debug(`Task ID: ${task.id}`);
 
         // Prepare task for Claude Code (using detailed prompt method if needed)
         // const detailedPrompt = this.createDetailedTaskPrompt(agent, task);
@@ -314,7 +298,7 @@ export class AgentManager {
         // Build a simple, clean prompt
         const taskPrompt = `${task.title}: ${task.description}`;
         
-        console.log(`[NofX AgentManager.executeTask] Sending task to agent`);
+        this.loggingService?.debug(`Sending task to agent`);
         
         // Show task assignment
         terminal.sendText(''); // Empty line for clarity
@@ -326,26 +310,28 @@ export class AgentManager {
         // Since Claude is already running in the agent's terminal with system prompt,
         // we can just send the task directly
         terminal.sendText(`Please complete this task: ${taskPrompt}`);
-        console.log(`[NofX AgentManager.executeTask] Sent task directly to already-running Claude instance`);
+        this.loggingService?.debug(`Sent task directly to already-running Claude instance`);
         
         // Show notification
-        vscode.window.showInformationMessage(
-            `🤖 Task sent to ${agent.name}'s Claude instance. Check terminal for progress.`,
-            'View Terminal'
-        ).then(selection => {
-            if (selection === 'View Terminal') {
-                terminal.show();
-            }
-        });
+        if (this.notificationService) {
+            this.notificationService.showInformation(
+                `🤖 Task sent to ${agent.name}'s Claude instance. Check terminal for progress.`,
+                'View Terminal'
+            ).then(selection => {
+                if (selection === 'View Terminal') {
+                    terminal.show();
+                }
+            });
+
+            // Show notification
+            this.notificationService.showInformation(
+                `🤖 ${agent.name} is working on: ${task.title}`
+            );
+        }
 
         // Log execution
-        outputChannel.appendLine(`\n🧠 Starting Claude Code session...`);
-        outputChannel.appendLine(`Task: ${task.title}`);
-        
-        // Show notification
-        vscode.window.showInformationMessage(
-            `🤖 ${agent.name} is working on: ${task.title}`
-        );
+        this.loggingService?.info(`Starting Claude Code session...`);
+        this.loggingService?.info(`Task: ${task.title}`);
 
         // Don't monitor - let the conductor or user decide when tasks are done
         // this.monitorTaskExecution(agentId, task);
@@ -416,9 +402,8 @@ export class AgentManager {
 
     public async completeTask(agentId: string, task: any) {
         const agent = this.agents.get(agentId);
-        const outputChannel = this.outputChannels.get(agentId);
         
-        if (!agent || !outputChannel) return;
+        if (!agent) return;
 
         // Update agent status
         agent.status = 'idle';
@@ -426,45 +411,54 @@ export class AgentManager {
         agent.tasksCompleted++;
         this._onAgentUpdate.fire();
         
+        // Publish event to EventBus
+        if (this.eventBus) {
+            this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, { agentId: agent.id, status: 'idle' });
+            this.eventBus.publish('agent.task.completed', { agentId: agent.id, task });
+        }
+        
         // Save state after update
         await this.saveAgentState();
 
-        outputChannel.appendLine(`\n✅ Task completed: ${task.title}`);
-        outputChannel.appendLine(`Total tasks completed: ${agent.tasksCompleted}`);
+        this.loggingService?.info(`Task completed: ${task.title}`);
+        this.loggingService?.info(`Total tasks completed: ${agent.tasksCompleted}`);
 
         // Show completion message
-        vscode.window.showInformationMessage(
-            `✅ ${agent.name} completed: ${task.title}`
-        );
+        if (this.notificationService) {
+            this.notificationService.showInformation(
+                `✅ ${agent.name} completed: ${task.title}`
+            );
+        }
     }
 
     async removeAgent(agentId: string) {
         const agent = this.agents.get(agentId);
         if (!agent) return;
 
-        // Clean up resources
-        const terminal = this.terminals.get(agentId);
-        const outputChannel = this.outputChannels.get(agentId);
-
-        if (terminal) {
-            terminal.dispose();
-            this.terminals.delete(agentId);
+        if (!this.agentLifecycleManager) {
+            const error = new Error('AgentLifecycleManager not available');
+            this.errorHandler?.handleError(error, 'removeAgent');
+            throw error;
         }
 
-        if (outputChannel) {
-            outputChannel.dispose();
-            this.outputChannels.delete(agentId);
-        }
-
-        this.agents.delete(agentId);
-        this._onAgentUpdate.fire();
+        // Delegate to AgentLifecycleManager
+        const success = await this.agentLifecycleManager.removeAgent(agentId);
         
-        // Save state after removal
-        await this.saveAgentState();
-
-        vscode.window.showInformationMessage(
-            `Agent ${agent.name} removed`
-        );
+        if (success) {
+            // Remove from our map
+            this.agents.delete(agentId);
+            this._onAgentUpdate.fire();
+            
+            // Publish event to EventBus
+            if (this.eventBus) {
+                this.eventBus.publish(DOMAIN_EVENTS.AGENT_REMOVED, { agentId, name: agent.name });
+            }
+            
+            // Save agent state after removing
+            await this.saveAgentState();
+            
+            this.loggingService?.info(`Agent ${agent.name} removed`);
+        }
     }
 
     getActiveAgents(): Agent[] {
@@ -479,22 +473,25 @@ export class AgentManager {
         const allAgents = Array.from(this.agents.values());
         const idleAgents = allAgents.filter(agent => agent.status === 'idle');
         
-        console.log(`[NofX AgentManager.getIdleAgents] Total agents: ${allAgents.length}, Idle: ${idleAgents.length}`);
+        this.loggingService?.debug(`Total agents: ${allAgents.length}, Idle: ${idleAgents.length}`);
         if (allAgents.length > 0) {
-            console.log(`[NofX AgentManager.getIdleAgents] Agent statuses:`, allAgents.map(a => `${a.name}(${a.id}): ${a.status}`));
+            this.loggingService?.debug(`Agent statuses:`, allAgents.map(a => `${a.name}(${a.id}): ${a.status}`));
         }
         
         return idleAgents;
     }
 
     getAgentTerminal(agentId: string): vscode.Terminal | undefined {
-        return this.terminals.get(agentId);
+        if (!this.terminalManager) {
+            return undefined;
+        }
+        return this.terminalManager.getTerminal(agentId);
     }
 
     private findAgentByTerminal(terminal: vscode.Terminal): Agent | undefined {
-        for (const [agentId, agentTerminal] of this.terminals.entries()) {
-            if (agentTerminal === terminal) {
-                return this.agents.get(agentId);
+        for (const [agentId, agent] of this.agents.entries()) {
+            if (agent.terminal === terminal) {
+                return agent;
             }
         }
         return undefined;
@@ -505,7 +502,7 @@ export class AgentManager {
         const IDLE_THRESHOLD = 30000; // 30 seconds of inactivity
         
         const checkInterval = setInterval(() => {
-            const terminal = this.terminals.get(agentId);
+            const terminal = this.terminalManager?.getTerminal(agentId);
             const agent = this.agents.get(agentId);
             
             if (!terminal || !agent || agent.status !== 'working') {
@@ -523,7 +520,7 @@ export class AgentManager {
                 // Terminal is not active, check if it's been idle too long
                 if (currentTime - lastActivityTime > IDLE_THRESHOLD) {
                     // Prompt user to confirm if task is complete
-                    vscode.window.showInformationMessage(
+                    this.notificationService?.showInformation(
                         `Is ${agent.name} done with "${task.title}"?`,
                         'Yes, Complete', 'Still Working'
                     ).then(selection => {
@@ -548,6 +545,33 @@ export class AgentManager {
         }
     }
 
+    public updateAgent(agent: Agent): void {
+        this.agents.set(agent.id, agent);
+        this._onAgentUpdate.fire();
+        this.saveAgentState();
+    }
+
+    public renameAgent(id: string, newName: string): void {
+        const agent = this.agents.get(id);
+        if (agent) {
+            agent.name = newName;
+            this.updateAgent(agent);
+        }
+    }
+
+    public updateAgentType(id: string, newType: string): void {
+        const agent = this.agents.get(id);
+        if (agent) {
+            agent.type = newType;
+            this.updateAgent(agent);
+        }
+    }
+
+    public setUseWorktrees(value: boolean): void {
+        // Delegate to ConfigurationService
+        this.configService?.update('useWorktrees', value, vscode.ConfigurationTarget.Workspace);
+    }
+
     private async saveAgentState() {
         if (!this.persistence) return;
         
@@ -555,7 +579,8 @@ export class AgentManager {
             const agents = Array.from(this.agents.values());
             await this.persistence.saveAgentState(agents);
         } catch (error) {
-            console.error('[NofX] Error saving agent state:', error);
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.errorHandler?.handleError(err, 'saveAgentState');
         }
     }
     
@@ -565,7 +590,8 @@ export class AgentManager {
         try {
             await this.persistence.saveAgentSession(agentId, content);
         } catch (error) {
-            console.error('[NofX] Error saving agent session:', error);
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.errorHandler?.handleError(err, 'saveAgentSession');
         }
     }
 
@@ -577,6 +603,15 @@ export class AgentManager {
         for (const agentId of this.agents.keys()) {
             this.removeAgent(agentId);
         }
+        
+        // Dispose services
+        this.agentLifecycleManager?.dispose();
+        this.terminalManager?.dispose();
+        this.worktreeService?.dispose();
+        
+        // Dispose all subscriptions
+        this.disposables.forEach(d => d.dispose());
+        this.disposables = [];
         
         this._onAgentUpdate.dispose();
     }

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { promises as fsPromises } from 'fs';
 import { Agent } from '../agents/types';
 
 /**
@@ -10,11 +11,15 @@ export class AgentPersistence {
     private persistenceDir: string;
     private agentSessionsDir: string;
     private stateFile: string;
+    private nofxDir: string;
+    private sessionsDir: string;
     
     constructor(workspaceRoot: string) {
         // Create .nofx directory in workspace for persistence
         this.persistenceDir = path.join(workspaceRoot, '.nofx');
+        this.nofxDir = this.persistenceDir; // Alias for compatibility
         this.agentSessionsDir = path.join(this.persistenceDir, 'sessions');
+        this.sessionsDir = this.agentSessionsDir; // Alias for compatibility
         this.stateFile = path.join(this.persistenceDir, 'agents.json');
         
         this.ensureDirectories();
@@ -240,5 +245,57 @@ export class AgentPersistence {
     
     private getSessionFileName(agentId: string): string {
         return `${agentId}_session.md`;
+    }
+
+    async clearAll() {
+        try {
+            // Clear agents.json
+            const agentStatePath = path.join(this.nofxDir, 'agents.json');
+            if (fs.existsSync(agentStatePath)) {
+                await fsPromises.unlink(agentStatePath);
+            }
+
+            // Clear all session files
+            const sessionFiles = await fsPromises.readdir(this.sessionsDir).catch(() => []);
+            for (const file of sessionFiles) {
+                await fsPromises.unlink(path.join(this.sessionsDir, file));
+            }
+
+            console.log('[NofX] Cleared all persistence data');
+        } catch (error) {
+            console.error('[NofX] Error clearing persistence data:', error);
+            throw error;
+        }
+    }
+
+    async archiveSessions(archiveName: string): Promise<string> {
+        const archiveDir = path.join(this.nofxDir, 'archives');
+        await this.ensureDirectories();
+        if (!fs.existsSync(archiveDir)) {
+            await fsPromises.mkdir(archiveDir, { recursive: true });
+        }
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const archivePath = path.join(archiveDir, `${archiveName}_${timestamp}`);
+        if (!fs.existsSync(archivePath)) {
+            await fsPromises.mkdir(archivePath, { recursive: true });
+        }
+
+        // Copy current sessions to archive
+        const sessionFiles = await fsPromises.readdir(this.sessionsDir).catch(() => []);
+        for (const file of sessionFiles) {
+            const sourcePath = path.join(this.sessionsDir, file);
+            const destPath = path.join(archivePath, file);
+            await fsPromises.copyFile(sourcePath, destPath);
+        }
+
+        // Copy agents.json if it exists
+        const agentStatePath = path.join(this.nofxDir, 'agents.json');
+        if (fs.existsSync(agentStatePath)) {
+            await fsPromises.copyFile(agentStatePath, path.join(archivePath, 'agents.json'));
+        }
+
+        console.log(`[NofX] Archived sessions to ${archivePath}`);
+        return archivePath;
     }
 }

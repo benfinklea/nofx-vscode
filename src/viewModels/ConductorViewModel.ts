@@ -1,0 +1,196 @@
+import * as vscode from 'vscode';
+import { IUIStateManager, ICommandService, IEventBus, ILoggingService, INotificationService, IConductorViewModel } from '../services/interfaces';
+import { ConductorViewState, WebviewCommand } from '../types/ui';
+import { DOMAIN_EVENTS } from '../services/EventConstants';
+
+export class ConductorViewModel implements IConductorViewModel {
+    private uiStateManager: IUIStateManager;
+    private commandService: ICommandService;
+    private eventBus: IEventBus;
+    private loggingService: ILoggingService;
+    private notificationService: INotificationService;
+    
+    // View-specific state
+    private collapsibleSections: Map<string, boolean> = new Map();
+    
+    // Event subscriptions
+    private subscriptions: vscode.Disposable[] = [];
+    private stateChangeCallbacks: ((state: ConductorViewState) => void)[] = [];
+
+    constructor(
+        uiStateManager: IUIStateManager,
+        commandService: ICommandService,
+        eventBus: IEventBus,
+        loggingService: ILoggingService,
+        notificationService: INotificationService
+    ) {
+        this.uiStateManager = uiStateManager;
+        this.commandService = commandService;
+        this.eventBus = eventBus;
+        this.loggingService = loggingService;
+        this.notificationService = notificationService;
+        
+        this.initialize();
+    }
+
+    private initialize(): void {
+        this.loggingService.info('ConductorViewModel: Initializing');
+        
+        // Subscribe to UI state changes
+        this.subscriptions.push(
+            this.uiStateManager.subscribe((state) => {
+                this.publishViewStateChange();
+            })
+        );
+    }
+
+    getViewState(): ConductorViewState {
+        return this.uiStateManager.getState();
+    }
+
+    async handleCommand(command: string, data?: any): Promise<void> {
+        try {
+            this.loggingService.debug('ConductorViewModel: Handling command', { command, data });
+            
+            switch (command as WebviewCommand) {
+                case 'spawnAgentGroup':
+                    await this.spawnAgentGroup(data?.groupName || 'Default Group');
+                    break;
+                case 'spawnCustomAgent':
+                    await this.spawnCustomAgent(data?.templateKey || 'default');
+                    break;
+                case 'createTask':
+                    await this.createTask();
+                    break;
+                case 'removeAgent':
+                    await this.removeAgent(data?.agentId);
+                    break;
+                case 'toggleTheme':
+                    await this.toggleTheme(data?.theme || 'light');
+                    break;
+                case 'showAgentPrompt':
+                    await this.showAgentPrompt();
+                    break;
+                default:
+                    this.loggingService.warn('ConductorViewModel: Unknown command', command);
+            }
+        } catch (error) {
+            this.loggingService.error('ConductorViewModel: Error handling command', error);
+            await this.notificationService.showError(`Failed to execute command: ${command}`);
+        }
+    }
+
+    async spawnAgentGroup(groupName: string): Promise<void> {
+        try {
+            this.loggingService.info('ConductorViewModel: Spawning agent group', { groupName });
+            // Pass through the groupName parameter to the command
+            await this.commandService.execute('nofx.addAgent', { groupName });
+            await this.notificationService.showInformation(`Agent group "${groupName}" spawned successfully`);
+        } catch (error) {
+            this.loggingService.error('ConductorViewModel: Error spawning agent group', error);
+            await this.notificationService.showError('Failed to spawn agent group');
+        }
+    }
+
+    async spawnCustomAgent(templateKey: string): Promise<void> {
+        try {
+            this.loggingService.info('ConductorViewModel: Spawning custom agent', { templateKey });
+            // Pass through the templateKey parameter to the command
+            await this.commandService.execute('nofx.addAgent', { templateKey });
+            await this.notificationService.showInformation(`Custom agent with template "${templateKey}" spawned successfully`);
+        } catch (error) {
+            this.loggingService.error('ConductorViewModel: Error spawning custom agent', error);
+            await this.notificationService.showError('Failed to spawn custom agent');
+        }
+    }
+
+    async createTask(): Promise<void> {
+        try {
+            this.loggingService.info('ConductorViewModel: Creating task');
+            await this.commandService.execute('nofx.createTask');
+            await this.notificationService.showInformation('Task created successfully');
+        } catch (error) {
+            this.loggingService.error('ConductorViewModel: Error creating task', error);
+            await this.notificationService.showError('Failed to create task');
+        }
+    }
+
+    async removeAgent(agentId: string): Promise<void> {
+        if (!agentId) {
+            await this.notificationService.showError('Agent ID is required');
+            return;
+        }
+
+        try {
+            this.loggingService.info('ConductorViewModel: Removing agent', { agentId });
+            // Use the existing deleteAgent command
+            await this.commandService.execute('nofx.deleteAgent', agentId);
+            await this.notificationService.showInformation(`Agent ${agentId} removed successfully`);
+        } catch (error) {
+            this.loggingService.error('ConductorViewModel: Error removing agent', error);
+            await this.notificationService.showError('Failed to remove agent');
+        }
+    }
+
+    async toggleTheme(theme: string): Promise<void> {
+        try {
+            this.loggingService.info('ConductorViewModel: Toggling theme', { theme });
+            this.eventBus.publish(DOMAIN_EVENTS.THEME_CHANGED, theme);
+            await this.notificationService.showInformation(`Theme changed to ${theme}`);
+        } catch (error) {
+            this.loggingService.error('ConductorViewModel: Error toggling theme', error);
+            await this.notificationService.showError('Failed to change theme');
+        }
+    }
+
+    async showAgentPrompt(): Promise<void> {
+        try {
+            this.loggingService.info('ConductorViewModel: Showing agent prompt');
+            // Use the existing addAgent command to show agent selection
+            await this.commandService.execute('nofx.addAgent');
+        } catch (error) {
+            this.loggingService.error('ConductorViewModel: Error showing agent prompt', error);
+            await this.notificationService.showError('Failed to show agent prompt');
+        }
+    }
+
+    subscribe(callback: (state: ConductorViewState) => void): vscode.Disposable {
+        this.stateChangeCallbacks.push(callback);
+        
+        // Immediately call with current state
+        callback(this.getViewState());
+        
+        return {
+            dispose: () => {
+                const index = this.stateChangeCallbacks.indexOf(callback);
+                if (index > -1) {
+                    this.stateChangeCallbacks.splice(index, 1);
+                }
+            }
+        };
+    }
+
+    private publishViewStateChange(): void {
+        const state = this.getViewState();
+        
+        // Notify direct subscribers
+        this.stateChangeCallbacks.forEach(callback => {
+            try {
+                callback(state);
+            } catch (error) {
+                this.loggingService.error('ConductorViewModel: Error in state change callback', error);
+            }
+        });
+    }
+
+    dispose(): void {
+        this.loggingService.info('ConductorViewModel: Disposing');
+        
+        // Dispose all subscriptions
+        this.subscriptions.forEach(sub => sub.dispose());
+        this.subscriptions = [];
+        
+        // Clear callbacks
+        this.stateChangeCallbacks = [];
+    }
+}

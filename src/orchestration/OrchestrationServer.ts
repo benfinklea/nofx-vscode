@@ -5,25 +5,53 @@ import {
     MessageType, 
     ClientConnection,
     createMessage,
-    isValidMessage,
     generateMessageId
 } from './MessageProtocol';
+import { 
+    ILoggingService, 
+    IEventBus, 
+    IErrorHandler,
+    IConnectionPoolService,
+    IMessageRouter,
+    IMessageValidator,
+    IMessagePersistenceService
+} from '../services/interfaces';
+import { ORCH_EVENTS, MessageReceivedPayload, ServerStartedPayload, ServerStoppedPayload } from '../services/EventConstants';
 
 export class OrchestrationServer {
     private wss: WebSocketServer | undefined;
-    private connections: Map<string, WebSocket> = new Map();
-    private clients: Map<string, ClientConnection> = new Map();
-    private messageHistory: OrchestratorMessage[] = [];
     private port: number;
     private actualPort: number = 0;
     private outputChannel: vscode.OutputChannel;
-    private dashboardCallback?: (message: OrchestratorMessage) => void;
-    private maxHistorySize = 1000;
-    private heartbeatInterval: NodeJS.Timeout | undefined;
     private isRunning = false;
+    private loggingService?: ILoggingService;
+    private eventBus?: IEventBus;
+    private errorHandler?: IErrorHandler;
     
-    constructor(port: number = 7777) {
+    // New service dependencies
+    private connectionPool?: IConnectionPoolService;
+    private messageRouter?: IMessageRouter;
+    private messageValidator?: IMessageValidator;
+    private messagePersistence?: IMessagePersistenceService;
+    
+    constructor(
+        port: number = 7777,
+        loggingService?: ILoggingService,
+        eventBus?: IEventBus,
+        errorHandler?: IErrorHandler,
+        connectionPool?: IConnectionPoolService,
+        messageRouter?: IMessageRouter,
+        messageValidator?: IMessageValidator,
+        messagePersistence?: IMessagePersistenceService
+    ) {
         this.port = port;
+        this.loggingService = loggingService;
+        this.eventBus = eventBus;
+        this.errorHandler = errorHandler;
+        this.connectionPool = connectionPool;
+        this.messageRouter = messageRouter;
+        this.messageValidator = messageValidator;
+        this.messagePersistence = messagePersistence;
         this.outputChannel = vscode.window.createOutputChannel('NofX Orchestration');
     }
     
@@ -32,125 +60,101 @@ export class OrchestrationServer {
      */
     async start(): Promise<void> {
         if (this.isRunning) {
-            this.log('Server already running on port ' + this.actualPort);
+            this.loggingService?.info('Server already running on port ' + this.actualPort);
             return;
         }
-        
-        // Try multiple ports if default is taken
-        const portsToTry = [this.port, 7778, 7779, 7780, 8888, 8889, 9999];
-        let started = false;
-        
-        for (const port of portsToTry) {
-            try {
-                await this.tryStartOnPort(port);
-                this.actualPort = port;
-                started = true;
-                break;
-            } catch (error: any) {
-                if (error.code === 'EADDRINUSE') {
-                    this.log(`Port ${port} in use, trying next...`, 'warn');
-                    continue;
-                }
-                // Other errors, stop trying
-                this.log(`Failed to start on port ${port}: ${error.message}`, 'error');
-                throw error;
-            }
+
+        try {
+            await this.tryStartOnPort(this.port);
+            this.isRunning = true;
+            
+            this.loggingService?.info(`Orchestration server started on port ${this.actualPort}`);
+            this.eventBus?.publish(ORCH_EVENTS.SERVER_STARTED, { port: this.actualPort } as ServerStartedPayload);
+            
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.errorHandler?.handleError(err, 'Failed to start orchestration server');
+            throw err;
         }
-        
-        if (!started) {
-            const errorMsg = 'Could not find available port for orchestration server';
-            this.log(errorMsg, 'error');
-            vscode.window.showErrorMessage(errorMsg);
-            throw new Error(errorMsg);
-        }
-        
-        this.isRunning = true;
-        
-        // Start heartbeat checking
-        this.startHeartbeatMonitor();
-        
-        this.log(`🚀 Orchestration server started on ws://localhost:${this.actualPort}`);
-        this.outputChannel.show();
-        
-        // Send system message
-        this.broadcastSystemMessage('Orchestration server online');
-    }
-    
-    /**
-     * Try to start server on specific port
-     */
-    private async tryStartOnPort(port: number): Promise<void> {
-        return new Promise((resolve, reject) => {
-            try {
-                this.wss = new WebSocketServer({ 
-                    port: port,
-                    host: 'localhost'
-                });
-                
-                this.wss.on('connection', (ws: WebSocket, req) => {
-                    this.handleConnection(ws, req);
-                });
-                
-                this.wss.on('error', (error: any) => {
-                    // Only show error if not EADDRINUSE (we handle that silently)
-                    if (error.code !== 'EADDRINUSE') {
-                        this.log(`Server error on port ${port}: ${error.message}`, 'error');
-                    }
-                    this.wss?.close();
-                    this.wss = undefined;
-                    reject(error);
-                });
-                
-                this.wss.on('listening', () => {
-                    resolve();
-                });
-                
-            } catch (error) {
-                reject(error);
-            }
-        });
     }
     
     /**
      * Stop the WebSocket server
      */
-    stop(): void {
+    async stop(): Promise<void> {
         if (!this.isRunning) {
+            this.loggingService?.info('Server not running');
             return;
         }
-        
-        if (this.heartbeatInterval) {
-            clearInterval(this.heartbeatInterval);
-            this.heartbeatInterval = undefined;
-        }
-        
-        // Close all connections
-        this.connections.forEach((ws, id) => {
-            try {
-                ws.close(1000, 'Server shutting down');
-            } catch (e) {
-                // Ignore errors during shutdown
+
+        try {
+            // Stop heartbeat monitoring
+            this.connectionPool?.stopHeartbeat();
+            
+            // Close all connections
+            this.connectionPool?.dispose();
+            
+            // Close WebSocket server
+            if (this.wss) {
+                this.wss.close();
+                this.wss = undefined;
             }
-        });
-        
-        if (this.wss) {
-            this.wss.close(() => {
-                this.log('Server stopped');
-            });
-            this.wss = undefined;
+            
+            this.isRunning = false;
+            this.actualPort = 0;
+            
+            this.loggingService?.info('Orchestration server stopped');
+            this.eventBus?.publish(ORCH_EVENTS.SERVER_STOPPED, {} as ServerStoppedPayload);
+            
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.errorHandler?.handleError(err, 'Failed to stop orchestration server');
+            throw err;
         }
-        
-        this.connections.clear();
-        this.clients.clear();
-        this.isRunning = false;
-        this.actualPort = 0;
     }
     
     /**
-     * Get the actual port the server is running on
+     * Try to start server on specified port, with fallback to other ports
      */
-    getPort(): number {
-        return this.actualPort;
+    private async tryStartOnPort(port: number): Promise<void> {
+        const maxAttempts = 10;
+        let currentPort = port;
+        
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+                await this.startOnPort(currentPort);
+                this.actualPort = currentPort;
+                return;
+            } catch (error) {
+                if (attempt === maxAttempts - 1) {
+                    throw error;
+                }
+                currentPort++;
+                this.loggingService?.warn(`Port ${currentPort - 1} unavailable, trying ${currentPort}`);
+            }
+        }
+    }
+    
+    /**
+     * Start server on specific port
+     */
+    private async startOnPort(port: number): Promise<void> {
+        return new Promise((resolve, reject) => {
+            this.wss = new WebSocketServer({ port });
+            
+            this.wss.on('listening', () => {
+                this.loggingService?.info(`WebSocket server listening on port ${port}`);
+                resolve();
+            });
+            
+            this.wss.on('error', (error) => {
+                reject(error);
+            });
+            
+            this.wss.on('connection', (ws: WebSocket, req: any) => {
+                this.handleConnection(ws, req);
+            });
+        });
     }
     
     /**
@@ -160,314 +164,85 @@ export class OrchestrationServer {
         const clientId = generateMessageId();
         const clientIp = req.socket.remoteAddress;
         
-        this.log(`New connection from ${clientIp} (assigned ID: ${clientId})`);
+        this.loggingService?.info(`New connection from ${clientIp} (assigned ID: ${clientId})`);
         
-        // Store connection
-        this.connections.set(clientId, ws);
+        // Determine if this is an agent connection based on user agent or other headers
+        const userAgent = req.headers['user-agent'] || '';
+        const isAgent = userAgent.includes('nofx-agent') || userAgent.includes('claude');
         
-        // Send welcome message with client ID
-        const welcomeMessage = createMessage(
-            'system',
+        // Add connection to pool
+        this.connectionPool?.addConnection(ws, clientId, {
             clientId,
-            MessageType.CONNECTION_ESTABLISHED,
-            { 
-                clientId,
-                serverTime: new Date().toISOString(),
-                orchestrationPort: this.actualPort
-            }
-        );
+            userAgent,
+            connectedAt: new Date(),
+            lastHeartbeat: new Date(),
+            messageCount: 0,
+            isAgent
+        });
         
-        ws.send(JSON.stringify(welcomeMessage));
-        
-        // Handle messages from this client
+        // Set up message handling
         ws.on('message', (data: Buffer) => {
             this.handleMessage(clientId, data.toString());
-        });
-        
-        // Handle client disconnect
-        ws.on('close', () => {
-            this.handleDisconnect(clientId);
-        });
-        
-        // Handle errors
-        ws.on('error', (error) => {
-            this.log(`Client ${clientId} error: ${error.message}`, 'error');
-        });
-        
-        // Handle pong for heartbeat
-        ws.on('pong', () => {
-            const client = this.clients.get(clientId);
-            if (client) {
-                client.lastHeartbeat = new Date().toISOString();
-            }
         });
     }
     
     /**
      * Handle incoming message from a client
      */
-    private handleMessage(clientId: string, data: string): void {
+    private async handleMessage(clientId: string, rawMessage: string): Promise<void> {
         try {
-            const message = JSON.parse(data);
+            this.loggingService?.debug(`Received message from ${clientId}: ${rawMessage.substring(0, 100)}...`);
             
-            // Handle client registration
-            if (message.type === 'register') {
-                this.registerClient(clientId, message);
+            // Validate message
+            const validationResult = this.messageValidator?.validate(rawMessage);
+            if (!validationResult?.isValid) {
+                this.loggingService?.warn(`Invalid message from ${clientId}:`, validationResult?.errors);
+                
+                // Send error response
+                const errorResponse = this.messageValidator?.createErrorResponse(
+                    `Validation failed: ${validationResult?.errors.join(', ')}`,
+                    clientId
+                );
+                
+                if (errorResponse) {
+                    this.connectionPool?.sendToClient(clientId, errorResponse);
+                }
                 return;
             }
             
-            // Validate message format
-            if (!isValidMessage(message)) {
-                this.sendError(clientId, 'Invalid message format');
-                return;
-            }
+            // Use parsed message from validation result
+            const message: OrchestratorMessage = validationResult.result;
             
-            // Update message with server timestamp
-            message.timestamp = new Date().toISOString();
+            // Publish MESSAGE_RECEIVED event
+            this.eventBus?.publish(ORCH_EVENTS.MESSAGE_RECEIVED, { message } as MessageReceivedPayload);
             
-            // Log the message
-            this.log(`Message from ${message.from}: ${message.type}`);
-            
-            // Store in history
-            this.addToHistory(message);
-            
-            // Route the message
-            this.routeMessage(message);
-            
-            // Send to dashboard if connected
-            if (this.dashboardCallback) {
-                this.dashboardCallback(message);
-            }
-            
-            // Send acknowledgment if required
-            if (message.requiresAck) {
-                this.sendAcknowledgment(clientId, message.id);
-            }
-            
-        } catch (error: any) {
-            this.log(`Error processing message from ${clientId}: ${error.message}`, 'error');
-            this.sendError(clientId, 'Failed to process message');
-        }
-    }
-    
-    /**
-     * Register a client (conductor, agent, or dashboard)
-     */
-    private registerClient(tempId: string, registration: any): void {
-        const { id, clientType, name, role } = registration;
-        const type = clientType || registration.type; // Support both fields
-        
-        // Remove temp connection
-        const ws = this.connections.get(tempId);
-        if (!ws) return;
-        
-        this.connections.delete(tempId);
-        this.connections.set(id, ws);
-        
-        // Store client info
-        const client: ClientConnection = {
-            id,
-            type,
-            name,
-            connectedAt: new Date().toISOString(),
-            lastHeartbeat: new Date().toISOString(),
-            messageCount: 0,
-            role,
-            status: 'connected'
-        };
-        
-        this.clients.set(id, client);
-        
-        this.log(`Client registered: ${name} (${id}) as ${type}`);
-        
-        // Notify others about new client
-        this.broadcastSystemMessage(`${name} has joined`, [id]);
-        
-        // Send current state to new client
-        if (type === 'conductor' || type === 'dashboard') {
-            this.sendCurrentState(id);
-        }
-    }
-    
-    /**
-     * Route message to appropriate recipient(s)
-     */
-    private routeMessage(message: OrchestratorMessage): void {
-        const { to } = message;
-        
-        if (to === 'broadcast') {
-            // Send to all except sender
-            this.broadcast(message, [message.from]);
-        } else if (to === 'dashboard') {
-            // Special handling for dashboard
-            if (this.dashboardCallback) {
-                this.dashboardCallback(message);
-            }
-        } else if (to.startsWith('agent-') || to === 'conductor') {
-            // Direct message to specific client
-            this.sendToClient(to, message);
-        } else if (to === 'all-agents') {
-            // Send to all agents
-            this.clients.forEach((client, id) => {
-                if (client.type === 'agent') {
-                    this.sendToClient(id, message);
+            // Register logical ID if this is the first message from a client
+            if (message.from && message.from !== 'system') {
+                const connection = this.connectionPool?.getConnection(clientId);
+                if (connection && !this.connectionPool?.resolveLogicalId(message.from)) {
+                    this.connectionPool?.registerLogicalId(clientId, message.from);
+                    
+                    // Replay recent messages to newly registered client
+                    await this.replayToClient(message.from);
                 }
-            });
-        }
-        
-        // Update message count
-        const sender = this.clients.get(message.from);
-        if (sender) {
-            sender.messageCount++;
-        }
-    }
-    
-    /**
-     * Send message to specific client
-     */
-    private sendToClient(clientId: string, message: OrchestratorMessage): void {
-        const ws = this.connections.get(clientId);
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(message));
-        } else {
-            this.log(`Cannot send to ${clientId}: not connected`, 'warn');
-        }
-    }
-    
-    /**
-     * Broadcast message to all clients except excluded ones
-     */
-    private broadcast(message: OrchestratorMessage, exclude: string[] = []): void {
-        const messageStr = JSON.stringify(message);
-        
-        this.connections.forEach((ws, id) => {
-            if (!exclude.includes(id) && ws.readyState === WebSocket.OPEN) {
-                ws.send(messageStr);
             }
-        });
-    }
-    
-    /**
-     * Send system message
-     */
-    private broadcastSystemMessage(text: string, exclude: string[] = []): void {
-        const message = createMessage(
-            'system',
-            'broadcast',
-            MessageType.BROADCAST,
-            { message: text }
-        );
-        
-        this.broadcast(message, exclude);
-        this.addToHistory(message);
-    }
-    
-    /**
-     * Handle client disconnect
-     */
-    private handleDisconnect(clientId: string): void {
-        const client = this.clients.get(clientId);
-        if (client) {
-            this.log(`Client disconnected: ${client.name} (${clientId})`);
-            this.broadcastSystemMessage(`${client.name} has disconnected`);
-        }
-        
-        this.connections.delete(clientId);
-        this.clients.delete(clientId);
-    }
-    
-    /**
-     * Send current state to a client
-     */
-    private sendCurrentState(clientId: string): void {
-        const agents = Array.from(this.clients.values())
-            .filter(c => c.type === 'agent')
-            .map(c => ({
-                id: c.id,
-                name: c.name,
-                role: c.role,
-                status: c.status,
-                connectedAt: c.connectedAt
-            }));
-        
-        const stateMessage = createMessage(
-            'system',
-            clientId,
-            MessageType.BROADCAST,
-            {
-                type: 'state_update',
-                agents,
-                messageHistory: this.messageHistory.slice(-50) // Last 50 messages
-            }
-        );
-        
-        this.sendToClient(clientId, stateMessage);
-    }
-    
-    /**
-     * Send error message to client
-     */
-    private sendError(clientId: string, error: string): void {
-        const errorMessage = createMessage(
-            'system',
-            clientId,
-            MessageType.SYSTEM_ERROR,
-            { error }
-        );
-        
-        this.sendToClient(clientId, errorMessage);
-    }
-    
-    /**
-     * Send acknowledgment
-     */
-    private sendAcknowledgment(clientId: string, messageId: string): void {
-        const ack = {
-            type: 'ack',
-            messageId,
-            timestamp: new Date().toISOString()
-        };
-        
-        const ws = this.connections.get(clientId);
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(ack));
-        }
-    }
-    
-    /**
-     * Monitor client heartbeats
-     */
-    private startHeartbeatMonitor(): void {
-        this.heartbeatInterval = setInterval(() => {
-            const now = Date.now();
-            const timeout = 30000; // 30 seconds
             
-            this.connections.forEach((ws, id) => {
-                const client = this.clients.get(id);
-                if (client) {
-                    const lastBeat = new Date(client.lastHeartbeat).getTime();
-                    if (now - lastBeat > timeout) {
-                        this.log(`Client ${id} timed out`, 'warn');
-                        ws.terminate();
-                        this.handleDisconnect(id);
-                    } else {
-                        // Send ping
-                        ws.ping();
-                    }
-                }
-            });
-        }, 10000); // Check every 10 seconds
-    }
-    
-    /**
-     * Add message to history
-     */
-    private addToHistory(message: OrchestratorMessage): void {
-        this.messageHistory.push(message);
-        
-        // Trim history if too large
-        if (this.messageHistory.length > this.maxHistorySize) {
-            this.messageHistory = this.messageHistory.slice(-this.maxHistorySize);
+            // Route message
+            await this.messageRouter?.route(message);
+            
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.errorHandler?.handleError(err, `Error handling message from ${clientId}`);
+            
+            // Send error response
+            const errorResponse = this.messageValidator?.createErrorResponse(
+                'Internal server error',
+                clientId
+            );
+            
+            if (errorResponse) {
+                this.connectionPool?.sendToClient(clientId, errorResponse);
+            }
         }
     }
     
@@ -475,29 +250,106 @@ export class OrchestrationServer {
      * Set dashboard callback for receiving messages
      */
     setDashboardCallback(callback: (message: OrchestratorMessage) => void): void {
-        this.dashboardCallback = callback;
+        // Delegate to message router
+        this.messageRouter?.setDashboardCallback(callback);
     }
-    
+
     /**
-     * Get current connections
+     * Clear dashboard callback
      */
-    getConnections(): ClientConnection[] {
-        return Array.from(this.clients.values());
+    clearDashboardCallback(): void {
+        // Delegate to message router
+        this.messageRouter?.setDashboardCallback(undefined);
     }
-    
+
     /**
-     * Get message history
+     * Get current connections (for backward compatibility)
      */
-    getMessageHistory(): OrchestratorMessage[] {
-        return [...this.messageHistory];
+    getConnections(): Map<string, WebSocket> {
+        const connections = new Map<string, WebSocket>();
+        const managedConnections = this.connectionPool?.getAllConnections();
+        
+        if (managedConnections) {
+            managedConnections.forEach((connection, clientId) => {
+                connections.set(clientId, connection.ws);
+            });
+        }
+        
+        return connections;
     }
-    
+
     /**
-     * Log message to output channel
+     * Get message history (for backward compatibility)
      */
-    private log(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
-        const timestamp = new Date().toISOString();
-        const prefix = level === 'error' ? '❌' : level === 'warn' ? '⚠️' : '📡';
-        this.outputChannel.appendLine(`[${timestamp}] ${prefix} ${message}`);
+    async getMessageHistory(): Promise<OrchestratorMessage[]> {
+        return await this.messagePersistence?.load(0, 100) || [];
+    }
+
+    /**
+     * Register client (for backward compatibility)
+     */
+    registerClient(clientId: string, type: 'agent' | 'conductor'): void {
+        // This is now handled automatically by the connection pool
+        this.loggingService?.debug(`Client registered: ${clientId} (${type})`);
+    }
+
+    /**
+     * Send message to specific client (for backward compatibility)
+     */
+    sendToClient(clientId: string, message: OrchestratorMessage): boolean {
+        return this.connectionPool?.sendToClient(clientId, message) || false;
+    }
+
+    /**
+     * Broadcast message to all clients (for backward compatibility)
+     */
+    broadcast(message: OrchestratorMessage, excludeIds?: string[]): void {
+        this.connectionPool?.broadcast(message, excludeIds);
+    }
+
+    /**
+     * Replay messages to a client
+     */
+    private async replayToClient(logicalId: string): Promise<void> {
+        if (!this.messageRouter) {
+            return;
+        }
+
+        try {
+            // Replay last 10 minutes of messages by default
+            const filter = {
+                timeRange: {
+                    from: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago
+                    to: new Date()
+                },
+                limit: 100
+            };
+
+            await this.messageRouter.replayToClient(logicalId, filter);
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.errorHandler?.handleError(err, `Failed to replay messages to ${logicalId}`);
+        }
+    }
+
+    /**
+     * Get server status
+     */
+    getStatus(): { isRunning: boolean; port: number; connectionCount: number } {
+        const connectionCount = this.connectionPool?.getAllConnections().size || 0;
+        return {
+            isRunning: this.isRunning,
+            port: this.actualPort,
+            connectionCount
+        };
+    }
+
+    /**
+     * Dispose of resources
+     */
+    dispose(): void {
+        this.stop();
+        this.outputChannel.dispose();
+        this.loggingService?.debug('OrchestrationServer disposed');
     }
 }

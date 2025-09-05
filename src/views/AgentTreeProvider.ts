@@ -1,26 +1,28 @@
 import * as vscode from 'vscode';
-import { AgentManager } from '../agents/AgentManager';
-import { Agent, Task } from '../agents/types';
-import { TaskQueue } from '../tasks/TaskQueue';
+import { ITreeStateManager, IUIStateManager } from '../services/interfaces';
 
 export class AgentTreeProvider implements vscode.TreeDataProvider<TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<TreeItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
-    private teamName: string = 'Active Agents';
+    private disposables: vscode.Disposable[] = [];
 
     constructor(
-        private agentManager: AgentManager,
-        private taskQueue?: TaskQueue
+        private treeStateManager: ITreeStateManager,
+        private uiStateManager: IUIStateManager
     ) {
-        agentManager.onAgentUpdate(() => {
-            this._onDidChangeTreeData.fire();
-        });
-        
-        if (taskQueue) {
-            taskQueue.onTaskUpdate(() => {
+        // Subscribe to tree state changes
+        this.disposables.push(
+            this.treeStateManager.subscribe(() => {
                 this._onDidChangeTreeData.fire();
-            });
-        }
+            })
+        );
+        
+        // Subscribe to UI state changes
+        this.disposables.push(
+            this.uiStateManager.subscribe(() => {
+                this._onDidChangeTreeData.fire();
+            })
+        );
     }
 
     getTreeItem(element: TreeItem): vscode.TreeItem {
@@ -29,40 +31,9 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeItem> {
 
     getChildren(element?: TreeItem): Thenable<TreeItem[]> {
         if (!element) {
-            // Return root level items - sections for agents and tasks
-            const items: TreeItem[] = [];
-            
-            // Add agents section with team name
-            const agents = this.agentManager.getActiveAgents();
-            if (agents.length > 0) {
-                // Get team name from global variable
-                const teamName = (global as any).currentTeamName || this.teamName;
-                items.push(new TeamSectionItem(teamName, 'organization', agents));
-            }
-            
-            // Add tasks section if we have a task queue
-            if (this.taskQueue) {
-                const pendingTasks = this.taskQueue.getPendingTasks();
-                const activeTasks = this.taskQueue.getActiveTasks();
-                
-                if (pendingTasks.length > 0 || activeTasks.length > 0) {
-                    items.push(new SectionItem('Tasks', 'tasklist'));
-                    
-                    // Show active tasks first
-                    if (activeTasks.length > 0) {
-                        items.push(...activeTasks.map(task => new TaskItem(task, true)));
-                    }
-                    
-                    // Then pending tasks
-                    if (pendingTasks.length > 0) {
-                        items.push(...pendingTasks.map(task => new TaskItem(task, false)));
-                    }
-                }
-            }
-            
-            // Don't show any message when empty - the welcome view will show instead
-            
-            return Promise.resolve(items);
+            // Delegate to TreeStateManager for root items
+            const sectionItems = this.treeStateManager.getSectionItems();
+            return Promise.resolve(sectionItems.map(item => this.createTreeItem(item)));
         }
         
         // Handle expanding team section
@@ -73,14 +44,44 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeItem> {
         return Promise.resolve([]);
     }
 
+    private createTreeItem(item: any): TreeItem {
+        // Convert TreeStateManager items to TreeItems
+        if (item.type === 'teamSection') {
+            const isExpanded = this.treeStateManager.expandedSections?.has('teamSection') ?? true;
+            return new TeamSectionItem(item.label, item.icon, item.agents, isExpanded);
+        } else if (item.type === 'section') {
+            return new SectionItem(item.label, item.icon);
+        } else if (item.type === 'agent') {
+            return new AgentItem(item.agent);
+        } else if (item.type === 'task') {
+            return new TaskItem(item.task, item.isActive);
+        } else if (item.type === 'message') {
+            return new MessageItem(item.message);
+        }
+        
+        // Fallback
+        return new SectionItem(item.label || 'Unknown', 'question');
+    }
+
     refresh(): void {
         this._onDidChangeTreeData.fire();
     }
     
     setTeamName(name: string): void {
-        this.teamName = name;
-        (global as any).currentTeamName = name;
-        this.refresh();
+        this.treeStateManager.setTeamName(name);
+    }
+    
+    dispose(): void {
+        // Dispose all subscriptions
+        while (this.disposables.length) {
+            const disposable = this.disposables.pop();
+            if (disposable) {
+                disposable.dispose();
+            }
+        }
+        
+        // Dispose event emitter
+        this._onDidChangeTreeData.dispose();
     }
 }
 
@@ -98,8 +99,8 @@ class SectionItem extends TreeItem {
 
 // Team section header item (collapsible)
 class TeamSectionItem extends TreeItem {
-    constructor(label: string, icon: string, public readonly agents: Agent[]) {
-        super(label, vscode.TreeItemCollapsibleState.Expanded); // Default to expanded
+    constructor(label: string, icon: string, public readonly agents: any[], isExpanded: boolean = true) {
+        super(label, isExpanded ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed);
         this.iconPath = new vscode.ThemeIcon(icon);
         this.contextValue = 'teamSection';
         this.tooltip = `${label} (${agents.length} agents)`;
@@ -124,7 +125,7 @@ class MessageItem extends TreeItem {
 
 // Agent item
 class AgentItem extends TreeItem {
-    constructor(public readonly agent: Agent) {
+    constructor(public readonly agent: any) {
         super(`  ${agent.name}`, vscode.TreeItemCollapsibleState.None);
         
         this.tooltip = `${agent.name} (${agent.type})`;
@@ -153,7 +154,7 @@ class AgentItem extends TreeItem {
 
 // Task item
 class TaskItem extends TreeItem {
-    constructor(public readonly task: Task, isActive: boolean) {
+    constructor(public readonly task: any, isActive: boolean) {
         super(`  ${task.title}`, vscode.TreeItemCollapsibleState.None);
         
         this.tooltip = task.description || task.title;

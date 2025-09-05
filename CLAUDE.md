@@ -4,7 +4,7 @@ This file provides comprehensive guidance to Claude Code (claude.ai/code) when w
 
 ## 🎸 Project Overview
 
-NofX is a VS Code extension that orchestrates multiple AI agents (Claude instances) to work collaboratively on development tasks. It features a sophisticated conductor system that can manage agents, assign tasks, and coordinate complex workflows through a modern webview-based chat interface.
+NofX is a VS Code extension that orchestrates multiple AI agents (Claude instances) to work collaboratively on development tasks. It features a sophisticated conductor system that can manage agents, assign tasks, and coordinate complex workflows through a unified terminal-based interface.
 
 ## 🚀 Quick Start
 
@@ -27,15 +27,23 @@ npm run watch
 
 ## 🏗️ Architecture Overview
 
+### Git Worktrees Integration (NEW)
+NofX now supports Git worktrees for parallel Claude sessions (Anthropic's recommendation):
+- Each agent works in their own isolated branch
+- No merge conflicts during parallel development
+- Automatic worktree creation and cleanup
+- Easy merging of agent work back to main branch
+
 ### Core Components
 
 #### 1. **Conductor System** (`src/conductor/`)
-Three levels of conductor intelligence:
+Conductor implementations:
 
-- **ConductorChat** - Basic terminal-based conductor
+- **ConductorTerminal** - Terminal-based conductor using Claude CLI (PRIMARY)
 - **IntelligentConductor** - Smart conductor with enhanced capabilities  
 - **SuperSmartConductor** - VP-level conductor with architectural decision-making
-- **ConductorChatWebview** - Modern webview-based chat interface (PRIMARY)
+- **ConductorChatWebview** - Webview-based chat interface (DEPRECATED - use Terminal)
+- **ConductorChatSimple** - Alternative conductor implementation
 
 #### 2. **WebSocket Orchestration** (`src/orchestration/`)
 Real-time bi-directional communication system:
@@ -73,9 +81,11 @@ Conductor ←→ WebSocket Server (7777) ←→ Agents
 nofx-vscode/
 ├── src/
 │   ├── conductor/           # Conductor implementations
-│   │   ├── ConductorChatWebview.ts  # Main webview chat (PRIMARY)
+│   │   ├── ConductorTerminal.ts     # Main terminal conductor (PRIMARY)
+│   │   ├── ConductorChatWebview.ts  # Webview chat (deprecated)
 │   │   ├── SuperSmartConductor.ts   # VP-level conductor
-│   │   └── IntelligentConductor.ts  # Smart conductor
+│   │   ├── IntelligentConductor.ts  # Smart conductor
+│   │   └── ConductorChatSimple.ts   # Alternative conductor
 │   ├── orchestration/       # WebSocket communication
 │   │   ├── OrchestrationServer.ts   # WebSocket server
 │   │   └── MessageProtocol.ts       # Message definitions
@@ -90,6 +100,8 @@ nofx-vscode/
 │   ├── views/              # VS Code tree views
 │   │   ├── AgentTreeProvider.ts     # Agent sidebar
 │   │   └── TaskTreeProvider.ts      # Task sidebar
+│   ├── worktrees/          # Git worktree management (NEW)
+│   │   └── WorktreeManager.ts       # Worktree lifecycle
 │   └── extension.ts        # Main extension entry
 ├── webview/               # Webview UI components
 │   ├── chat.js/css        # Conductor chat UI
@@ -98,17 +110,19 @@ nofx-vscode/
 │   ├── agents.json        # Active agents state
 │   ├── sessions/          # Agent session logs
 │   └── templates/         # Agent template definitions
+├── .nofx-worktrees/       # Agent worktrees (adjacent to project)
+│   └── [agent-id]/        # Individual agent working directory
 └── package.json           # Extension manifest
 ```
 
-## 💬 Conductor Chat System
+## 💬 Conductor Terminal System
 
 ### How It Works
 
-1. **User Opens Chat**: Click NofX icon → Conductor chat opens automatically
-2. **Claude Process**: Attempts to spawn Claude CLI, falls back to mock mode
-3. **WebSocket Connection**: Connects to orchestration server on port 7777
-4. **Message Handling**: User messages → Claude/Mock → Parse JSON commands → Execute
+1. **User Starts Team**: Select team preset → Conductor terminal opens automatically
+2. **Claude CLI**: Uses `claude --append-system-prompt` with conductor instructions
+3. **Terminal Interface**: Same as regular agents - unified experience
+4. **Message Handling**: Type commands directly in terminal → Claude processes → Execute
 
 ### Conductor Commands
 
@@ -128,13 +142,13 @@ The conductor understands JSON commands embedded in natural language:
 {"type": "terminate", "agentId": "agent-2"}
 ```
 
-### Mock Mode (Fallback)
+### Terminal Approach
 
-When Claude CLI isn't available, the conductor uses intelligent mock responses:
-- Detects keywords in user input
-- Provides contextual responses
-- Maintains conversation flow
-- Simulates agent management
+The conductor now uses the same terminal-based approach as regular agents:
+- Direct Claude CLI integration with `--append-system-prompt`
+- No separate chat webview needed
+- Consistent experience across conductor and agents
+- Audio icon (🎵) in terminal tab for easy identification
 
 ## 🔌 WebSocket Orchestration
 
@@ -220,14 +234,56 @@ enum MessageType {
 
 | Command | Description |
 |---------|------------|
-| `nofx.openConductorChat` | Open conductor chat webview |
+| `nofx.openConductorTerminal` | Open conductor terminal |
 | `nofx.openMessageFlow` | Open message flow dashboard |
-| `nofx.startConductor` | Start conductor selection |
-| `nofx.quickStartChat` | Quick start with 3 agents |
-| `nofx.addAgent` | Add new agent |
+| `nofx.startConductor` | Start new session with team selection |
+| `nofx.restoreAgents` | Restore previous session |
+| `nofx.addAgent` | Add agent(s) - individual or team preset |
 | `nofx.browseAgentTemplates` | Browse agent templates |
-| `nofx.exportSessions` | Export agent sessions |
+| `nofx.exportSessions` | Save current session |
 | `nofx.clearPersistence` | Clear all saved data |
+| `nofx.toggleWorktrees` | Toggle git worktrees on/off |
+| `nofx.mergeAgentWork` | Merge agent work from worktree |
+
+## 🌳 Git Worktrees for Parallel Development
+
+### Overview
+Following Anthropic's recommendation, NofX uses git worktrees to enable parallel Claude sessions without conflicts.
+
+### How It Works
+1. **Automatic Creation**: Each agent gets their own worktree when spawned
+2. **Isolated Branches**: Agents work on `agent-[name]-[timestamp]` branches
+3. **No Conflicts**: Multiple agents can modify the same files independently
+4. **Easy Merging**: Merge agent work back to main with one command
+
+### Configuration
+```json
+// .vscode/settings.json
+{
+  "nofx.useWorktrees": true  // Enable/disable worktrees
+}
+```
+
+### Worktree Structure
+```
+project/
+├── main workspace (your code)
+└── ../.nofx-worktrees/
+    ├── agent-abc123/  (Frontend Dev worktree)
+    ├── agent-def456/  (Backend Dev worktree)
+    └── agent-ghi789/  (Test Engineer worktree)
+```
+
+### Commands
+- **View worktrees**: `git worktree list`
+- **Merge agent work**: `Cmd+Shift+P` → "NofX: Merge Agent Work"
+- **Toggle worktrees**: `Cmd+Shift+P` → "NofX: Toggle Git Worktrees"
+
+### Benefits
+- **Parallel Development**: Multiple agents work simultaneously
+- **No Merge Conflicts**: Each agent has isolated workspace
+- **Clean History**: Organized branch structure
+- **Easy Rollback**: Discard agent branches if needed
 
 ## 🛠️ Development Guidelines
 
@@ -262,7 +318,10 @@ npm test
 ### Common Issues & Solutions
 
 #### Issue: Conductor not responding
-**Solution**: Extension falls back to mock mode when Claude CLI unavailable
+**Solution**: Check Claude CLI is installed and accessible. Conductor uses terminal now, same as agents.
+
+#### Issue: System prompt not submitting
+**Solution**: Fixed - all agents and conductor now use `--append-system-prompt` flag
 
 #### Issue: WebSocket connection failed
 **Solution**: Orchestration server starts automatically on extension activation
@@ -278,27 +337,37 @@ npm test
 - Templates in `.nofx/templates/`
 - Auto-restore on VS Code restart
 
-### Auto-Open Conductor
+### Team Management UI
 ```typescript
-// When NofX icon clicked → Conductor chat opens
-agentTreeView.onDidChangeVisibility(async (e) => {
-    if (e.visible && !hasShownConductor) {
-        await openConductorChatWebview();
+// Collapsible team sections in sidebar
+// Click team name → Opens conductor terminal
+// Click agent name → Opens agent terminal
+class TeamSectionItem extends TreeItem {
+    constructor(label: string, icon: string, agents: Agent[]) {
+        super(label, vscode.TreeItemCollapsibleState.Expanded);
+        this.command = {
+            command: 'nofx.openConductorTerminal',
+            title: 'Open Conductor'
+        };
     }
-});
+}
 ```
 
-### Mock Claude Responses
+### Agent System Prompts
 ```typescript
-// Intelligent fallback when Claude CLI unavailable
-if (text.includes('test') || text.includes('coverage')) {
-    response = "Analyzing project for test coverage...";
-}
+// All agents use --append-system-prompt flag
+const fullPrompt = agent.template.systemPrompt + 
+    '\n\nYou are part of a NofX.dev coding team. ' +
+    'Please wait for further instructions. ' +
+    "Don't do anything yet. Just wait.";
+const escapedPrompt = fullPrompt.replace(/'/g, "'\\''");
+terminal.sendText(`${claudePath} --append-system-prompt '${escapedPrompt}'`);
 ```
 
 ## 🚀 Future Enhancements
 
 ### Planned Features
+- [x] Git worktrees for parallel Claude sessions (IMPLEMENTED)
 - [ ] Agent-to-agent communication
 - [ ] Task dependency graphs
 - [ ] Performance metrics tracking
@@ -320,10 +389,11 @@ if (text.includes('test') || text.includes('coverage')) {
 ### When Making Changes
 
 1. **Always preserve the WebSocket orchestration** - It's core to agent communication
-2. **Maintain mock mode fallback** - Not all users have Claude CLI installed
+2. **Use terminal approach for Claude integration** - Consistent with agent implementation
 3. **Test in both VS Code and Cursor** - They handle extensions differently
 4. **Include dependencies when packaging** - WebSocket (ws) module required
 5. **Update both TypeScript and JavaScript** - Webview uses JS, extension uses TS
+6. **Use --append-system-prompt flag** - Required for proper Claude CLI integration
 
 ### Code Style
 
@@ -341,9 +411,11 @@ When testing changes:
 3. Install: `code --install-extension nofx-0.1.0.vsix --force`
 4. Reload VS Code/Cursor completely
 5. Test all major features:
-   - Conductor chat responds
+   - Conductor terminal opens and accepts commands
+   - Agents spawn with proper system prompts
+   - Team sections are collapsible
+   - Click behaviors work (team → conductor, agent → terminal)
    - Dashboard shows messages
-   - Agents can be spawned
    - Persistence works
 
 ## 🔗 Related Documentation
@@ -352,6 +424,44 @@ When testing changes:
 - [WebView API Guide](https://code.visualstudio.com/api/extension-guides/webview)
 - [Tree View Guide](https://code.visualstudio.com/api/extension-guides/tree-view)
 - [VS Code Extension Samples](https://github.com/microsoft/vscode-extension-samples)
+
+## 🧪 Testing the Orchestration System
+
+### Quick Test Commands
+
+1. **Test Basic File Creation**:
+```json
+// In conductor terminal:
+{"type": "spawn", "role": "frontend-specialist", "name": "Test Agent"}
+{"type": "assign", "agentId": "agent-1", "task": "Create hello.js with a greeting function"}
+```
+
+2. **Test Team Coordination**:
+```json
+// Spawn a team
+{"type": "spawn", "role": "frontend-specialist", "name": "UI Dev"}
+{"type": "spawn", "role": "backend-specialist", "name": "API Dev"}
+
+// Assign coordinated tasks
+{"type": "assign", "agentId": "agent-1", "task": "Create React components"}
+{"type": "assign", "agentId": "agent-2", "task": "Create API endpoints"}
+```
+
+3. **Verify Communication**:
+- Open Message Flow Dashboard to see real-time messages
+- Check agent terminals for task execution
+- Monitor file changes in workspace/worktrees
+
+### Testing Checklist
+- ✅ Conductor accepts JSON commands
+- ✅ Agents spawn in separate terminals
+- ✅ Tasks appear in agent terminals
+- ✅ Files are created/modified
+- ✅ Worktrees isolate agent work
+- ✅ Message dashboard shows communication
+- ✅ Agent status updates correctly
+
+See `TEST_ORCHESTRATION.md` for comprehensive testing scenarios.
 
 ## 📞 Support & Debugging
 

@@ -26,6 +26,7 @@ export enum MessageType {
     CONNECTION_LOST = 'connection_lost',
     HEARTBEAT = 'heartbeat',
     SYSTEM_ERROR = 'system_error',
+    SYSTEM_ACK = 'system_ack',
     BROADCAST = 'broadcast'
 }
 

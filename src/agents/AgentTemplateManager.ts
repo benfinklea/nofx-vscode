@@ -219,6 +219,11 @@ export class AgentTemplateManager {
         return true;
     }
 
+    // Alias for createTemplate to match command expectations
+    public async saveTemplate(template: AgentTemplate, isCustom: boolean = true) {
+        return this.createTemplate(template, isCustom);
+    }
+
     public async editTemplate(id: string) {
         const template = this.templates.get(id);
         if (!template) return;

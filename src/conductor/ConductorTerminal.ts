@@ -43,11 +43,11 @@ export class ConductorTerminal {
         // Start Claude with --append-system-prompt flag
         const command = `${this.claudePath} --append-system-prompt '${escapedPrompt}'`;
         
-        // Show the user what we're doing
-        this.terminal.sendText('echo "Running: claude --append-system-prompt \\"<conductor system prompt>\\""');
+        // Show the user what we're doing (simplified message)
+        this.terminal.sendText('echo "Running: claude --append-system-prompt \'<conductor system prompt>\'"');
         this.terminal.sendText('echo ""');
         
-        // Execute the command
+        // Execute the actual command
         this.terminal.sendText(command);
     }
     

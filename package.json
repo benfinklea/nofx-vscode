@@ -140,6 +140,16 @@
         "command": "nofx.browseAgentTemplates",
         "title": "NofX: Browse Agent Templates",
         "icon": "$(library)"
+      },
+      {
+        "command": "nofx.toggleWorktrees",
+        "title": "NofX: Toggle Git Worktrees",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "nofx.mergeAgentWork",
+        "title": "NofX: Merge Agent Work",
+        "icon": "$(git-merge)"
       }
     ],
     "menus": {
@@ -191,6 +201,12 @@
           "name": "Activity",
           "icon": "$(pulse)",
           "contextualTitle": "Agent Activity"
+        },
+        {
+          "id": "nofx.tasks",
+          "name": "Tasks",
+          "icon": "$(tasklist)",
+          "contextualTitle": "Task Management"
         }
       ],
       "panel": [
@@ -241,6 +257,16 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically assign tasks to available agents"
+        },
+        "nofx.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically start NofX when VS Code opens"
+        },
+        "nofx.useWorktrees": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use Git worktrees for parallel agent sessions (Anthropic recommendation)"
         },
         "nofx.claudeCommandStyle": {
           "type": "string",
