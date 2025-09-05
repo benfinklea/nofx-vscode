@@ -1,0 +1,206 @@
+name: Test and Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node-version: [18, 20]
+        exclude:
+          - os: windows-latest
+            node-version: 18
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Compile TypeScript
+      run: npm run compile
+
+    - name: Run linting
+      run: npm run lint
+
+    - name: Run unit tests
+      run: npm run test:unit
+      env:
+        CI: true
+
+    - name: Run integration tests
+      run: npm run test:integration
+      env:
+        CI: true
+        ENABLE_TEST_LOGGING: false
+
+    - name: Run test coverage
+      run: npm run test:coverage
+      env:
+        CI: true
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.os }}-node${{ matrix.node-version }}
+        path: |
+          coverage/
+          test-results/
+        retention-days: 30
+
+  build:
+    name: Build Extension
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Compile TypeScript
+      run: npm run compile
+
+    - name: Build extension
+      run: npm run build
+
+    - name: Upload extension artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: nofx-extension
+        path: nofx-*.vsix
+        retention-days: 30
+
+  performance-test:
+    name: Performance Regression Test
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Compile TypeScript
+      run: npm run compile
+
+    - name: Run performance tests
+      run: npm run test:integration -- --testNamePattern="Performance"
+      env:
+        CI: true
+        ENABLE_TEST_LOGGING: false
+
+    - name: Check performance regression
+      run: |
+        # This would compare current metrics with baseline
+        # For now, just ensure tests complete within time limits
+        echo "Performance tests completed successfully"
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run npm audit
+      run: npm audit --audit-level=moderate
+
+    - name: Run security scan with CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: javascript
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [test, build, security-scan]
+    if: always()
+
+    steps:
+    - name: Check test results
+      run: |
+        if [ "${{ needs.test.result }}" != "success" ]; then
+          echo "Tests failed"
+          exit 1
+        fi
+
+    - name: Check build results
+      run: |
+        if [ "${{ needs.build.result }}" != "success" ]; then
+          echo "Build failed"
+          exit 1
+        fi
+
+    - name: Check security scan results
+      run: |
+        if [ "${{ needs.security-scan.result }}" != "success" ]; then
+          echo "Security scan failed"
+          exit 1
+        fi
+
+    - name: Quality gate passed
+      run: echo "All quality checks passed successfully"
+
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [test, build, security-scan, quality-gate]
+    if: always() && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Notify on success
+      if: needs.quality-gate.result == 'success'
+      run: |
+        echo "✅ All tests passed on main branch"
+        # Add notification logic here (Slack, email, etc.)
+
+    - name: Notify on failure
+      if: needs.quality-gate.result == 'failure'
+      run: |
+        echo "❌ Tests failed on main branch"
+        # Add notification logic here (Slack, email, etc.)

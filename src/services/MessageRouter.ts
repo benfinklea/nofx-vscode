@@ -30,6 +30,12 @@ export class MessageRouter implements IMessageRouter {
         lastFailure: null as Date | null,
         failureCount: 0
     };
+    private retryQueues: Map<string, Array<{message: OrchestratorMessage, attempt: number, next: number}>> = new Map();
+    private retryTimer?: NodeJS.Timeout;
+    private fallbackFlushTimer?: NodeJS.Timeout;
+    private maxRetries = 3;
+    private baseDelay = 1000; // 1 second
+    private fallbackFlushInterval = 30000; // 30 seconds
 
     constructor(
         private connectionPool: IConnectionPoolService,
@@ -42,6 +48,8 @@ export class MessageRouter implements IMessageRouter {
     ) {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
+        this.startRetryProcessor();
+        this.startFallbackFlushTimer();
     }
 
     async route(message: OrchestratorMessage): Promise<void> {
@@ -52,6 +60,15 @@ export class MessageRouter implements IMessageRouter {
             if (this.messagePersistence) {
                 try {
                     await this.messagePersistence.save(message);
+                    
+                    // Check if persistence recovered and flush fallback buffer
+                    if (!this.persistenceStatus.isHealthy && this.fallbackBuffer.length > 0) {
+                        this.loggingService.info('Persistence recovered, flushing fallback buffer', {
+                            bufferSize: this.fallbackBuffer.length
+                        });
+                        await this.flushFallbackBuffer();
+                    }
+                    
                     this.persistenceStatus.isHealthy = true;
                     this.persistenceStatus.failureCount = 0;
                 } catch (error) {
@@ -80,9 +97,12 @@ export class MessageRouter implements IMessageRouter {
             }
 
             // Check if this is a system command first
-            if (message.to === 'conductor' || message.type === MessageType.SPAWN_AGENT || message.type === MessageType.ASSIGN_TASK || message.type === MessageType.QUERY_STATUS || message.type === MessageType.TERMINATE_AGENT) {
-                await this.routeSystemCommand(message);
-                return;
+            if (message.type === MessageType.SPAWN_AGENT || message.type === MessageType.ASSIGN_TASK || message.type === MessageType.QUERY_STATUS || message.type === MessageType.TERMINATE_AGENT) {
+                const handled = await this.routeSystemCommand(message);
+                if (handled) {
+                    return;
+                }
+                // If not handled by system command, fall through to normal routing
             }
 
             // Route based on destination
@@ -200,10 +220,37 @@ export class MessageRouter implements IMessageRouter {
         return DestinationUtil.isValidDestination(to);
     }
 
-    async replayToClient(target: string, filter?: MessageFilter): Promise<void> {
+    async replayToClient(target: string, filter?: MessageFilter, deferUntilRegistered: boolean = true): Promise<void> {
         if (!this.messagePersistence) {
             this.loggingService.warn('Message persistence not available for replay');
             return;
+        }
+
+        // Check if logical ID is resolved
+        if (!this.connectionPool.resolveLogicalId(target)) {
+            if (deferUntilRegistered) {
+                this.loggingService.debug(`Logical ID ${target} not resolved, deferring replay until registered`);
+                
+                // Subscribe to logical ID registration event
+                const subscription = this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_REGISTERED, (data) => {
+                    if (data.logicalId === target) {
+                        this.loggingService.debug(`Logical ID ${target} registered, triggering deferred replay`);
+                        subscription.dispose();
+                        this.replayToClient(target, filter, false); // Don't defer again
+                    }
+                });
+                
+                // Set a timeout to avoid indefinite waiting
+                setTimeout(() => {
+                    subscription.dispose();
+                    this.loggingService.warn(`Timeout waiting for logical ID ${target} to register`);
+                }, 30000); // 30 second timeout
+                
+                return;
+            } else {
+                this.loggingService.warn(`Logical ID ${target} not resolved, skipping replay`);
+                return;
+            }
         }
 
         try {
@@ -237,8 +284,121 @@ export class MessageRouter implements IMessageRouter {
 
     dispose(): void {
         this.dashboardCallback = undefined;
+        if (this.retryTimer) {
+            clearInterval(this.retryTimer);
+            this.retryTimer = undefined;
+        }
+        if (this.fallbackFlushTimer) {
+            clearInterval(this.fallbackFlushTimer);
+            this.fallbackFlushTimer = undefined;
+        }
         this.loggingService.debug('MessageRouter disposed', {
             finalStats: this.deliveryStats
+        });
+    }
+
+    private startRetryProcessor(): void {
+        this.retryTimer = setInterval(() => {
+            this.processRetries();
+        }, 1000); // Process retries every second
+    }
+
+    private startFallbackFlushTimer(): void {
+        this.fallbackFlushTimer = setInterval(async () => {
+            if (this.persistenceStatus.isHealthy && this.fallbackBuffer.length > 0) {
+                this.loggingService.debug('Periodic fallback buffer flush triggered', {
+                    bufferSize: this.fallbackBuffer.length
+                });
+                await this.flushFallbackBuffer();
+            }
+        }, this.fallbackFlushInterval);
+    }
+
+    private async processRetries(): Promise<void> {
+        const now = Date.now();
+        
+        for (const [destination, retryQueue] of this.retryQueues.entries()) {
+            const readyMessages = retryQueue.filter(item => now >= item.next);
+            
+            for (const item of readyMessages) {
+                // Remove from queue
+                const index = retryQueue.indexOf(item);
+                retryQueue.splice(index, 1);
+                
+                // Try to deliver
+                const success = this.connectionPool.sendToLogical(destination, item.message);
+                
+                if (success) {
+                    this.deliveryStats.successfulDeliveries++;
+                    this.eventBus.publish(ORCH_EVENTS.MESSAGE_DELIVERED, {
+                        messageId: item.message.id,
+                        from: item.message.from,
+                        to: item.message.to,
+                        resolvedTo: destination,
+                        timestamp: item.message.timestamp
+                    } as MessageDeliveredPayload);
+                    
+                    this.loggingService.debug('Retry delivery successful', {
+                        messageId: item.message.id,
+                        destination,
+                        attempt: item.attempt
+                    });
+                } else {
+                    // Increment attempt and reschedule
+                    item.attempt++;
+                    if (item.attempt <= this.maxRetries) {
+                        item.next = now + (this.baseDelay * Math.pow(2, item.attempt - 1));
+                        retryQueue.push(item);
+                        
+                        this.loggingService.debug('Retry delivery failed, rescheduling', {
+                            messageId: item.message.id,
+                            destination,
+                            attempt: item.attempt,
+                            nextRetry: new Date(item.next)
+                        });
+                    } else {
+                        // Max retries exceeded, drop message
+                        this.deliveryStats.failedDeliveries++;
+                        this.eventBus.publish(ORCH_EVENTS.MESSAGE_DELIVERY_FAILED, {
+                            messageId: item.message.id,
+                            from: item.message.from,
+                            to: item.message.to,
+                            resolvedTo: destination,
+                            reason: 'Max retries exceeded'
+                        } as MessageDeliveryFailedPayload);
+                        
+                        this.loggingService.warn('Message dropped after max retries', {
+                            messageId: item.message.id,
+                            destination,
+                            maxRetries: this.maxRetries
+                        });
+                    }
+                }
+            }
+            
+            // Clean up empty queues
+            if (retryQueue.length === 0) {
+                this.retryQueues.delete(destination);
+            }
+        }
+    }
+
+    private enqueueRetry(destination: string, message: OrchestratorMessage): void {
+        if (!this.retryQueues.has(destination)) {
+            this.retryQueues.set(destination, []);
+        }
+        
+        const retryQueue = this.retryQueues.get(destination)!;
+        retryQueue.push({
+            message,
+            attempt: 1,
+            next: Date.now() + this.baseDelay
+        });
+        
+        this.loggingService.debug('Message enqueued for retry', {
+            messageId: message.id,
+            destination,
+            nextRetry: new Date(Date.now() + this.baseDelay)
         });
     }
 
@@ -256,29 +416,31 @@ export class MessageRouter implements IMessageRouter {
         });
     }
 
-    private async routeSystemCommand(message: OrchestratorMessage): Promise<void> {
+    private async routeSystemCommand(message: OrchestratorMessage): Promise<boolean> {
         try {
             this.loggingService.debug('Routing system command', { messageId: message.id, type: message.type });
 
             switch (message.type) {
                 case MessageType.SPAWN_AGENT:
                     await this.handleSpawnAgent(message);
-                    break;
+                    return true;
                 case MessageType.ASSIGN_TASK:
                     await this.handleAssignTask(message);
-                    break;
+                    return true;
                 case MessageType.QUERY_STATUS:
                     await this.handleQueryStatus(message);
-                    break;
+                    return true;
                 case MessageType.TERMINATE_AGENT:
                     await this.handleTerminateAgent(message);
-                    break;
+                    return true;
                 default:
                     this.loggingService.warn('Unknown system command type', { messageId: message.id, type: message.type });
+                    return false;
             }
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler.handleError(err, `Failed to route system command ${message.id}`);
+            return false;
         }
     }
 
@@ -499,13 +661,22 @@ export class MessageRouter implements IMessageRouter {
                     timestamp: message.timestamp
                 } as MessageDeliveredPayload);
             } else {
-                this.eventBus.publish(ORCH_EVENTS.MESSAGE_DELIVERY_FAILED, {
-                    messageId: message.id,
-                    from: message.from,
-                    to: message.to,
-                    resolvedTo: targetClientId,
-                    reason: 'Client not connected'
-                } as MessageDeliveryFailedPayload);
+                // If destination resolved but send failed, enqueue for retry
+                if (this.connectionPool.resolveLogicalId(to)) {
+                    this.enqueueRetry(to, message);
+                    this.loggingService.debug('Message enqueued for retry due to delivery failure', {
+                        messageId: message.id,
+                        destination: to
+                    });
+                } else {
+                    this.eventBus.publish(ORCH_EVENTS.MESSAGE_DELIVERY_FAILED, {
+                        messageId: message.id,
+                        from: message.from,
+                        to: message.to,
+                        resolvedTo: targetClientId,
+                        reason: 'Client not connected'
+                    } as MessageDeliveryFailedPayload);
+                }
             }
 
             return success;

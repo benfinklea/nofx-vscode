@@ -66,4 +66,5 @@ export interface TaskConfig {
     tags?: string[];
     estimatedDuration?: number;
     requiredCapabilities?: string[];
+    capabilities?: string[]; // Deprecated: use requiredCapabilities instead
 }

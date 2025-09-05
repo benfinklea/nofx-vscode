@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ConductorViewState, DashboardViewState, AgentDTO, TaskDTO } from '../types/ui';
-import { Task, TaskStatus, TaskValidationError } from '../agents/types';
+import { Task, TaskStatus, TaskValidationError, Agent } from '../agents/types';
 
 // Service tokens for type-safe dependency resolution
 export const SERVICE_TOKENS = {
@@ -34,7 +34,9 @@ export const SERVICE_TOKENS = {
     ConductorViewModel: Symbol('ConductorViewModel'),
     DashboardViewModel: Symbol('DashboardViewModel'),
     TreeStateManager: Symbol('TreeStateManager'),
-    AgentTreeViewHost: Symbol('AgentTreeViewHost')
+    AgentTreeViewHost: Symbol('AgentTreeViewHost'),
+    MetricsService: Symbol('MetricsService'),
+    ConfigurationValidator: Symbol('ConfigurationValidator')
 } as const;
 
 // Configuration service for managing VS Code configuration
@@ -238,6 +240,11 @@ export const CONFIG_KEYS = {
     PERSIST_AGENTS: 'persistAgents',   // (future) Persist agent state
     LOG_LEVEL: 'logLevel',             // (future) Logging level
     ORCHESTRATION_PORT: 'orchestrationPort', // (future) WebSocket server port
+    // Metrics configuration
+    ENABLE_METRICS: 'enableMetrics',   // Enable metrics collection
+    METRICS_OUTPUT_LEVEL: 'metricsOutputLevel', // Metrics output detail level
+    TEST_MODE: 'testMode',             // Test mode flag
+    CLAUDE_COMMAND_STYLE: 'claudeCommandStyle', // Claude command style
     // Orchestration service configuration
     ORCH_HEARTBEAT_INTERVAL: 'orchestration.heartbeatInterval',
     ORCH_HEARTBEAT_TIMEOUT: 'orchestration.heartbeatTimeout',
@@ -446,6 +453,14 @@ export interface IConnectionPoolService {
     registerLogicalId(clientId: string, logicalId: string): void;
     resolveLogicalId(logicalId: string): string | undefined;
     unregisterLogicalId(logicalId: string): void;
+    getConnectionSummaries(): Array<{
+        clientId: string;
+        isAgent: boolean;
+        connectedAt: string;
+        lastHeartbeat: string;
+        messageCount: number;
+        userAgent?: string;
+    }>;
     startHeartbeat(): void;
     stopHeartbeat(): void;
     dispose(): void;
@@ -491,3 +506,57 @@ export interface IMessagePersistenceService {
     getStats(): Promise<{totalMessages: number, oldestMessage: Date}>;
     dispose(): void;
 }
+
+// Metric types for performance monitoring
+export enum MetricType {
+    COUNTER = 'counter',
+    GAUGE = 'gauge',
+    HISTOGRAM = 'histogram',
+    TIMER = 'timer'
+}
+
+// Validation error interface
+export interface ValidationError {
+    field: string;
+    message: string;
+    severity: 'error' | 'warning' | 'info';
+}
+
+// Metric data interface
+export interface MetricData {
+    name: string;
+    type: MetricType;
+    value: number;
+    tags?: Record<string, string>;
+    timestamp: Date;
+}
+
+// Metrics Service interface for performance monitoring
+export interface IMetricsService {
+    incrementCounter(name: string, tags?: Record<string, string>): void;
+    recordDuration(name: string, duration: number, tags?: Record<string, string>): void;
+    setGauge(name: string, value: number, tags?: Record<string, string>): void;
+    startTimer(name: string): string;
+    endTimer(timerId: string): void;
+    getMetrics(): MetricData[];
+    resetMetrics(): void;
+    exportMetrics(format?: 'json' | 'csv'): string;
+    getDashboardData(): Record<string, any>;
+    dispose(): void;
+}
+
+// Configuration Validator interface for schema-based validation
+export interface IConfigurationValidator {
+    validateConfiguration(config: Record<string, any>): { isValid: boolean; errors: ValidationError[] };
+    validateConfigurationKey(key: string, value: any): { isValid: boolean; errors: ValidationError[] };
+    getValidationSchema(): any;
+    getValidationErrors(): ValidationError[];
+    dispose(): void;
+}
+
+// Configuration keys for metrics
+export const METRICS_CONFIG_KEYS = {
+    ENABLE_METRICS: 'enableMetrics',
+    METRICS_OUTPUT_LEVEL: 'metricsOutputLevel',
+    METRICS_RETENTION_HOURS: 'metricsRetentionHours'
+} as const;

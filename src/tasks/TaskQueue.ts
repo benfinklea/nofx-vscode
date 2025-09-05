@@ -1,8 +1,17 @@
 import * as vscode from 'vscode';
 import { Task, TaskConfig, TaskStatus, TaskValidationError } from '../agents/types';
 import { AgentManager } from '../agents/AgentManager';
-import { ILoggingService, IEventBus, IErrorHandler, INotificationService, ITaskReader, IConfigurationService, ITaskStateMachine, IPriorityTaskQueue, ICapabilityMatcher, ITaskDependencyManager } from '../services/interfaces';
+import { ILoggingService, IEventBus, IErrorHandler, INotificationService, ITaskReader, IConfigurationService, ITaskStateMachine, IPriorityTaskQueue, ICapabilityMatcher, ITaskDependencyManager, IMetricsService } from '../services/interfaces';
 import { DOMAIN_EVENTS } from '../services/EventConstants';
+
+// Utility function to safely publish events
+function safePublish(eventBus: any, logger: any, event: string, data: any) {
+    try {
+        eventBus?.publish(event, data);
+    } catch (error) {
+        logger?.warn(`Failed to publish event ${event}`, { error: error instanceof Error ? error.message : String(error) });
+    }
+}
 import { priorityToNumeric } from './priority';
 
 /**
@@ -28,6 +37,7 @@ export class TaskQueue implements ITaskReader {
     private priorityQueue?: IPriorityTaskQueue;
     private capabilityMatcher?: ICapabilityMatcher;
     private dependencyManager?: ITaskDependencyManager;
+    private metricsService?: IMetricsService;
     private subscriptions: vscode.Disposable[] = [];
 
     constructor(
@@ -40,7 +50,8 @@ export class TaskQueue implements ITaskReader {
         taskStateMachine?: ITaskStateMachine,
         priorityQueue?: IPriorityTaskQueue,
         capabilityMatcher?: ICapabilityMatcher,
-        dependencyManager?: ITaskDependencyManager
+        dependencyManager?: ITaskDependencyManager,
+        metricsService?: IMetricsService
     ) {
         this.agentManager = agentManager;
         this.loggingService = loggingService;
@@ -52,6 +63,7 @@ export class TaskQueue implements ITaskReader {
         this.priorityQueue = priorityQueue;
         this.capabilityMatcher = capabilityMatcher;
         this.dependencyManager = dependencyManager;
+        this.metricsService = metricsService;
         
         // Auto-assign tasks when agents become available
         this.agentManager.onAgentUpdate(() => {
@@ -121,6 +133,12 @@ export class TaskQueue implements ITaskReader {
         this.loggingService?.debug(`Creating task ${taskId}`);
         this.loggingService?.debug(`Config:`, config);
         
+        // Record task creation metrics
+        this.metricsService?.incrementCounter('tasks_created', { 
+            priority: config.priority || 'medium',
+            hasDependencies: (config.dependsOn && config.dependsOn.length > 0) ? 'true' : 'false'
+        });
+        
         const task: Task = {
             id: taskId,
             title: config.title,
@@ -179,7 +197,7 @@ export class TaskQueue implements ITaskReader {
                     
                     // Publish task.created event before early return
                     if (this.eventBus) {
-                        this.eventBus.publish(DOMAIN_EVENTS.TASK_CREATED, { taskId, task });
+                        safePublish(this.eventBus, this.loggingService, DOMAIN_EVENTS.TASK_CREATED, { taskId, task });
                     }
                     
                     this._onTaskUpdate.fire();
@@ -228,7 +246,7 @@ export class TaskQueue implements ITaskReader {
                         // Set blockedBy to dependencies for UI visibility
                         task.blockedBy = task.dependsOn || [];
                         // Publish waiting event for observability
-                        this.eventBus?.publish(DOMAIN_EVENTS.TASK_WAITING, { taskId: task.id, task, reasons: readinessErrors });
+                        safePublish(this.eventBus, this.loggingService, DOMAIN_EVENTS.TASK_WAITING, { taskId: task.id, task, reasons: readinessErrors });
                     }
                 }
             } else {
@@ -452,6 +470,7 @@ export class TaskQueue implements ITaskReader {
         const task = this.tasks.get(taskId);
         if (!task) {
             this.loggingService?.warn(`Task ${taskId} not found`);
+            this.metricsService?.incrementCounter('tasks_completion_failed', { reason: 'task_not_found' });
             return false;
         }
 
@@ -460,14 +479,25 @@ export class TaskQueue implements ITaskReader {
             const transitionErrors = this.taskStateMachine.transition(task, 'completed');
             if (transitionErrors.length > 0) {
                 this.loggingService?.error(`State transition failed:`, transitionErrors);
+                this.metricsService?.incrementCounter('tasks_completion_failed', { reason: 'transition_error' });
                 return false;
             }
         } else {
             task.status = 'completed';
             task.completedAt = new Date();
         }
+        
+        // Record successful completion metrics
+        this.metricsService?.incrementCounter('tasks_completed', { 
+            priority: task.priority,
+            duration: task.completedAt && task.createdAt ? 
+                (task.completedAt.getTime() - task.createdAt.getTime()) : 0
+        });
 
         this._onTaskUpdate.fire();
+        
+        // Update queue depth metrics
+        this.updateQueueMetrics();
 
         // Check for dependent tasks that become ready
         if (this.dependencyManager) {
@@ -615,9 +645,12 @@ export class TaskQueue implements ITaskReader {
     }
 
     async assignTask(taskId: string, agentId: string): Promise<boolean> {
+        const assignmentTimer = this.metricsService?.startTimer('task_assignment_duration');
+        
         const task = this.tasks.get(taskId);
         if (!task) {
             this.loggingService?.warn(`Task ${taskId} not found`);
+            this.metricsService?.incrementCounter('assignments_failed', { reason: 'task_not_found' });
             return false;
         }
 
@@ -682,10 +715,24 @@ export class TaskQueue implements ITaskReader {
                 }
             });
             
+            // Record successful assignment metrics
+            this.metricsService?.endTimer(assignmentTimer!);
+            this.metricsService?.incrementCounter('assignments_made', { 
+                agentId,
+                taskPriority: task.priority 
+            });
+            
             return true;
         } catch (error: any) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler?.handleError(err, 'assignTask');
+            
+            // Record failed assignment metrics
+            this.metricsService?.endTimer(assignmentTimer!);
+            this.metricsService?.incrementCounter('assignments_failed', { 
+                reason: 'assignment_error',
+                error: err.message 
+            });
             
             // Revert via state machine on failure
             if (this.taskStateMachine) {
@@ -982,6 +1029,24 @@ export class TaskQueue implements ITaskReader {
                 });
             }
         }
+    }
+
+    /**
+     * Updates queue depth and status metrics
+     */
+    private updateQueueMetrics(): void {
+        if (!this.metricsService) return;
+        
+        const tasks = this.getTasks();
+        const stats = this.getTaskStats();
+        
+        // Update queue depth metrics
+        this.metricsService.setGauge('current_queue_depth', stats.queued + stats.ready);
+        this.metricsService.setGauge('ready_tasks_count', stats.ready);
+        this.metricsService.setGauge('blocked_tasks_count', stats.blocked);
+        this.metricsService.setGauge('active_tasks_count', stats.inProgress);
+        this.metricsService.setGauge('completed_tasks_count', stats.completed);
+        this.metricsService.setGauge('failed_tasks_count', stats.failed);
     }
 
     dispose() {

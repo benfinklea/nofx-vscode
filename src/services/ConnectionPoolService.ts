@@ -121,16 +121,30 @@ export class ConnectionPoolService implements IConnectionPoolService {
 
         this.connections.delete(clientId);
 
-        // Clean up logical address registry
+        // Collect all logical IDs mapped to this client and unregister them
+        const logicalIdsToUnregister: string[] = [];
         for (const [logicalId, registeredClientId] of this.logicalAddressRegistry.entries()) {
             if (registeredClientId === clientId) {
-                this.logicalAddressRegistry.delete(logicalId);
+                logicalIdsToUnregister.push(logicalId);
             }
+        }
+
+        // Unregister each logical ID and publish events
+        for (const logicalId of logicalIdsToUnregister) {
+            this.logicalAddressRegistry.delete(logicalId);
+            this.loggingService.debug(`Unregistered logical ID: ${logicalId} -> ${clientId}`);
+            
+            this.eventBus.publish(ORCH_EVENTS.LOGICAL_ID_UNREGISTERED, {
+                clientId,
+                logicalId,
+                timestamp: new Date().toISOString()
+            } as LogicalIdUnregisteredPayload);
         }
 
         this.loggingService.info(`Connection removed: ${clientId}`, {
             messageCount: connection.messageCount,
-            duration: Date.now() - connection.metadata.connectedAt.getTime()
+            duration: Date.now() - connection.metadata.connectedAt.getTime(),
+            unregisteredLogicalIds: logicalIdsToUnregister.length
         });
 
         // Publish event
@@ -274,6 +288,37 @@ export class ConnectionPoolService implements IConnectionPoolService {
 
         this.isHeartbeatRunning = false;
         this.loggingService.info('Heartbeat monitoring stopped');
+    }
+
+    getConnectionSummaries(): Array<{
+        clientId: string;
+        isAgent: boolean;
+        connectedAt: string;
+        lastHeartbeat: string;
+        messageCount: number;
+        userAgent?: string;
+    }> {
+        const summaries: Array<{
+            clientId: string;
+            isAgent: boolean;
+            connectedAt: string;
+            lastHeartbeat: string;
+            messageCount: number;
+            userAgent?: string;
+        }> = [];
+
+        this.connections.forEach((connection, clientId) => {
+            summaries.push({
+                clientId,
+                isAgent: connection.metadata.isAgent,
+                connectedAt: connection.metadata.connectedAt.toISOString(),
+                lastHeartbeat: connection.metadata.lastHeartbeat.toISOString(),
+                messageCount: connection.metadata.messageCount,
+                userAgent: connection.metadata.userAgent
+            });
+        });
+
+        return summaries;
     }
 
     dispose(): void {

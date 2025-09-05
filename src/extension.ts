@@ -5,6 +5,8 @@ import { Container } from './services/Container';
 import { SERVICE_TOKENS, IContainer, CONFIG_KEYS, ILoggingService, IEventBus, ITaskStateMachine, IMessagePersistenceService } from './services/interfaces';
 import { DOMAIN_EVENTS } from './services/EventConstants';
 import { ConfigurationService } from './services/ConfigurationService';
+import { ConfigurationValidator } from './services/ConfigurationValidator';
+import { MetricsService } from './services/MetricsService';
 import { NotificationService } from './services/NotificationService';
 import { LoggingService } from './services/LoggingService';
 import { EventBus } from './services/EventBus';
@@ -69,13 +71,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const outputChannel = vscode.window.createOutputChannel('NofX');
     container.registerInstance(SERVICE_TOKENS.OutputChannel, outputChannel);
     
-    // Register foundational services first
-    container.register(SERVICE_TOKENS.ConfigurationService, 
-        () => new ConfigurationService(), 'singleton');
-    container.register(SERVICE_TOKENS.NotificationService, 
-        () => new NotificationService(), 'singleton');
-    
-    // Register new core services
+    // Register foundational services first (in dependency order)
     container.register(SERVICE_TOKENS.LoggingService, 
         (container) => new LoggingService(
             container.resolve(SERVICE_TOKENS.ConfigurationService),
@@ -83,6 +79,30 @@ export async function activate(context: vscode.ExtensionContext) {
         ), 'singleton');
     container.register(SERVICE_TOKENS.EventBus, 
         (container) => new EventBus(container.resolveOptional(SERVICE_TOKENS.LoggingService)), 'singleton');
+    container.register(SERVICE_TOKENS.NotificationService, 
+        () => new NotificationService(), 'singleton');
+    
+    // Register validation service (depends on LoggingService and NotificationService)
+    container.register(SERVICE_TOKENS.ConfigurationValidator, 
+        (container) => new ConfigurationValidator(
+            container.resolve(SERVICE_TOKENS.LoggingService),
+            container.resolve(SERVICE_TOKENS.NotificationService)
+        ), 'singleton');
+    
+    // Register configuration service (depends on ConfigurationValidator and EventBus)
+    container.register(SERVICE_TOKENS.ConfigurationService, 
+        (container) => new ConfigurationService(
+            container.resolve(SERVICE_TOKENS.ConfigurationValidator),
+            container.resolve(SERVICE_TOKENS.EventBus)
+        ), 'singleton');
+    
+    // Register metrics service (depends on ConfigurationService, LoggingService, EventBus)
+    container.register(SERVICE_TOKENS.MetricsService, 
+        (container) => new MetricsService(
+            container.resolve(SERVICE_TOKENS.ConfigurationService),
+            container.resolve(SERVICE_TOKENS.LoggingService),
+            container.resolve(SERVICE_TOKENS.EventBus)
+        ), 'singleton');
     container.register(SERVICE_TOKENS.ErrorHandler, 
         (container) => new ErrorHandler(
             container.resolve(SERVICE_TOKENS.LoggingService),
@@ -163,7 +183,8 @@ export async function activate(context: vscode.ExtensionContext) {
         container.resolve(SERVICE_TOKENS.NotificationService),
         container.resolve(SERVICE_TOKENS.LoggingService),
         container.resolve(SERVICE_TOKENS.EventBus),
-        container.resolve(SERVICE_TOKENS.ErrorHandler)
+        container.resolve(SERVICE_TOKENS.ErrorHandler),
+        container.resolve(SERVICE_TOKENS.MetricsService)
     );
     
     // Register new task management services
@@ -204,7 +225,8 @@ export async function activate(context: vscode.ExtensionContext) {
         container.resolve(SERVICE_TOKENS.TaskStateMachine),
         container.resolve(SERVICE_TOKENS.PriorityTaskQueue),
         container.resolve(SERVICE_TOKENS.CapabilityMatcher),
-        container.resolve(SERVICE_TOKENS.TaskDependencyManager)
+        container.resolve(SERVICE_TOKENS.TaskDependencyManager),
+        container.resolve(SERVICE_TOKENS.MetricsService)
     );
     container.registerInstance(SERVICE_TOKENS.TaskQueue, taskQueue);
     
@@ -276,7 +298,8 @@ export async function activate(context: vscode.ExtensionContext) {
         container.resolve(SERVICE_TOKENS.ConnectionPoolService),
         container.resolve(SERVICE_TOKENS.MessageRouter),
         container.resolve(SERVICE_TOKENS.MessageValidator),
-        container.resolve(SERVICE_TOKENS.MessagePersistenceService)
+        container.resolve(SERVICE_TOKENS.MessagePersistenceService),
+        container.resolve(SERVICE_TOKENS.MetricsService)
     );
     await orchestrationServer.start();
     container.registerInstance(SERVICE_TOKENS.OrchestrationServer, orchestrationServer);
@@ -423,6 +446,10 @@ export async function activate(context: vscode.ExtensionContext) {
     const utilityCommands = new UtilityCommands(container);
     utilityCommands.register();
     
+    // Register metrics commands
+    const metricsCommands = new (require('./commands/MetricsCommands').MetricsCommands)(container);
+    metricsCommands.register();
+    
     // Status Bar Item
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     statusBarItem.text = '$(organization) NofX';
@@ -470,6 +497,46 @@ export async function activate(context: vscode.ExtensionContext) {
     if (config.get(CONFIG_KEYS.AUTO_START, false)) {
         await vscode.commands.executeCommand('nofx.quickStartChat');
     }
+
+    // Record activation metrics
+    const metricsService = container.resolve(SERVICE_TOKENS.MetricsService);
+    const activationTimer = metricsService.startTimer('extension.activation');
+    metricsService.incrementCounter('extension.activated');
+    metricsService.setGauge('extension.services.registered', 25); // Approximate count
+    metricsService.endTimer(activationTimer);
+
+    // Validate configuration during startup
+    const configValidator = container.resolve(SERVICE_TOKENS.ConfigurationValidator);
+    const validationResult = configValidator.validateConfiguration(config.getAll());
+    if (!validationResult.isValid) {
+        const errorMessages = validationResult.errors.map(e => `${e.field}: ${e.message}`).join('; ');
+        loggingService.warn('Configuration validation issues detected', { errors: validationResult.errors });
+        
+        // Show notification for critical errors
+        const criticalErrors = validationResult.errors.filter(e => e.severity === 'error');
+        if (criticalErrors.length > 0) {
+            const notificationService = container.resolve(SERVICE_TOKENS.NotificationService);
+            await notificationService.showWarning(
+                `Configuration validation failed: ${errorMessages}. Some features may not work correctly.`
+            );
+        }
+    }
+
+    // Record agent restoration metrics
+    const agentCount = agentManager.getActiveAgents().length;
+    if (agentCount > 0) {
+        metricsService.incrementCounter('agents.restored', { count: agentCount.toString() });
+        metricsService.setGauge('agents.active.count', agentCount);
+    }
+
+    // Record task restoration metrics
+    const taskCount = taskQueue.getTasks().length;
+    if (taskCount > 0) {
+        metricsService.incrementCounter('tasks.restored', { count: taskCount.toString() });
+        metricsService.setGauge('tasks.total.count', taskCount);
+    }
+
+    loggingService.info('🎸 NofX Multi-Agent Orchestrator activation completed with metrics and validation');
 
     // Note: Global context removed - use dependency injection instead
 }

@@ -150,6 +150,26 @@
         "command": "nofx.mergeAgentWork",
         "title": "NofX: Merge Agent Work",
         "icon": "$(git-merge)"
+      },
+      {
+        "command": "nofx.showMetricsDashboard",
+        "title": "NofX: Show Metrics Dashboard",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "nofx.exportMetrics",
+        "title": "NofX: Export Metrics Data",
+        "icon": "$(export)"
+      },
+      {
+        "command": "nofx.resetMetrics",
+        "title": "NofX: Reset Metrics Data",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "nofx.toggleMetrics",
+        "title": "NofX: Toggle Metrics Collection",
+        "icon": "$(pulse)"
       }
     ],
     "menus": {
@@ -278,6 +298,26 @@
             "file"
           ],
           "description": "How to pass prompts to Claude CLI (simple: echo | claude, interactive: claude then prompt, heredoc: claude << EOF, file: via temp file)"
+        },
+        "nofx.enableMetrics": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable performance metrics collection"
+        },
+        "nofx.metricsOutputLevel": {
+          "type": "string",
+          "default": "basic",
+          "enum": [
+            "none",
+            "basic",
+            "detailed"
+          ],
+          "description": "Level of detail for metrics output"
+        },
+        "nofx.testMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable test mode for integration testing"
         }
       }
     },
@@ -296,7 +336,11 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js",
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=unit",
+    "test:integration": "jest --testPathPattern=integration",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "build": "npm run compile && vsce package",
     "build:clean": "rm -f nofx-*.vsix && npm run build",
     "package": "vsce package"
@@ -307,12 +351,21 @@
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "@vscode/vsce": "^3.6.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/test-cli": "^0.0.4",
+    "@types/jest": "^29.5.8",
     "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "sinon": "^17.0.1",
+    "supertest": "^6.3.3",
+    "tmp": "^0.2.3",
     "typescript": "^5.3.3"
   },
   "dependencies": {
     "@types/ws": "^8.18.1",
     "uuid": "^9.0.1",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^3.22.4"
   }
 }

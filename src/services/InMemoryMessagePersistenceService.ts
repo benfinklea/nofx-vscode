@@ -8,9 +8,13 @@ import {
 import { OrchestratorMessage } from '../orchestration/MessageProtocol';
 import { ORCH_EVENTS } from './EventConstants';
 
+/**
+ * In-memory implementation of IMessagePersistenceService
+ * Used as fallback when no workspace folder is available
+ */
 export class InMemoryMessagePersistenceService implements IMessagePersistenceService {
     private messages: OrchestratorMessage[] = [];
-    private maxMessages: number;
+    private maxMessages = 1000; // Configurable limit
     private isDisposed = false;
 
     constructor(
@@ -18,7 +22,8 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
         private configService: IConfigurationService,
         private eventBus: IEventBus
     ) {
-        this.maxMessages = this.configService.get('orchestration.inMemoryMaxMessages', 1000);
+        this.maxMessages = this.configService.getOrchestrationHistoryLimit();
+        this.loggingService.info('InMemoryMessagePersistenceService initialized (no workspace folder)');
     }
 
     async save(message: OrchestratorMessage): Promise<void> {
@@ -28,10 +33,10 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
         }
 
         try {
-            // Add to in-memory array
+            // Add message to in-memory array
             this.messages.push(message);
-            
-            // Limit array size
+
+            // Maintain size limit by removing oldest messages
             if (this.messages.length > this.maxMessages) {
                 this.messages = this.messages.slice(-this.maxMessages);
             }
@@ -65,10 +70,19 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
         }
 
         try {
+            // Return messages in reverse chronological order (newest first)
             const startIndex = Math.max(0, this.messages.length - offset - limit);
-            const endIndex = Math.min(this.messages.length, startIndex + limit);
-            
-            return this.messages.slice(startIndex, endIndex);
+            const endIndex = this.messages.length - offset;
+            const result = this.messages.slice(startIndex, endIndex).reverse();
+
+            this.loggingService.debug('Messages loaded from in-memory persistence', {
+                offset,
+                limit,
+                returned: result.length,
+                total: this.messages.length
+            });
+
+            return result;
 
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
@@ -102,6 +116,7 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
                 filter = clientIdOrFilter;
             }
 
+            // Start with all messages
             let filteredMessages = [...this.messages];
 
             // Apply client ID filter
@@ -132,26 +147,28 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
             }
 
             // Apply pagination
-            const limit = filter.limit || this.maxMessages;
-            const offset = filter.offset || 0;
+            const offset = filter.offset ?? 0;
+            const limit = filter.limit ?? this.maxMessages;
+            
+            // Return in reverse chronological order (newest first)
             const startIndex = Math.max(0, filteredMessages.length - offset - limit);
-            const endIndex = Math.min(filteredMessages.length, startIndex + limit);
-            const paginatedMessages = filteredMessages.slice(startIndex, endIndex);
+            const endIndex = filteredMessages.length - offset;
+            const result = filteredMessages.slice(startIndex, endIndex).reverse();
 
-            this.loggingService.debug('Message history retrieved from in-memory persistence with filter', {
+            this.loggingService.debug('Message history retrieved with filter from in-memory persistence', {
                 totalMessages: this.messages.length,
                 filteredMessages: filteredMessages.length,
-                paginatedMessages: paginatedMessages.length,
+                returned: result.length,
                 filter,
                 offset,
                 limit
             });
 
-            return paginatedMessages;
+            return result;
 
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
-            this.loggingService.error('Failed to get message history from in-memory persistence with filter', {
+            this.loggingService.error('Failed to get message history with filter from in-memory persistence', {
                 clientIdOrFilter,
                 messageType,
                 error: err.message
@@ -194,7 +211,7 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
         try {
             const totalMessages = this.messages.length;
             const oldestMessage = this.messages.length > 0 
-                ? new Date(this.messages[0].timestamp) 
+                ? new Date(Math.min(...this.messages.map(m => new Date(m.timestamp).getTime())))
                 : new Date();
 
             return { totalMessages, oldestMessage };

@@ -67,6 +67,7 @@ export const ORCH_EVENTS = {
     // Logical ID events
     LOGICAL_ID_REGISTERED: 'orchestration.logical_id.registered',
     LOGICAL_ID_UNREGISTERED: 'orchestration.logical_id.unregistered',
+    LOGICAL_ID_REASSIGNED: 'orchestration.logical_id.reassigned',
     // Message persistence events
     MESSAGE_PERSISTED: 'orchestration.message.persisted',
     MESSAGE_PERSISTENCE_FAILED: 'orchestration.message.persistence_failed',
@@ -137,6 +138,13 @@ export interface LogicalIdRegisteredPayload {
 export interface LogicalIdUnregisteredPayload {
     clientId: string;
     logicalId: string;
+    timestamp: string;
+}
+
+export interface LogicalIdReassignedPayload {
+    logicalId: string;
+    previousClientId: string;
+    newClientId: string;
     timestamp: string;
 }
 

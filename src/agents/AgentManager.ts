@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { Agent, AgentConfig, AgentStatus } from './types';
 import { AgentPersistence } from '../persistence/AgentPersistence';
-import { IAgentLifecycleManager, ITerminalManager, IWorktreeService, IConfigurationService, INotificationService, ILoggingService, IEventBus, IErrorHandler, IAgentReader } from '../services/interfaces';
+import { IAgentLifecycleManager, ITerminalManager, IWorktreeService, IConfigurationService, INotificationService, ILoggingService, IEventBus, IErrorHandler, IAgentReader, IMetricsService } from '../services/interfaces';
 import { DOMAIN_EVENTS } from '../services/EventConstants';
 
 export class AgentManager implements IAgentReader {
@@ -20,6 +20,7 @@ export class AgentManager implements IAgentReader {
     private loggingService?: ILoggingService;
     private eventBus?: IEventBus;
     private errorHandler?: IErrorHandler;
+    private metricsService?: IMetricsService;
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
@@ -52,7 +53,8 @@ export class AgentManager implements IAgentReader {
         notificationService: INotificationService,
         loggingService?: ILoggingService,
         eventBus?: IEventBus,
-        errorHandler?: IErrorHandler
+        errorHandler?: IErrorHandler,
+        metricsService?: IMetricsService
     ) {
         this.agentLifecycleManager = agentLifecycleManager;
         this.terminalManager = terminalManager;
@@ -62,6 +64,7 @@ export class AgentManager implements IAgentReader {
         this.loggingService = loggingService;
         this.eventBus = eventBus;
         this.errorHandler = errorHandler;
+        this.metricsService = metricsService;
 
         // Set up terminal close event listener
         const terminalCloseDisposable = this.terminalManager.onTerminalClosed((terminal) => {
@@ -108,7 +111,7 @@ export class AgentManager implements IAgentReader {
         
         // Only show setup dialog if explicitly requested (e.g., when starting conductor)
         if (showSetupDialog) {
-            const selection = await this.notificationService.showInformation(
+            const selection = await this.notificationService?.showInformation(
                 '🎸 NofX Conductor ready. Using Claude command: ' + claudePath,
                 'Test Claude',
                 'Change Path',
@@ -120,14 +123,14 @@ export class AgentManager implements IAgentReader {
                 terminal.show();
                 terminal.sendText(`${claudePath} --version || echo "Claude not found. Please check installation."`);            
             } else if (selection === 'Change Path') {
-                const newPath = await this.notificationService.showInputBox({
+                const newPath = await this.notificationService?.showInputBox({
                     prompt: 'Enter Claude command or path',
                     value: claudePath,
                     placeHolder: 'e.g., claude, /usr/local/bin/claude'
                 });
                 if (newPath) {
-                    await this.configService.update('claudePath', newPath, vscode.ConfigurationTarget.Global);
-                    this.notificationService.showInformation(`Claude path updated to: ${newPath}`);
+                    await this.configService?.update('claudePath', newPath, vscode.ConfigurationTarget.Global);
+                    this.notificationService?.showInformation(`Claude path updated to: ${newPath}`);
                 }
             } else if (selection === 'Restore Session') {
                 await this.restoreAgentsFromPersistence(true);
@@ -224,6 +227,12 @@ export class AgentManager implements IAgentReader {
         // Store agent in our map
         this.agents.set(agent.id, agent);
         
+        // Record metrics
+        this.metricsService?.incrementCounter('agents_created', { 
+            agentType: agent.type,
+            totalAgents: this.agents.size.toString()
+        });
+        
         // Notify listeners
         this._onAgentUpdate.fire();
 
@@ -269,10 +278,24 @@ export class AgentManager implements IAgentReader {
 
         this.loggingService?.debug(`Updating agent status from ${agent.status} to working`);
         
+        // Start timer for task assignment
+        const assignmentTimer = this.metricsService?.startTimer('task_assignment_time');
+        
         // Update agent status
         agent.status = 'working';
         agent.currentTask = task;
         this._onAgentUpdate.fire();
+        
+        // Record task assignment metrics
+        this.metricsService?.incrementCounter('task_assigned', { 
+            agentType: agent.type,
+            taskPriority: task.priority?.toString() || 'unknown'
+        });
+        
+        // End assignment timer
+        if (assignmentTimer) {
+            this.metricsService?.endTimer(assignmentTimer);
+        }
         
         // Publish event to EventBus
         if (this.eventBus) {
@@ -445,6 +468,12 @@ export class AgentManager implements IAgentReader {
         const success = await this.agentLifecycleManager.removeAgent(agentId);
         
         if (success) {
+            // Record metrics
+            this.metricsService?.incrementCounter('agents_removed', { 
+                agentType: agent.type,
+                totalAgents: (this.agents.size - 1).toString()
+            });
+            
             // Remove from our map
             this.agents.delete(agentId);
             this._onAgentUpdate.fire();

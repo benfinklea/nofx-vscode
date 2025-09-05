@@ -40,6 +40,12 @@ export class MessageValidator implements IMessageValidator {
             message = JSON.parse(rawMessage);
         } catch (error) {
             errors.push('Invalid JSON format');
+            this.eventBus.publish(ORCH_EVENTS.MESSAGE_VALIDATION_FAILED, {
+                messageId: 'unknown',
+                errors,
+                warnings: [],
+                messageType: 'unknown'
+            });
             return { isValid: false, errors, warnings };
         }
 
@@ -224,14 +230,27 @@ export class MessageValidator implements IMessageValidator {
             errors.push('AssignTask payload requires taskId field');
         }
 
+        if (!payload.title || typeof payload.title !== 'string') {
+            errors.push('AssignTask payload requires title field');
+        }
+
+        if (!payload.description || typeof payload.description !== 'string') {
+            errors.push('AssignTask payload requires description field');
+        }
+
         if (payload.priority !== undefined) {
-            if (typeof payload.priority !== 'number' || payload.priority < 0 || payload.priority > 10) {
-                errors.push('Priority must be a number between 0 and 10');
+            const validPriorities = ['low', 'medium', 'high', 'critical'];
+            if (!validPriorities.includes(payload.priority)) {
+                errors.push(`Priority must be one of: ${validPriorities.join(', ')}`);
             }
         }
 
-        if (payload.timeout && typeof payload.timeout !== 'number') {
-            errors.push('Timeout must be a number if provided');
+        if (payload.dependencies && !Array.isArray(payload.dependencies)) {
+            errors.push('Dependencies must be an array if provided');
+        }
+
+        if (payload.deadline && typeof payload.deadline !== 'string') {
+            errors.push('Deadline must be a string if provided');
         }
     }
 
@@ -256,8 +275,24 @@ export class MessageValidator implements IMessageValidator {
             errors.push('TaskComplete payload requires taskId field');
         }
 
-        if (payload.result !== undefined && typeof payload.result !== 'string') {
-            errors.push('Result must be a string if provided');
+        if (payload.success === undefined || typeof payload.success !== 'boolean') {
+            errors.push('TaskComplete payload requires success field as boolean');
+        }
+
+        if (payload.output !== undefined && typeof payload.output !== 'string') {
+            errors.push('Output must be a string if provided');
+        }
+
+        if (payload.filesCreated && !Array.isArray(payload.filesCreated)) {
+            errors.push('FilesCreated must be an array if provided');
+        }
+
+        if (payload.filesModified && !Array.isArray(payload.filesModified)) {
+            errors.push('FilesModified must be an array if provided');
+        }
+
+        if (payload.metrics && typeof payload.metrics !== 'object') {
+            errors.push('Metrics must be an object if provided');
         }
     }
 
@@ -276,26 +311,55 @@ export class MessageValidator implements IMessageValidator {
     }
 
     private validateAgentStatusPayload(payload: any, errors: string[], warnings: string[]): void {
-        if (!payload.status || typeof payload.status !== 'string') {
-            errors.push('AgentStatus payload requires status field');
+        if (!payload.agentId || typeof payload.agentId !== 'string') {
+            errors.push('AgentStatus payload requires agentId field');
         }
 
-        if (payload.capabilities && !Array.isArray(payload.capabilities)) {
-            errors.push('Capabilities must be an array if provided');
+        if (!payload.status || typeof payload.status !== 'string') {
+            errors.push('AgentStatus payload requires status field');
+        } else {
+            const validStatuses = ['idle', 'working', 'paused', 'error', 'offline'];
+            if (!validStatuses.includes(payload.status)) {
+                errors.push(`Status must be one of: ${validStatuses.join(', ')}`);
+            }
+        }
+
+        if (payload.completedTasks === undefined || typeof payload.completedTasks !== 'number') {
+            errors.push('AgentStatus payload requires completedTasks field as number');
+        }
+
+        if (payload.failedTasks === undefined || typeof payload.failedTasks !== 'number') {
+            errors.push('AgentStatus payload requires failedTasks field as number');
+        }
+
+        if (payload.uptime === undefined || typeof payload.uptime !== 'number') {
+            errors.push('AgentStatus payload requires uptime field as number');
         }
 
         if (payload.currentTask && typeof payload.currentTask !== 'string') {
             errors.push('CurrentTask must be a string if provided');
         }
+
+        if (payload.capabilities && !Array.isArray(payload.capabilities)) {
+            errors.push('Capabilities must be an array if provided');
+        }
     }
 
     private validateAgentQueryPayload(payload: any, errors: string[], warnings: string[]): void {
-        if (!payload.query || typeof payload.query !== 'string') {
-            errors.push('AgentQuery payload requires query field');
+        if (!payload.question || typeof payload.question !== 'string') {
+            errors.push('AgentQuery payload requires question field');
         }
 
-        if (payload.queryType && typeof payload.queryType !== 'string') {
-            errors.push('QueryType must be a string if provided');
+        if (payload.needsResponse === undefined || typeof payload.needsResponse !== 'boolean') {
+            errors.push('AgentQuery payload requires needsResponse field as boolean');
+        }
+
+        if (payload.options && !Array.isArray(payload.options)) {
+            errors.push('Options must be an array if provided');
+        }
+
+        if (payload.context && typeof payload.context !== 'object') {
+            errors.push('Context must be an object if provided');
         }
     }
 
@@ -329,3 +393,4 @@ export class MessageValidator implements IMessageValidator {
         }
     }
 }
+

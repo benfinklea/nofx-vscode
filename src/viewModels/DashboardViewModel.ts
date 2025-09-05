@@ -26,6 +26,7 @@ export class DashboardViewModel implements IDashboardViewModel {
         offset: 0
     };
     private connectionStatus: Map<string, 'connected' | 'disconnected'> = new Map();
+    private clientToLogical = new Map<string, string>();
     private statistics: {
         totalMessages: number;
         successRate: number;
@@ -73,6 +74,8 @@ export class DashboardViewModel implements IDashboardViewModel {
                 this.connectionStatus.set(data.clientId, 'disconnected'); 
                 this.publishStateChange(); 
             }),
+            this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_REGISTERED, (data) => this.handleLogicalIdRegistered(data)),
+            this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_UNREGISTERED, (data) => this.handleLogicalIdUnregistered(data)),
             // Subscribe to persistence events for real-time updates
             this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_PERSISTED, () => this.handlePersistenceUpdate()),
             this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_STORAGE_CLEANUP, () => this.handlePersistenceUpdate())
@@ -164,7 +167,7 @@ export class DashboardViewModel implements IDashboardViewModel {
             this.loggingService.info('DashboardViewModel: Exporting messages');
             
             const history = await this.messagePersistence.getHistory();
-            const connections = this.orchestrationServer.getConnections();
+            const connections = this.orchestrationServer.getConnectionSummaries();
             
             const exportData = {
                 timestamp: new Date().toISOString(),
@@ -244,8 +247,9 @@ export class DashboardViewModel implements IDashboardViewModel {
             this.messageBuffer.shift();
         }
         
-        // Update connection status
-        this.connectionStatus.set(message.from, 'connected');
+        // Update connection status using normalized ID
+        const normalizedId = this.normalizeId(message.from);
+        this.connectionStatus.set(normalizedId, 'connected');
         
         // Update statistics and publish state change
         this.updateStatistics().then(() => {
@@ -254,8 +258,40 @@ export class DashboardViewModel implements IDashboardViewModel {
     }
 
     private updateConnectionStatus(data: any): void {
-        this.connectionStatus.set(data.clientId, 'connected');
+        const normalizedId = this.normalizeId(data.clientId);
+        this.connectionStatus.set(normalizedId, 'connected');
         this.publishStateChange();
+    }
+
+    private handleLogicalIdRegistered(data: any): void {
+        this.clientToLogical.set(data.clientId, data.logicalId);
+        this.loggingService.debug('Logical ID registered in dashboard', {
+            clientId: data.clientId,
+            logicalId: data.logicalId
+        });
+    }
+
+    private handleLogicalIdUnregistered(data: any): void {
+        this.clientToLogical.delete(data.clientId);
+        this.loggingService.debug('Logical ID unregistered in dashboard', {
+            clientId: data.clientId,
+            logicalId: data.logicalId
+        });
+    }
+
+    private normalizeId(inputId: string): string {
+        // If we have a logical ID for this client ID, return the logical ID
+        if (this.clientToLogical.has(inputId)) {
+            return this.clientToLogical.get(inputId)!;
+        }
+
+        // If inputId looks like a logical ID and we can resolve it, use the logical ID
+        if (this.connectionPool && this.connectionPool.resolveLogicalId(inputId)) {
+            return inputId;
+        }
+
+        // Otherwise return the input ID as-is
+        return inputId;
     }
 
     private async getLastMessageForConnection(connectionId: string): Promise<Date | undefined> {

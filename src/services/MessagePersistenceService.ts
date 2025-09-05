@@ -14,12 +14,14 @@ import { ORCH_EVENTS } from './EventConstants';
 export class MessagePersistenceService implements IMessagePersistenceService {
     private persistenceDir: string;
     private messagesFile: string;
+    private lockFile: string;
     private maxFileSize: number;
     private historyLimit: number;
     private inMemoryCache: OrchestratorMessage[] = [];
     private cacheSize = 100;
     private isDisposed = false;
     private writeQueue: Promise<void> = Promise.resolve();
+    private lockFd: fsPromises.FileHandle | null = null;
 
     constructor(
         private loggingService: ILoggingService,
@@ -27,8 +29,12 @@ export class MessagePersistenceService implements IMessagePersistenceService {
         private eventBus: IEventBus,
         workspaceRoot: string
     ) {
-        this.persistenceDir = path.join(workspaceRoot, '.nofx', 'orchestration');
+        const configured = this.configService.getOrchestrationPersistencePath();
+        this.persistenceDir = path.isAbsolute(configured)
+            ? configured
+            : path.join(workspaceRoot, configured);
         this.messagesFile = path.join(this.persistenceDir, 'messages.jsonl');
+        this.lockFile = path.join(this.persistenceDir, 'messages.lock');
         this.maxFileSize = this.configService.getOrchestrationMaxFileSize();
         this.historyLimit = this.configService.getOrchestrationHistoryLimit();
 
@@ -55,7 +61,12 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             // Append to file using write queue for atomicity
             const messageLine = JSON.stringify(message) + '\n';
             this.writeQueue = this.writeQueue.then(async () => {
-                await fsPromises.appendFile(this.messagesFile, messageLine, 'utf8');
+                await this.acquireLock();
+                try {
+                    await fsPromises.appendFile(this.messagesFile, messageLine, 'utf8');
+                } finally {
+                    await this.releaseLock();
+                }
             });
             await this.writeQueue;
 
@@ -135,12 +146,13 @@ export class MessagePersistenceService implements IMessagePersistenceService {
                 filter = clientIdOrFilter;
             }
 
-            // Determine how many messages to read based on filter
+            // Determine pagination parameters
             const limit = filter.limit ?? this.historyLimit;
             const offset = filter.offset ?? 0;
             
-            // Read messages from file with proper limit/offset
-            const allMessages = await this.readMessagesFromFile(offset, limit);
+            // Read a larger batch to account for filtering, with a reasonable max scan window
+            const maxScanWindow = Math.max(limit * 10, 1000); // Scan up to 10x the limit or 1000 messages
+            const allMessages = await this.readMessagesFromFile(0, maxScanWindow);
             
             let filteredMessages = allMessages;
 
@@ -171,15 +183,19 @@ export class MessagePersistenceService implements IMessagePersistenceService {
                 });
             }
 
+            // Apply pagination after filtering
+            const paginatedMessages = filteredMessages.slice(offset, offset + limit);
+
             this.loggingService.debug('Message history retrieved with filter', {
                 totalMessages: allMessages.length,
                 filteredMessages: filteredMessages.length,
+                paginatedMessages: paginatedMessages.length,
                 filter,
                 offset,
                 limit
             });
 
-            return filteredMessages;
+            return paginatedMessages;
 
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
@@ -236,7 +252,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             const messages = await this.readMessagesFromFile(0, this.historyLimit);
             const totalMessages = messages.length;
             const oldestMessage = messages.length > 0 
-                ? new Date(messages[0].timestamp) 
+                ? new Date(Math.min(...messages.map(m => new Date(m.timestamp).getTime())))
                 : new Date();
 
             return { totalMessages, oldestMessage };
@@ -253,7 +269,66 @@ export class MessagePersistenceService implements IMessagePersistenceService {
     dispose(): void {
         this.isDisposed = true;
         this.inMemoryCache = [];
+        this.releaseLock();
         this.loggingService.debug('MessagePersistenceService disposed');
+    }
+
+    private async acquireLock(): Promise<void> {
+        const maxRetries = 20;
+        const retryDelay = 25; // 25ms
+        const timeout = 5000; // 5 seconds
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                // Check for stale locks
+                if (fs.existsSync(this.lockFile)) {
+                    const stats = await fsPromises.stat(this.lockFile);
+                    const age = Date.now() - stats.mtime.getTime();
+                    if (age > timeout) {
+                        this.loggingService.warn('Removing stale lock file', {
+                            lockFile: this.lockFile,
+                            age: age
+                        });
+                        await fsPromises.unlink(this.lockFile);
+                    }
+                }
+
+                // Try to create lock file exclusively
+                this.lockFd = await fsPromises.open(this.lockFile, 'wx');
+                this.loggingService.debug('Acquired file lock', { lockFile: this.lockFile });
+                return;
+            } catch (error) {
+                if (attempt === maxRetries - 1) {
+                    const err = error instanceof Error ? error : new Error(String(error));
+                    this.loggingService.error('Failed to acquire file lock after maximum retries', {
+                        lockFile: this.lockFile,
+                        attempts: maxRetries,
+                        error: err.message
+                    });
+                    throw err;
+                }
+                
+                // Wait before retry
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+            }
+        }
+    }
+
+    private async releaseLock(): Promise<void> {
+        if (this.lockFd) {
+            try {
+                await this.lockFd.close();
+                await fsPromises.unlink(this.lockFile);
+                this.lockFd = null;
+                this.loggingService.debug('Released file lock', { lockFile: this.lockFile });
+            } catch (error) {
+                const err = error instanceof Error ? error : new Error(String(error));
+                this.loggingService.warn('Failed to release file lock', {
+                    lockFile: this.lockFile,
+                    error: err.message
+                });
+            }
+        }
     }
 
     private ensureDirectories(): void {
@@ -291,30 +366,30 @@ export class MessagePersistenceService implements IMessagePersistenceService {
 
     private async readMessagesFromFile(offset: number, limit: number): Promise<OrchestratorMessage[]> {
         const messages: OrchestratorMessage[] = [];
-        let remainingLimit = limit;
-        let currentOffset = offset;
+        let skipped = 0;
+        let collected: OrchestratorMessage[] = [];
 
         try {
-            // First try to read from current file
-            const currentFileMessages = await this.readFromSingleFile(this.messagesFile, currentOffset, remainingLimit);
-            messages.push(...currentFileMessages);
-            remainingLimit -= currentFileMessages.length;
-            currentOffset = Math.max(0, currentOffset - currentFileMessages.length);
+            // Build ordered list of files (newest first)
+            const files = [this.messagesFile, ...(await this.getRolledFiles())];
 
-            // If we need more messages and there are rolled files, read from them
-            if (remainingLimit > 0) {
-                const rolledFiles = await this.getRolledFiles();
-                for (const rolledFile of rolledFiles) {
-                    if (remainingLimit <= 0) break;
+            // Process each file in order (newest first)
+            for (const filePath of files) {
+                if (collected.length >= limit) break;
 
-                    const rolledMessages = await this.readFromSingleFile(rolledFile, currentOffset, remainingLimit);
-                    messages.unshift(...rolledMessages); // Prepend to maintain chronological order
-                    remainingLimit -= rolledMessages.length;
-                    currentOffset = Math.max(0, currentOffset - rolledMessages.length);
-                }
+                await this.readFromSingleFile(filePath, (message) => {
+                    if (skipped < offset) {
+                        skipped++;
+                        return;
+                    }
+                    
+                    if (collected.length < limit) {
+                        collected.push(message);
+                    }
+                });
             }
 
-            return messages;
+            return collected;
 
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
@@ -325,64 +400,46 @@ export class MessagePersistenceService implements IMessagePersistenceService {
         }
     }
 
-    private async readFromSingleFile(filePath: string, offset: number, limit: number): Promise<OrchestratorMessage[]> {
+    private async readFromSingleFile(filePath: string, onLine: (message: OrchestratorMessage) => void): Promise<void> {
         if (!fs.existsSync(filePath)) {
-            return [];
+            return;
         }
 
+        let fd: fsPromises.FileHandle | null = null;
+
         try {
-            // Use streaming approach to read last N lines
-            const stats = await fsPromises.stat(filePath);
-            const fileSize = stats.size;
+            // Use streaming approach with readline for forward reading
+            const readline = require('readline');
+            fd = await fsPromises.open(filePath, 'r');
             
-            if (fileSize === 0) {
-                return [];
-            }
+            const rl = readline.createInterface({
+                input: fd.createReadStream(),
+                crlfDelay: Infinity
+            });
 
-            // Read file in chunks from the end
-            const chunkSize = Math.min(64 * 1024, fileSize); // 64KB chunks
             const messages: OrchestratorMessage[] = [];
-            let position = fileSize;
-            let buffer = '';
 
-            while (position > 0 && messages.length < limit) {
-                const readSize = Math.min(chunkSize, position);
-                position -= readSize;
-                
-                const fd = await fsPromises.open(filePath, 'r');
-                const chunk = Buffer.alloc(readSize);
-                await fd.read(chunk, 0, readSize, position);
-                await fd.close();
-                
-                buffer = chunk.toString('utf8') + buffer;
-                
-                // Process complete lines
-                const lines = buffer.split('\n');
-                buffer = lines[0]; // Keep incomplete line in buffer
-                
-                // Process lines in reverse order (newest first)
-                for (let i = lines.length - 2; i >= 1; i--) {
-                    const line = lines[i].trim();
-                    if (line && messages.length < limit) {
-                        try {
-                            const message = JSON.parse(line) as OrchestratorMessage;
-                            messages.unshift(message); // Prepend to maintain order
-                        } catch (parseError) {
-                            this.loggingService.warn('Failed to parse message line', {
-                                file: filePath,
-                                lineNumber: i,
-                                error: parseError instanceof Error ? parseError.message : String(parseError)
-                            });
-                        }
+            // Read all lines and collect messages
+            for await (const line of rl) {
+                const trimmedLine = line.trim();
+                if (trimmedLine) {
+                    try {
+                        const message = JSON.parse(trimmedLine) as OrchestratorMessage;
+                        messages.push(message);
+                    } catch (parseError) {
+                        this.loggingService.warn('Failed to parse message line', {
+                            file: filePath,
+                            line: trimmedLine.substring(0, 100),
+                            error: parseError instanceof Error ? parseError.message : String(parseError)
+                        });
                     }
                 }
             }
 
-            // Apply offset
-            const startIndex = Math.max(0, messages.length - offset - limit);
-            const endIndex = Math.min(messages.length, startIndex + limit);
-            
-            return messages.slice(startIndex, endIndex);
+            // Process messages in reverse chronological order (newest first)
+            for (let i = messages.length - 1; i >= 0; i--) {
+                onLine(messages[i]);
+            }
 
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
@@ -390,7 +447,10 @@ export class MessagePersistenceService implements IMessagePersistenceService {
                 file: filePath,
                 error: err.message
             });
-            return [];
+        } finally {
+            if (fd) {
+                await fd.close();
+            }
         }
     }
 
@@ -430,7 +490,12 @@ export class MessagePersistenceService implements IMessagePersistenceService {
                 
                 // Create new empty file using write queue
                 this.writeQueue = this.writeQueue.then(async () => {
-                    await fsPromises.writeFile(this.messagesFile, '', 'utf8');
+                    await this.acquireLock();
+                    try {
+                        await fsPromises.writeFile(this.messagesFile, '', 'utf8');
+                    } finally {
+                        await this.releaseLock();
+                    }
                 });
                 await this.writeQueue;
 

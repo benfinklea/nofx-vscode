@@ -14,9 +14,10 @@ import {
     IConnectionPoolService,
     IMessageRouter,
     IMessageValidator,
-    IMessagePersistenceService
+    IMessagePersistenceService,
+    IMetricsService
 } from '../services/interfaces';
-import { ORCH_EVENTS, MessageReceivedPayload, ServerStartedPayload, ServerStoppedPayload } from '../services/EventConstants';
+import { ORCH_EVENTS, MessageReceivedPayload, ServerStartedPayload, ServerStoppedPayload, LogicalIdReassignedPayload } from '../services/EventConstants';
 
 export class OrchestrationServer {
     private wss: WebSocketServer | undefined;
@@ -33,6 +34,7 @@ export class OrchestrationServer {
     private messageRouter?: IMessageRouter;
     private messageValidator?: IMessageValidator;
     private messagePersistence?: IMessagePersistenceService;
+    private metricsService?: IMetricsService;
     
     constructor(
         port: number = 7777,
@@ -42,7 +44,8 @@ export class OrchestrationServer {
         connectionPool?: IConnectionPoolService,
         messageRouter?: IMessageRouter,
         messageValidator?: IMessageValidator,
-        messagePersistence?: IMessagePersistenceService
+        messagePersistence?: IMessagePersistenceService,
+        metricsService?: IMetricsService
     ) {
         this.port = port;
         this.loggingService = loggingService;
@@ -52,6 +55,7 @@ export class OrchestrationServer {
         this.messageRouter = messageRouter;
         this.messageValidator = messageValidator;
         this.messagePersistence = messagePersistence;
+        this.metricsService = metricsService;
         this.outputChannel = vscode.window.createOutputChannel('NofX Orchestration');
     }
     
@@ -67,6 +71,12 @@ export class OrchestrationServer {
         try {
             await this.tryStartOnPort(this.port);
             this.isRunning = true;
+            
+            // Record server start metrics
+            this.metricsService?.incrementCounter('connections_established', { 
+                event: 'server_started',
+                port: this.actualPort.toString()
+            });
             
             this.loggingService?.info(`Orchestration server started on port ${this.actualPort}`);
             this.eventBus?.publish(ORCH_EVENTS.SERVER_STARTED, { port: this.actualPort } as ServerStartedPayload);
@@ -180,6 +190,12 @@ export class OrchestrationServer {
             isAgent
         });
         
+        // Record connection metrics
+        this.metricsService?.incrementCounter('connections_established', { 
+            clientType: isAgent ? 'agent' : 'client',
+            userAgent: userAgent.substring(0, 50) // Truncate for storage
+        });
+        
         // Set up message handling
         ws.on('message', (data: Buffer) => {
             this.handleMessage(clientId, data.toString());
@@ -190,8 +206,15 @@ export class OrchestrationServer {
      * Handle incoming message from a client
      */
     private async handleMessage(clientId: string, rawMessage: string): Promise<void> {
+        const startTime = Date.now();
+        
         try {
             this.loggingService?.debug(`Received message from ${clientId}: ${rawMessage.substring(0, 100)}...`);
+            
+            // Record message received metrics
+            this.metricsService?.incrementCounter('messages_received', { 
+                clientId: clientId.substring(0, 8) // Truncate for storage
+            });
             
             // Validate message
             const validationResult = this.messageValidator?.validate(rawMessage);
@@ -219,16 +242,52 @@ export class OrchestrationServer {
             // Register logical ID if this is the first message from a client
             if (message.from && message.from !== 'system') {
                 const connection = this.connectionPool?.getConnection(clientId);
-                if (connection && !this.connectionPool?.resolveLogicalId(message.from)) {
-                    this.connectionPool?.registerLogicalId(clientId, message.from);
-                    
-                    // Replay recent messages to newly registered client
-                    await this.replayToClient(message.from);
+                if (connection) {
+                    const existingClientId = this.connectionPool?.resolveLogicalId(message.from);
+                    if (!existingClientId) {
+                        // No existing mapping, register normally
+                        this.connectionPool?.registerLogicalId(clientId, message.from);
+                        
+                        // Replay recent messages to newly registered client
+                        await this.replayToClient(message.from);
+                    } else if (existingClientId !== clientId) {
+                        // Duplicate logical ID registration - warn and reassign
+                        this.loggingService?.warn(`Duplicate logical ID registration detected`, {
+                            logicalId: message.from,
+                            previousClientId: existingClientId,
+                            newClientId: clientId
+                        });
+                        
+                        // Unregister the previous mapping
+                        this.connectionPool?.unregisterLogicalId(message.from);
+                        
+                        // Register the new mapping
+                        this.connectionPool?.registerLogicalId(clientId, message.from);
+                        
+                        // Publish reassignment event
+                        this.eventBus?.publish(ORCH_EVENTS.LOGICAL_ID_REASSIGNED, {
+                            logicalId: message.from,
+                            previousClientId: existingClientId,
+                            newClientId: clientId,
+                            timestamp: new Date().toISOString()
+                        } as LogicalIdReassignedPayload);
+                        
+                        // Replay recent messages to newly registered client
+                        await this.replayToClient(message.from);
+                    }
+                    // If existingClientId === clientId, it's already correctly mapped, do nothing
                 }
             }
             
             // Route message
             await this.messageRouter?.route(message);
+            
+            // Record message processing duration
+            const processingTime = Date.now() - startTime;
+            this.metricsService?.recordDuration('message_processing_duration', processingTime, {
+                clientId: clientId.substring(0, 8),
+                messageType: message.type || 'unknown'
+            });
             
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
@@ -276,6 +335,20 @@ export class OrchestrationServer {
         }
         
         return connections;
+    }
+
+    /**
+     * Get connection summaries for JSON export
+     */
+    getConnectionSummaries(): Array<{
+        clientId: string;
+        isAgent: boolean;
+        connectedAt: string;
+        lastHeartbeat: string;
+        messageCount: number;
+        userAgent?: string;
+    }> {
+        return this.connectionPool?.getConnectionSummaries() || [];
     }
 
     /**
