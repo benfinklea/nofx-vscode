@@ -1,18 +1,21 @@
 import { z } from 'zod';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as vscode from 'vscode';
 import { IConfigurationValidator, ValidationError, ILoggingService, INotificationService } from './interfaces';
 
 export class ConfigurationValidator implements IConfigurationValidator {
     private validationErrors: ValidationError[] = [];
-    private logger: ILoggingService;
+    private logger?: ILoggingService;
     private notificationService: INotificationService;
 
-    constructor(logger: ILoggingService, notificationService: INotificationService) {
+    constructor(logger: ILoggingService | undefined, notificationService: INotificationService) {
         this.logger = logger;
         this.notificationService = notificationService;
     }
 
-    // Comprehensive validation schema for all configuration keys
-    private buildValidationSchema() {
+    // Base schema without refinements
+    private buildBaseSchema() {
         return z.object({
             maxAgents: z.number()
                 .int('Max agents must be an integer')
@@ -29,7 +32,7 @@ export class ConfigurationValidator implements IConfigurationValidator {
             
             logLevel: z.enum(['debug', 'info', 'warn', 'error'], {
                 errorMap: () => ({ message: 'Log level must be one of: debug, info, warn, error' })
-            }),
+            }).optional(),
             
             autoStart: z.boolean(),
             
@@ -45,6 +48,12 @@ export class ConfigurationValidator implements IConfigurationValidator {
             
             testMode: z.boolean(),
             
+            metricsRetentionHours: z.number()
+                .int('Metrics retention hours must be an integer')
+                .min(1, 'Metrics retention must be at least 1 hour')
+                .max(168, 'Metrics retention cannot exceed 168 hours (1 week)')
+                .optional(),
+            
             // Orchestration settings
             orchestration: z.object({
                 heartbeatInterval: z.number().int().min(1000).max(60000),
@@ -53,7 +62,12 @@ export class ConfigurationValidator implements IConfigurationValidator {
                 persistencePath: z.string().min(1),
                 maxFileSize: z.number().int().min(1024).max(104857600) // 1KB to 100MB
             }).optional()
-        }).refine((data) => {
+        });
+    }
+
+    // Comprehensive validation schema for all configuration keys
+    private buildValidationSchema() {
+        return this.buildBaseSchema().refine((data) => {
             // Cross-field validation: if useWorktrees is true, workspace should be a Git repository
             // This is handled at runtime since we can't check Git status in schema validation
             return true;
@@ -61,7 +75,7 @@ export class ConfigurationValidator implements IConfigurationValidator {
     }
 
     validateConfiguration(config: Record<string, any>): { isValid: boolean; errors: ValidationError[] } {
-        this.logger.debug('Validating configuration', { configKeys: Object.keys(config) });
+        this.logger?.debug('Validating configuration', { configKeys: Object.keys(config) });
         
         try {
             const schema = this.buildValidationSchema();
@@ -69,16 +83,16 @@ export class ConfigurationValidator implements IConfigurationValidator {
             
             if (result.success) {
                 this.validationErrors = [];
-                this.logger.debug('Configuration validation successful');
+                this.logger?.debug('Configuration validation successful');
                 return { isValid: true, errors: [] };
             } else {
                 this.validationErrors = this.mapZodErrorsToValidationErrors(result.error.errors);
-                this.logger.warn('Configuration validation failed', { errors: this.validationErrors });
+                this.logger?.warn('Configuration validation failed', { errors: this.validationErrors });
                 return { isValid: false, errors: this.validationErrors };
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown validation error';
-            this.logger.error('Configuration validation error', { error: errorMessage });
+            this.logger?.error('Configuration validation error', { error: errorMessage });
             
             const validationError: ValidationError = {
                 field: 'general',
@@ -92,24 +106,54 @@ export class ConfigurationValidator implements IConfigurationValidator {
     }
 
     validateConfigurationKey(key: string, value: any): { isValid: boolean; errors: ValidationError[] } {
-        this.logger.debug('Validating configuration key', { key, value });
+        this.logger?.debug('Validating configuration key', { key, value });
         
         try {
             const schema = this.buildValidationSchema();
-            const partialSchema = schema.pick({ [key]: true } as any);
-            const result = partialSchema.safeParse({ [key]: value });
             
-            if (result.success) {
-                this.logger.debug('Configuration key validation successful', { key });
-                return { isValid: true, errors: [] };
+            // Handle dotted keys (e.g., orchestration.heartbeatInterval)
+            if (key.includes('.')) {
+                const parts = key.split('.');
+                const nestedObj = this.buildNestedObject(parts, value);
+                
+                // Use partial base schema to validate just the nested structure
+                const baseSchema = this.buildBaseSchema();
+                const partialResult = baseSchema.partial().safeParse(nestedObj);
+                
+                if (partialResult.success) {
+                    this.logger?.debug('Configuration key validation successful', { key });
+                    return { isValid: true, errors: [] };
+                } else {
+                    const errors = this.mapZodErrorsToValidationErrors(partialResult.error.errors);
+                    this.logger?.warn('Configuration key validation failed', { key, errors });
+                    return { isValid: false, errors };
+                }
             } else {
-                const errors = this.mapZodErrorsToValidationErrors(result.error.errors);
-                this.logger.warn('Configuration key validation failed', { key, errors });
-                return { isValid: false, errors };
+                // Handle non-dotted keys - check if key exists in schema first
+                const baseSchema = this.buildBaseSchema();
+                const schemaShape = baseSchema.shape;
+                if (key in schemaShape) {
+                    // Known key - validate normally
+                    const partialSchema = baseSchema.pick({ [key]: true } as any);
+                    const result = partialSchema.safeParse({ [key]: value });
+                    
+                    if (result.success) {
+                        this.logger?.debug('Configuration key validation successful', { key });
+                        return { isValid: true, errors: [] };
+                    } else {
+                        const errors = this.mapZodErrorsToValidationErrors(result.error.errors);
+                        this.logger?.warn('Configuration key validation failed', { key, errors });
+                        return { isValid: false, errors };
+                    }
+                } else {
+                    // Unknown key - allow it to pass through
+                    this.logger?.debug('Unknown configuration key detected, allowing through', { key });
+                    return { isValid: true, errors: [] };
+                }
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown validation error';
-            this.logger.error('Configuration key validation error', { key, error: errorMessage });
+            this.logger?.error('Configuration key validation error', { key, error: errorMessage });
             
             const validationError: ValidationError = {
                 field: key,
@@ -164,6 +208,26 @@ export class ConfigurationValidator implements IConfigurationValidator {
         return suggestion ? `${message} ${suggestion}` : message;
     }
 
+    /**
+     * Build a nested object from dotted key parts
+     * e.g., ['orchestration', 'heartbeatInterval'] with value 5000 
+     * becomes { orchestration: { heartbeatInterval: 5000 } }
+     */
+    private buildNestedObject(parts: string[], value: any): Record<string, any> {
+        const result: Record<string, any> = {};
+        let current = result;
+        
+        for (let i = 0; i < parts.length - 1; i++) {
+            current[parts[i]] = {};
+            current = current[parts[i]];
+        }
+        
+        // Set the final value
+        current[parts[parts.length - 1]] = value;
+        
+        return result;
+    }
+
     // Validate specific NofX configuration scenarios
     validateNofXConfiguration(config: Record<string, any>): { isValid: boolean; errors: ValidationError[] } {
         const errors: ValidationError[] = [];
@@ -202,10 +266,17 @@ export class ConfigurationValidator implements IConfigurationValidator {
     }
 
     private isGitRepository(): boolean {
-        // This would check if the current workspace is a Git repository
-        // For now, return true as a placeholder
-        // In a real implementation, this would check for .git directory
-        return true;
+        // Get the first workspace folder path
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            return false;
+        }
+        
+        const root = workspaceFolders[0].uri.fsPath;
+        
+        // Check if .git directory exists
+        const gitPath = path.join(root, '.git');
+        return fs.existsSync(gitPath);
     }
 
     // Validate configuration migration between versions
@@ -240,6 +311,6 @@ export class ConfigurationValidator implements IConfigurationValidator {
 
     dispose(): void {
         this.validationErrors = [];
-        this.logger.debug('ConfigurationValidator disposed');
+        this.logger?.debug('ConfigurationValidator disposed');
     }
 }

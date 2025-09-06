@@ -9,11 +9,9 @@ import {
 } from '../services/interfaces';
 import { PickItem } from '../types/ui';
 import { AgentManager } from '../agents/AgentManager';
-import { TaskQueue } from '../tasks/TaskQueue';
 
 export class AgentCommands implements ICommandHandler {
     private readonly agentManager: AgentManager;
-    private readonly taskQueue: TaskQueue;
     private readonly commandService: ICommandService;
     private readonly notificationService: INotificationService;
     private readonly configService: IConfigurationService;
@@ -21,7 +19,6 @@ export class AgentCommands implements ICommandHandler {
 
     constructor(container: IContainer) {
         this.agentManager = container.resolve<AgentManager>(SERVICE_TOKENS.AgentManager);
-        this.taskQueue = container.resolve<TaskQueue>(SERVICE_TOKENS.TaskQueue);
         this.commandService = container.resolve<ICommandService>(SERVICE_TOKENS.CommandService);
         this.notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
         this.configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
@@ -201,7 +198,7 @@ export class AgentCommands implements ICommandHandler {
                     });
                     createdCount++;
                 } catch (error) {
-                    console.error(`Failed to create agent from template ${templateId}:`, error);
+                    // Error handling is done by the notification service in the calling context
                 }
             }
         }

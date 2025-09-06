@@ -1,6 +1,7 @@
 import { IContainer, ServiceRegistration, ServiceLifetime, ServiceNotFoundError, CircularDependencyError, IDisposable, ILoggingService } from './interfaces';
 
 export class Container implements IContainer {
+    private static instance: Container | null = null;
     private registrations = new Map<symbol, ServiceRegistration>();
     private resolutionStack = new Set<symbol>();
     private singletonInstances = new Map<symbol, any>();
@@ -8,6 +9,19 @@ export class Container implements IContainer {
 
     constructor(loggingService?: ILoggingService) {
         this.loggingService = loggingService;
+    }
+
+    static getInstance(): Container {
+        if (!Container.instance) {
+            Container.instance = new Container();
+        }
+        return Container.instance;
+    }
+
+    reset(): void {
+        // Clear all registrations and instances
+        this.dispose();
+        Container.instance = null;
     }
 
     setLoggingService(loggingService: ILoggingService): void {
@@ -99,22 +113,31 @@ export class Container implements IContainer {
     }
 
     createScope(): IContainer {
-        // For now, return a new container instance
-        // In a more sophisticated implementation, this would create a scoped container
-        // that shares singleton instances with the parent but creates new transient instances
-        return new Container();
+        throw new Error('Not implemented');
     }
 
-    dispose(): void {
+    async dispose(): Promise<void> {
         this.loggingService?.debug(`Disposing container with ${this.singletonInstances.size} singleton instances`);
         
-        // Dispose all singleton instances that implement IDisposable
+        // Dispose all singleton instances that implement IDisposable or IAsyncDisposable
         for (const [token, instance] of this.singletonInstances.entries()) {
-            if (instance && typeof instance.dispose === 'function') {
+            if (instance) {
                 try {
-                    instance.dispose();
-                    if (this.loggingService?.isLevelEnabled('debug')) {
-                        this.loggingService.debug(`Service disposed: ${token.toString()}`);
+                    // Check for async dispose first, then sync dispose
+                    if (typeof instance.disposeAsync === 'function') {
+                        await instance.disposeAsync();
+                        if (this.loggingService?.isLevelEnabled('debug')) {
+                            this.loggingService.debug(`Service disposed async: ${token.toString()}`);
+                        }
+                    } else if (typeof instance.dispose === 'function') {
+                        // Handle both sync and async dispose methods
+                        const result = instance.dispose();
+                        if (result instanceof Promise) {
+                            await result;
+                        }
+                        if (this.loggingService?.isLevelEnabled('debug')) {
+                            this.loggingService.debug(`Service disposed: ${token.toString()}`);
+                        }
                     }
                 } catch (error) {
                     const err = error instanceof Error ? error : new Error(String(error));

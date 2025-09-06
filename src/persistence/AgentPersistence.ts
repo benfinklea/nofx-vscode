@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { promises as fsPromises } from 'fs';
 import { Agent } from '../agents/types';
+import { ILoggingService } from '../services/interfaces';
 
 /**
  * Handles persistence of agents and their context across sessions
@@ -13,8 +14,10 @@ export class AgentPersistence {
     private stateFile: string;
     private nofxDir: string;
     private sessionsDir: string;
+    private loggingService?: ILoggingService;
     
-    constructor(workspaceRoot: string) {
+    constructor(workspaceRoot: string, loggingService?: ILoggingService) {
+        this.loggingService = loggingService;
         // Create .nofx directory in workspace for persistence
         this.persistenceDir = path.join(workspaceRoot, '.nofx');
         this.nofxDir = this.persistenceDir; // Alias for compatibility
@@ -31,11 +34,11 @@ export class AgentPersistence {
     private ensureDirectories() {
         if (!fs.existsSync(this.persistenceDir)) {
             fs.mkdirSync(this.persistenceDir, { recursive: true });
-            console.log(`[NofX Persistence] Created persistence directory: ${this.persistenceDir}`);
+            this.loggingService?.debug(`Created persistence directory: ${this.persistenceDir}`);
         }
         if (!fs.existsSync(this.agentSessionsDir)) {
             fs.mkdirSync(this.agentSessionsDir, { recursive: true });
-            console.log(`[NofX Persistence] Created sessions directory: ${this.agentSessionsDir}`);
+            this.loggingService?.debug(`Created sessions directory: ${this.agentSessionsDir}`);
         }
     }
     
@@ -60,27 +63,27 @@ export class AgentPersistence {
         };
         
         fs.writeFileSync(this.stateFile, JSON.stringify(state, null, 2));
-        console.log(`[NofX Persistence] Saved state for ${agents.length} agents`);
+        this.loggingService?.debug(`Saved state for ${agents.length} agents`);
     }
     
     /**
      * Load saved agent state
      */
     async loadAgentState(): Promise<any[]> {
-        console.log(`[NofX Persistence] Looking for state file: ${this.stateFile}`);
+        this.loggingService?.debug(`Looking for state file: ${this.stateFile}`);
         
         if (!fs.existsSync(this.stateFile)) {
-            console.log('[NofX Persistence] No state file found');
+            this.loggingService?.debug('No state file found');
             return [];
         }
         
         try {
             const content = fs.readFileSync(this.stateFile, 'utf-8');
             const state = JSON.parse(content);
-            console.log(`[NofX Persistence] Loaded state for ${state.agents.length} agents from ${this.stateFile}`);
+            this.loggingService?.debug(`Loaded state for ${state.agents.length} agents from ${this.stateFile}`);
             return state.agents;
         } catch (error) {
-            console.error('[NofX Persistence] Error loading state:', error);
+            this.loggingService?.error('Error loading state:', error);
             return [];
         }
     }
@@ -102,7 +105,7 @@ export class AgentPersistence {
             fs.writeFileSync(sessionFile, header + content);
         }
         
-        console.log(`[NofX Persistence] Saved session for agent ${agentId}`);
+        this.loggingService?.debug(`Saved session for agent ${agentId}`);
     }
     
     /**
@@ -117,10 +120,10 @@ export class AgentPersistence {
         
         try {
             const content = fs.readFileSync(sessionFile, 'utf-8');
-            console.log(`[NofX Persistence] Loaded session for agent ${agentId}`);
+            this.loggingService?.debug(`Loaded session for agent ${agentId}`);
             return content;
         } catch (error) {
-            console.error(`[NofX Persistence] Error loading session for ${agentId}:`, error);
+            this.loggingService?.error(`Error loading session for ${agentId}:`, error);
             return null;
         }
     }
@@ -143,7 +146,7 @@ export class AgentPersistence {
                 const content = fs.readFileSync(checkpointFile, 'utf-8');
                 checkpoints = JSON.parse(content);
             } catch (error) {
-                console.error('[NofX Persistence] Error loading checkpoints:', error);
+                this.loggingService?.error('Error loading checkpoints:', error);
             }
         }
         
@@ -194,7 +197,7 @@ export class AgentPersistence {
             if (now - stats.mtime.getTime() > maxAge) {
                 const archivePath = path.join(archiveDir, file);
                 fs.renameSync(filePath, archivePath);
-                console.log(`[NofX Persistence] Archived old session: ${file}`);
+                this.loggingService?.debug(`Archived old session: ${file}`);
             }
         }
     }
@@ -214,7 +217,7 @@ export class AgentPersistence {
             fs.unlinkSync(path.join(this.agentSessionsDir, file));
         }
         
-        console.log('[NofX Persistence] Cleaned up all persistence data');
+        this.loggingService?.info('Cleaned up all persistence data');
     }
     
     /**
@@ -261,9 +264,9 @@ export class AgentPersistence {
                 await fsPromises.unlink(path.join(this.sessionsDir, file));
             }
 
-            console.log('[NofX] Cleared all persistence data');
+            this.loggingService?.info('Cleared all persistence data');
         } catch (error) {
-            console.error('[NofX] Error clearing persistence data:', error);
+            this.loggingService?.error('Error clearing persistence data:', error);
             throw error;
         }
     }
@@ -295,7 +298,7 @@ export class AgentPersistence {
             await fsPromises.copyFile(agentStatePath, path.join(archivePath, 'agents.json'));
         }
 
-        console.log(`[NofX] Archived sessions to ${archivePath}`);
+        this.loggingService?.info(`Archived sessions to ${archivePath}`);
         return archivePath;
     }
 }

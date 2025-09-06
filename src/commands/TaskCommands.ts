@@ -7,8 +7,7 @@ import {
     ICommandService,
     INotificationService,
     IConfigurationService,
-    SERVICE_TOKENS,
-    ITaskDependencyManager
+    SERVICE_TOKENS
 } from '../services/interfaces';
 import { PickItem, formatBlockingReason } from '../types/ui';
 import { AgentManager } from '../agents/AgentManager';
@@ -21,7 +20,6 @@ export class TaskCommands implements ICommandHandler {
     private readonly commandService: ICommandService;
     private readonly notificationService: INotificationService;
     private readonly configService: IConfigurationService;
-    private readonly dependencyManager: ITaskDependencyManager;
 
     constructor(container: IContainer) {
         this.agentManager = container.resolve<AgentManager>(SERVICE_TOKENS.AgentManager);
@@ -29,7 +27,6 @@ export class TaskCommands implements ICommandHandler {
         this.commandService = container.resolve<ICommandService>(SERVICE_TOKENS.CommandService);
         this.notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
         this.configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
-        this.dependencyManager = container.resolve<ITaskDependencyManager>(SERVICE_TOKENS.TaskDependencyManager);
     }
 
     register(): void {

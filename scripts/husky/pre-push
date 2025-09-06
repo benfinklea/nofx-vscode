@@ -1,0 +1,79 @@
+#!/bin/sh
+
+# Pre-push hook for NofX VS Code Extension
+# Comprehensive validation before pushing to remote
+
+echo "🚀 Running pre-push validation..."
+echo "This may take a few minutes..."
+
+# Full build validation
+echo "🔨 Running full build..."
+npm run compile || {
+    echo "❌ Build failed. Please fix errors before pushing."
+    exit 1
+}
+
+# Run all tests
+echo "🧪 Running test suite..."
+npm test || {
+    echo "❌ Tests failed. Please fix failing tests before pushing."
+    exit 1
+}
+
+# Check code coverage (if available)
+echo "📊 Checking code coverage..."
+if grep -q "test:coverage" package.json; then
+    npm run test:coverage || {
+        echo "⚠️  Coverage check failed. Continuing anyway..."
+    }
+else
+    echo "⚠️  Coverage check not configured. Skipping..."
+fi
+
+# Package extension with clean build
+echo "📦 Creating VSIX package (clean build)..."
+npm run build:clean || {
+    echo "❌ Failed to create VSIX package. Please fix errors before pushing."
+    exit 1
+}
+
+# Dynamically resolve VSIX filename from package.json
+PACKAGE_NAME=$(node -e "console.log(require('./package.json').name)")
+PACKAGE_VERSION=$(node -e "console.log(require('./package.json').version)")
+VSIX_PATTERN="${PACKAGE_NAME}-*.vsix"
+EXPECTED_VSIX="${PACKAGE_NAME}-${PACKAGE_VERSION}.vsix"
+
+# Validate the package (using glob pattern)
+VSIX_FILE=$(ls ${VSIX_PATTERN} 2>/dev/null | head -n 1)
+if [ -n "$VSIX_FILE" ]; then
+    echo "✅ VSIX package created successfully: $VSIX_FILE"
+    
+    # Check package size
+    size=$(stat -f%z "$VSIX_FILE" 2>/dev/null || stat -c%s "$VSIX_FILE" 2>/dev/null)
+    if [ "$size" -lt 10000 ]; then
+        echo "⚠️  Warning: VSIX package seems too small (${size} bytes)"
+    fi
+else
+    echo "❌ VSIX package not found (expected pattern: ${VSIX_PATTERN})"
+    exit 1
+fi
+
+# Run linting (if available)
+echo "🔍 Running linter..."
+if grep -q '"lint"' package.json; then
+    npm run lint || {
+        echo "⚠️  Linting failed. Consider fixing lint issues."
+    }
+else
+    echo "⚠️  Linting not configured. Skipping..."
+fi
+
+# Final validation
+echo "✅ Running final validation..."
+./scripts/validate-build.sh || {
+    echo "❌ Final validation failed."
+    exit 1
+}
+
+echo "✅ All pre-push validations passed!"
+echo "📤 Ready to push to remote repository"

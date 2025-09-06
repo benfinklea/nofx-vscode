@@ -2,88 +2,337 @@
 
 # Build script for NofX VS Code Extension
 # This ensures all TypeScript is compiled and packaged correctly
+# Enhanced with comprehensive validation to prevent broken builds
 
-echo "🎸 Building NofX Extension..."
-echo "=============================="
+set -e  # Exit on any error
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Default flags
+PACKAGE_ONLY=false
+SKIP_INSTALL=false
+SKIP_PLATFORM_CHECK=false
+INSTALL_CURSOR=false
+HELP=false
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --package-only)
+            PACKAGE_ONLY=true
+            shift
+            ;;
+        --skip-install)
+            SKIP_INSTALL=true
+            shift
+            ;;
+        --skip-platform-check)
+            SKIP_PLATFORM_CHECK=true
+            shift
+            ;;
+        --install-cursor)
+            INSTALL_CURSOR=true
+            shift
+            ;;
+        --help|-h)
+            HELP=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Show help if requested
+if [ "$HELP" = true ]; then
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --install-cursor      Install extension to Cursor after build (macOS only)"
+    echo "  --package-only        Only create VSIX package (deprecated, this is now default)"
+    echo "  --skip-install        Don't prompt for installation (deprecated, use without --install-cursor)"
+    echo "  --skip-platform-check Skip platform checks (deprecated, no longer needed)"
+    echo "  --help, -h            Show this help message"
+    echo ""
+    echo "Default behavior:"
+    echo "  Builds and packages the extension into a VSIX file"
+    echo "  Works on all platforms (macOS, Linux, Windows with bash)"
+    echo ""
+    echo "Examples:"
+    echo "  $0                       Build and package extension (default)"
+    echo "  $0 --install-cursor      Build, package, and install to Cursor (macOS)"
+    echo "  $0 --package-only        Same as default (kept for compatibility)"
+    exit 0
+fi
+
+# Platform detection for Cursor installation only
+if [ "$INSTALL_CURSOR" = true ]; then
+    UNAME=$(uname)
+    if [[ "$UNAME" != "Darwin" ]]; then
+        echo -e "${YELLOW}[WARNING]${NC} Cursor installation is only supported on macOS."
+        echo "Building and packaging will continue, but installation will be skipped."
+        INSTALL_CURSOR=false
+    elif ! command -v cursor >/dev/null 2>&1; then
+        echo -e "${YELLOW}[WARNING]${NC} 'cursor' CLI not found in PATH."
+        echo "Building and packaging will continue, but installation will be skipped."
+        echo "To install manually after build: cursor --install-extension \$(pwd)/\$VSIX_FILE --force"
+        INSTALL_CURSOR=false
+    fi
+fi
+
+# Get package information dynamically
+PKG_NAME=$(node -p "require('./package.json').name")
+PKG_VERSION=$(node -p "require('./package.json').version")
+PUBLISHER=$(node -p "require('./package.json').publisher")
+VSIX_FILE="$PKG_NAME-$PKG_VERSION.vsix"
+EXT_ID="$PUBLISHER.$PKG_NAME"
+PROJECT_ROOT="$(pwd)"
+
+echo "🎸 Building NofX Extension v$PKG_VERSION"
+echo "========================================="
+
+# Step 0: Pre-build validation
+echo -e "${BLUE}[PRE-BUILD]${NC} Validating source files..."
+if [ ! -f "package.json" ]; then
+    echo -e "${RED}[ERROR]${NC} package.json not found!"
+    exit 1
+fi
+
+if [ ! -f "tsconfig.json" ] && [ ! -f "tsconfig.build.json" ]; then
+    echo -e "${RED}[ERROR]${NC} TypeScript configuration not found!"
+    exit 1
+fi
+
+if [ ! -d "src" ]; then
+    echo -e "${RED}[ERROR]${NC} Source directory not found!"
+    exit 1
+fi
+
+# Check dependencies are installed
+if [ ! -d "node_modules" ]; then
+    echo -e "${YELLOW}[WARNING]${NC} node_modules not found. Installing dependencies..."
+    npm install
+fi
+
+# Create backup of previous build if it exists
+if [ -f "$VSIX_FILE" ]; then
+    echo -e "${BLUE}[BACKUP]${NC} Backing up previous build..."
+    mv "$VSIX_FILE" "$VSIX_FILE.backup"
+fi
 
 # Step 1: Clean old build
-echo "📦 Cleaning old build..."
+echo -e "${BLUE}[CLEAN]${NC} Cleaning old build artifacts..."
+rm -rf out/
 rm -f nofx-*.vsix
+mkdir -p out
 
-# Step 2: Compile TypeScript
-echo "⚙️  Compiling TypeScript..."
-npm run compile
+# Step 2: Compile TypeScript with detailed output
+echo -e "${BLUE}[COMPILE]${NC} Compiling TypeScript..."
+COMPILE_START=$(date +%s)
 
-if [ $? -ne 0 ]; then
-    echo "❌ TypeScript compilation failed!"
+# Capture compilation output
+COMPILE_OUTPUT=$(npm run compile 2>&1) || {
+    COMPILE_EXIT=$?
+    echo -e "${RED}[ERROR]${NC} TypeScript compilation failed!"
+    echo "$COMPILE_OUTPUT"
+    
+    # Restore backup if exists
+    if [ -f "$VSIX_FILE.backup" ]; then
+        echo -e "${YELLOW}[ROLLBACK]${NC} Restoring previous build..."
+        mv "$VSIX_FILE.backup" "$VSIX_FILE"
+    fi
+    exit $COMPILE_EXIT
+}
+
+COMPILE_END=$(date +%s)
+COMPILE_TIME=$((COMPILE_END - COMPILE_START))
+echo -e "${GREEN}[SUCCESS]${NC} TypeScript compiled in ${COMPILE_TIME}s"
+
+# Check for compilation warnings
+if echo "$COMPILE_OUTPUT" | grep -q "warning"; then
+    echo -e "${YELLOW}[WARNING]${NC} Compilation completed with warnings"
+fi
+
+# Step 3: Validate build output
+echo -e "${BLUE}[VALIDATE]${NC} Validating build output..."
+
+# Check main entry point exists
+if [ ! -f "out/extension.js" ]; then
+    echo -e "${RED}[ERROR]${NC} Main extension file not created!"
     exit 1
 fi
 
-# Step 3: Package extension
-echo "📦 Packaging extension..."
-npx vsce package
-
-if [ $? -ne 0 ]; then
-    echo "❌ Packaging failed!"
+# Check file size is reasonable
+FILE_SIZE=$(stat -f%z "out/extension.js" 2>/dev/null || stat -c%s "out/extension.js" 2>/dev/null)
+if [ "$FILE_SIZE" -lt 1024 ]; then
+    echo -e "${RED}[ERROR]${NC} Extension file too small (${FILE_SIZE} bytes)"
     exit 1
 fi
 
-# Step 4: Show result
+# Run build validation script if available
+if [ -x "./scripts/validate-build.sh" ]; then
+    echo -e "${BLUE}[VALIDATE]${NC} Running comprehensive validation..."
+    ./scripts/validate-build.sh --quiet || {
+        echo -e "${RED}[ERROR]${NC} Build validation failed!"
+        exit 1
+    }
+    echo -e "${GREEN}[SUCCESS]${NC} Build validation passed"
+fi
+
+# Test that extension can be loaded
+echo -e "${BLUE}[TEST]${NC} Testing extension loading..."
+node -e "
+try {
+    const ext = require('./out/extension.js');
+    if (!ext.activate || !ext.deactivate) {
+        console.error('Missing required exports');
+        process.exit(1);
+    }
+    console.log('Extension loaded successfully');
+} catch (error) {
+    console.error('Failed to load extension:', error.message);
+    process.exit(1);
+}
+" || exit 1
+
+# Step 4: Run quick smoke tests if available
+if grep -q "test:smoke" package.json; then
+    echo -e "${BLUE}[TEST]${NC} Running smoke tests..."
+    npm run test:smoke 2>/dev/null || {
+        echo -e "${YELLOW}[WARNING]${NC} Smoke tests failed or not available"
+    }
+fi
+
+# Step 5: Package extension
+echo -e "${BLUE}[PACKAGE]${NC} Creating VSIX package..."
+PACKAGE_OUTPUT=$(npx vsce package 2>&1) || {
+    PACKAGE_EXIT=$?
+    echo -e "${RED}[ERROR]${NC} Packaging failed!"
+    echo "$PACKAGE_OUTPUT"
+    exit $PACKAGE_EXIT
+}
+
+if [ ! -f "$VSIX_FILE" ]; then
+    echo -e "${RED}[ERROR]${NC} VSIX file not created!"
+    exit 1
+fi
+
+# Validate package size
+VSIX_SIZE=$(stat -f%z "$VSIX_FILE" 2>/dev/null || stat -c%s "$VSIX_FILE" 2>/dev/null)
+if [ "$VSIX_SIZE" -lt 10000 ]; then
+    echo -e "${RED}[ERROR]${NC} VSIX package too small (${VSIX_SIZE} bytes)"
+    exit 1
+fi
+
+# Clean up backup
+rm -f "$VSIX_FILE.backup"
+
+# Step 6: Show build report
 echo ""
-echo "✅ Build successful!"
-echo "=============================="
+echo "========================================="
+echo -e "${GREEN}       BUILD SUCCESSFUL${NC}"
+echo "========================================="
+echo -e "${BLUE}Version:${NC} $PKG_VERSION"
+echo -e "${BLUE}Package:${NC} $VSIX_FILE"
+echo -e "${BLUE}Size:${NC} $(ls -lh "$VSIX_FILE" | awk '{print $5}')"
+COMMAND_COUNT=$(node -e "const pkg = require('./package.json'); console.log(pkg.contributes.commands.length);")
+echo -e "${BLUE}Commands:${NC} $COMMAND_COUNT registered"
+echo -e "${BLUE}Build Time:${NC} ${COMPILE_TIME}s"
+echo "========================================="
 ls -lh nofx-*.vsix
 echo ""
-echo "📦 Extension ready to install: nofx-0.1.0.vsix"
+echo -e "${GREEN}✅ Extension ready to install: $VSIX_FILE${NC}"
 
-# Step 5: Offer to install
-echo ""
-echo "Would you like to install the extension now?"
-echo "This will:"
-echo "  1. Close Cursor"
-echo "  2. Remove old extension"
-echo "  3. Install new version"
-echo "  4. Reopen Cursor"
-echo ""
-read -p "Install now? (y/n): " -n 1 -r
-echo ""
+# Step 7: Validate installation readiness
+echo -e "${BLUE}[FINAL]${NC} Running final validation..."
+node -e "
+const pkg = require('./package.json');
+const commands = pkg.contributes.commands;
+if (commands.length === 0) {
+    console.error('Error: No commands found in manifest');
+    process.exit(1);
+}
+console.log('All ' + commands.length + ' commands present in manifest');
+"
 
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "📦 Installing extension..."
+# Step 8: Handle installation if requested
+if [ "$INSTALL_CURSOR" = true ] && [ "$SKIP_INSTALL" = false ]; then
+    echo ""
+    echo "========================================="
+    echo -e "${BLUE}   CURSOR INSTALLATION${NC}"
+    echo "========================================="
+    echo -e "${BLUE}[INSTALL]${NC} Beginning installation process..."
+    
+    # Pre-installation validation
+    echo -e "${BLUE}[VALIDATE]${NC} Validating extension package..."
+    if [ ! -f "$VSIX_FILE" ]; then
+        echo -e "${RED}[ERROR]${NC} VSIX file not found!"
+        exit 1
+    fi
     
     # Check if Cursor is running
     if pgrep -x "Cursor" > /dev/null; then
-        echo "⏹️  Closing Cursor..."
+        echo -e "${BLUE}[CURSOR]${NC} Closing Cursor..."
         osascript -e 'quit app "Cursor"'
         sleep 2
     fi
     
     # Remove old extension
-    echo "🗑️  Removing old extension..."
-    rm -rf ~/.cursor/extensions/nofx.nofx-*
+    echo -e "${BLUE}[CLEAN]${NC} Removing old extension..."
+    rm -rf ~/.cursor/extensions/$EXT_ID-*
     
-    # Install new extension
-    echo "📦 Installing new extension..."
-    cursor --install-extension "$(pwd)/nofx-0.1.0.vsix" --force
+    # Install new extension with validation
+    echo -e "${BLUE}[INSTALL]${NC} Installing new extension..."
+    INSTALL_OUTPUT=$(cursor --install-extension "$(pwd)/$VSIX_FILE" --force 2>&1)
+    INSTALL_EXIT=$?
     
-    if [ $? -eq 0 ]; then
+    if [ $INSTALL_EXIT -eq 0 ]; then
         echo ""
-        echo "✅ Extension installed successfully!"
+        echo -e "${GREEN}✅ Extension installed successfully!${NC}"
+        
+        # Verify installation
+        echo -e "${BLUE}[VERIFY]${NC} Verifying installation..."
+        if ls ~/.cursor/extensions/ | grep -q "$EXT_ID"; then
+            echo -e "${GREEN}[SUCCESS]${NC} Extension found in Cursor"
+        else
+            echo -e "${YELLOW}[WARNING]${NC} Could not verify installation"
+        fi
+        
         echo ""
-        echo "🚀 Opening Cursor..."
+        echo -e "${BLUE}[LAUNCH]${NC} Opening Cursor..."
         open -a "Cursor"
+        
+        echo ""
+        echo "========================================="
+        echo -e "${GREEN}   INSTALLATION COMPLETE${NC}"
+        echo "========================================="
+        echo "The NofX extension is now ready to use!"
+        echo "Look for the 🎸 icon in the activity bar"
+        echo "========================================="
     else
-        echo "❌ Installation failed. Please try manual installation:"
+        echo -e "${RED}[ERROR]${NC} Installation failed!"
+        echo "$INSTALL_OUTPUT"
+        echo ""
+        echo -e "${YELLOW}[HELP]${NC} Please try manual installation:"
         echo "  1. Quit Cursor completely (Cmd+Q)"
-        echo "  2. Run: rm -rf ~/.cursor/extensions/nofx.nofx-*"
-        echo "  3. Run: cursor --install-extension $(pwd)/nofx-0.1.0.vsix"
+        echo "  2. Run: rm -rf ~/.cursor/extensions/$EXT_ID-*"
+        echo "  3. Run: cursor --install-extension $(pwd)/$VSIX_FILE --force"
         echo "  4. Open Cursor"
     fi
 else
     echo ""
-    echo "📝 Manual installation steps:"
-    echo "  1. Quit Cursor completely (Cmd+Q)"
-    echo "  2. Run: rm -rf ~/.cursor/extensions/nofx.nofx-*"
-    echo "  3. Run: cursor --install-extension $(pwd)/nofx-0.1.0.vsix"
-    echo "  4. Open Cursor"
+    echo "📦 Package created successfully: $VSIX_FILE"
+    echo ""
+    echo "To install manually:"
+    echo "  • VS Code: code --install-extension $(pwd)/$VSIX_FILE --force"
+    echo "  • Cursor: cursor --install-extension $(pwd)/$VSIX_FILE --force"
+    echo "  • Or use the GUI: Extensions → ... → Install from VSIX"
 fi

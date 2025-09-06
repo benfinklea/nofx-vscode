@@ -5,6 +5,7 @@ import {
     IEventBus, 
     IErrorHandler, 
     IConfigurationService,
+    IMetricsService,
     ManagedConnection,
     ConnectionMetadata
 } from './interfaces';
@@ -28,7 +29,8 @@ export class ConnectionPoolService implements IConnectionPoolService {
         private loggingService: ILoggingService,
         private eventBus: IEventBus,
         private errorHandler: IErrorHandler,
-        private configService: IConfigurationService
+        private configService: IConfigurationService,
+        private metricsService?: IMetricsService
     ) {
         this.heartbeatIntervalMs = this.configService.getOrchestrationHeartbeatInterval();
         this.heartbeatTimeoutMs = this.configService.getOrchestrationHeartbeatTimeout();
@@ -348,6 +350,11 @@ export class ConnectionPoolService implements IConnectionPoolService {
                 connection.lastHeartbeat = new Date();
                 connection.metadata.lastHeartbeat = connection.lastHeartbeat;
                 
+                // Record heartbeat received metrics
+                this.metricsService?.incrementCounter('heartbeat_received', { 
+                    clientId: clientId.substring(0, 8)
+                });
+                
                 this.eventBus.publish(ORCH_EVENTS.HEARTBEAT_RECEIVED, { 
                     clientId,
                     timestamp: connection.lastHeartbeat.toISOString()
@@ -404,6 +411,12 @@ export class ConnectionPoolService implements IConnectionPoolService {
                     timeoutMs
                 });
 
+                // Record connection timeout metrics
+                this.metricsService?.incrementCounter('connection_timeouts', { 
+                    clientId: clientId.substring(0, 8),
+                    timeoutMs: timeoutMs.toString()
+                });
+
                 connectionsToRemove.push(clientId);
                 this.eventBus.publish(ORCH_EVENTS.CONNECTION_TIMEOUT, { 
                     clientId,
@@ -414,6 +427,12 @@ export class ConnectionPoolService implements IConnectionPoolService {
                 // Send ping
                 try {
                     connection.ws.ping();
+                    
+                    // Record heartbeat sent metrics
+                    this.metricsService?.incrementCounter('heartbeat_sent', { 
+                        clientId: clientId.substring(0, 8)
+                    });
+                    
                     this.eventBus.publish(ORCH_EVENTS.HEARTBEAT_SENT, { 
                         clientId,
                         timestamp: new Date().toISOString()
@@ -421,6 +440,13 @@ export class ConnectionPoolService implements IConnectionPoolService {
                 } catch (error) {
                     const err = error instanceof Error ? error : new Error(String(error));
                     this.errorHandler.handleError(err, `Failed to ping client ${clientId}`);
+                    
+                    // Record heartbeat failure metrics
+                    this.metricsService?.incrementCounter('heartbeat_failures', { 
+                        clientId: clientId.substring(0, 8),
+                        errorType: err.name || 'unknown'
+                    });
+                    
                     connectionsToRemove.push(clientId);
                 }
             }

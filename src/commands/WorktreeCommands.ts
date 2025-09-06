@@ -5,24 +5,26 @@ import {
     ICommandService,
     INotificationService,
     IConfigurationService,
+    IWorktreeService,
     SERVICE_TOKENS,
     CONFIG_KEYS
 } from '../services/interfaces';
 import { PickItem } from '../types/ui';
 import { AgentManager } from '../agents/AgentManager';
-import { WorktreeManager } from '../worktrees/WorktreeManager';
 
 export class WorktreeCommands implements ICommandHandler {
     private readonly agentManager: AgentManager;
     private readonly commandService: ICommandService;
     private readonly notificationService: INotificationService;
     private readonly configService: IConfigurationService;
+    private readonly worktreeService: IWorktreeService;
 
     constructor(container: IContainer) {
         this.agentManager = container.resolve<AgentManager>(SERVICE_TOKENS.AgentManager);
         this.commandService = container.resolve<ICommandService>(SERVICE_TOKENS.CommandService);
         this.notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
         this.configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
+        this.worktreeService = container.resolve<IWorktreeService>(SERVICE_TOKENS.WorktreeService);
     }
 
     register(): void {
@@ -60,25 +62,25 @@ export class WorktreeCommands implements ICommandHandler {
             return;
         }
 
-        const worktreeManager = new WorktreeManager(workspaceFolder.uri.fsPath);
-        const agentWorktrees = await worktreeManager.listWorktreesInfo();
+        if (!this.worktreeService.isAvailable()) {
+            await this.notificationService.showError('Git worktrees are not available in this workspace');
+            return;
+        }
 
-        if (agentWorktrees.length === 0) {
-            await this.notificationService.showInformation('No agent worktrees found');
+        // Get active agents to show for merging
+        const activeAgents = this.agentManager.getActiveAgents();
+        if (activeAgents.length === 0) {
+            await this.notificationService.showInformation('No active agents found');
             return;
         }
 
         // Let user select which agent work to merge
-        const items: PickItem<{ agentId: string; directory: string; branch: string }>[] = agentWorktrees.map(w => {
-            const agent = w.agentId ? this.agentManager.getAgent(w.agentId) : null;
-            const agentName = agent?.name || w.branch.replace(/^agent-/, '').split('-')[0];
-            return {
-                label: agentName,
-                description: w.branch,
-                detail: `Path: ${w.directory}`,
-                value: { agentId: w.agentId || '', directory: w.directory, branch: w.branch }
-            };
-        });
+        const items: PickItem<{ agentId: string; agentName: string }>[] = activeAgents.map(agent => ({
+            label: agent.name,
+            description: `Agent ID: ${agent.id}`,
+            detail: `Worktree path: ${this.worktreeService.getWorktreePath(agent.id) || 'Not available'}`,
+            value: { agentId: agent.id, agentName: agent.name }
+        }));
 
         const selected = await this.notificationService.showQuickPick(items, {
             placeHolder: 'Select agent work to merge'
@@ -92,40 +94,39 @@ export class WorktreeCommands implements ICommandHandler {
 
         await this.notificationService.withProgress({
             location: vscode.ProgressLocation.Notification,
-            title: `Merging work from ${worktree.branch}...`,
+            title: `Merging work from ${worktree.agentName}...`,
             cancellable: false
         }, async (progress) => {
             try {
                 progress.report({ message: 'Merging agent work...', increment: 50 });
                 
-                if (worktree.agentId) {
-                    // Merge the agent's work
-                    await worktreeManager.mergeAgentWork(worktree.agentId);
-                    
-                    progress.report({ message: 'Cleaning up worktree...', increment: 25 });
-                    
-                    // Optionally remove the worktree after successful merge
-                    const cleanup = await this.notificationService.confirm(
-                        'Successfully merged! Remove the agent worktree?',
-                        'Remove'
-                    );
-                    
-                    if (cleanup) {
-                        await worktreeManager.removeWorktreeForAgent(worktree.agentId);
-                        
-                        // Also remove the agent from the manager
-                        const agent = this.agentManager.getAgent(worktree.agentId);
-                        if (agent) {
-                            await this.agentManager.removeAgent(agent.id);
-                        }
-                    }
-                    
-                    await this.notificationService.showInformation('Agent work successfully merged!');
-                } else {
-                    await this.notificationService.showError(
-                        'Cannot merge: Agent ID not found for this worktree'
-                    );
+                // Merge the agent's work using the service
+                const success = await this.worktreeService.mergeForAgent(worktree.agentId);
+                
+                if (!success) {
+                    await this.notificationService.showError('Failed to merge agent work');
+                    return;
                 }
+                
+                progress.report({ message: 'Cleaning up worktree...', increment: 25 });
+                
+                // Optionally remove the worktree after successful merge
+                const cleanup = await this.notificationService.confirm(
+                    'Successfully merged! Remove the agent worktree?',
+                    'Remove'
+                );
+                
+                if (cleanup) {
+                    await this.worktreeService.removeForAgent(worktree.agentId);
+                    
+                    // Also remove the agent from the manager
+                    const agent = this.agentManager.getAgent(worktree.agentId);
+                    if (agent) {
+                        await this.agentManager.removeAgent(agent.id);
+                    }
+                }
+                
+                await this.notificationService.showInformation('Agent work successfully merged!');
             } catch (error) {
                 await this.notificationService.showError(
                     `Failed to merge: ${error instanceof Error ? error.message : 'Unknown error'}`

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { IUIStateManager, IEventBus, ILoggingService, IDashboardViewModel, IMessagePersistenceService, IConnectionPoolService, MessageFilter } from '../services/interfaces';
-import { DashboardViewState, WebviewCommand } from '../types/ui';
+import { DashboardViewState, WebviewCommand, WEBVIEW_COMMANDS } from '../types/ui';
 import { OrchestrationServer } from '../orchestration/OrchestrationServer';
 import { OrchestratorMessage, MessageType } from '../orchestration/MessageProtocol';
 import { ORCH_EVENTS } from '../services/EventConstants';
@@ -112,19 +112,19 @@ export class DashboardViewModel implements IDashboardViewModel {
             this.loggingService.debug('DashboardViewModel: Handling command', { command, data });
             
             switch (command as WebviewCommand) {
-                case 'applyFilter':
+                case WEBVIEW_COMMANDS.APPLY_FILTER:
                     this.applyFilter(data?.filter);
                     break;
-                case 'clearMessages':
+                case WEBVIEW_COMMANDS.CLEAR_MESSAGES:
                     await this.clearMessages();
                     break;
-                case 'exportMessages':
+                case WEBVIEW_COMMANDS.EXPORT_MESSAGES:
                     this.exportMessages();
                     break;
-                case 'pauseUpdates':
+                case WEBVIEW_COMMANDS.PAUSE_UPDATES:
                     this.pauseUpdates();
                     break;
-                case 'resumeUpdates':
+                case WEBVIEW_COMMANDS.RESUME_UPDATES:
                     this.resumeUpdates();
                     break;
                 default:
@@ -191,13 +191,14 @@ export class DashboardViewModel implements IDashboardViewModel {
         }
     }
 
-    async calculateMessageStats(): Promise<{ totalMessages: number; successRate: number; averageResponseTime: number; activeConnections: number }> {
-        const history = await this.messagePersistence.getHistory();
+    calculateMessageStats(): { totalMessages: number; successRate: number; averageResponseTime: number; activeConnections: number } {
+        // Use cached history for synchronous access
+        const history = this.messageBuffer;
         const connections = this.connectionPool?.getAllConnections() || new Map();
         
         // Calculate success rate (completed tasks / assigned tasks)
-        const assigned = history.filter(m => m.type === MessageType.ASSIGN_TASK).length;
-        const completed = history.filter(m => m.type === MessageType.TASK_COMPLETE).length;
+        const assigned = history.filter((m: OrchestratorMessage) => m.type === MessageType.ASSIGN_TASK).length;
+        const completed = history.filter((m: OrchestratorMessage) => m.type === MessageType.TASK_COMPLETE).length;
         const successRate = assigned > 0 ? (completed / assigned) * 100 : 0;
         
         // Count agent connections from metadata
@@ -216,10 +217,11 @@ export class DashboardViewModel implements IDashboardViewModel {
         };
     }
 
-    async calculateSuccessRate(): Promise<number> {
-        const history = await this.messagePersistence.getHistory();
-        const assigned = history.filter(m => m.type === MessageType.ASSIGN_TASK).length;
-        const completed = history.filter(m => m.type === MessageType.TASK_COMPLETE).length;
+    calculateSuccessRate(): number {
+        // Use cached history for synchronous access
+        const history = this.messageBuffer;
+        const assigned = history.filter((m: OrchestratorMessage) => m.type === MessageType.ASSIGN_TASK).length;
+        const completed = history.filter((m: OrchestratorMessage) => m.type === MessageType.TASK_COMPLETE).length;
         return assigned > 0 ? (completed / assigned) * 100 : 0;
     }
 

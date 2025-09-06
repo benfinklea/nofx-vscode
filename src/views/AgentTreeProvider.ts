@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ITreeStateManager, IUIStateManager } from '../services/interfaces';
+import { normalizeAgentStatus, normalizeTaskStatus } from '../types/ui';
 
 export class AgentTreeProvider implements vscode.TreeDataProvider<TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<TreeItem | undefined | null | void>();
@@ -31,9 +32,9 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeItem> {
 
     getChildren(element?: TreeItem): Thenable<TreeItem[]> {
         if (!element) {
-            // Delegate to TreeStateManager for root items
-            const sectionItems = this.treeStateManager.getSectionItems();
-            return Promise.resolve(sectionItems.map(item => this.createTreeItem(item)));
+            // Get pure data from TreeStateManager and handle presentation here
+            const data = this.treeStateManager.getSectionItems();
+            return Promise.resolve(this.createTreeItemsFromData(data));
         }
         
         // Handle expanding team section
@@ -44,10 +45,44 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeItem> {
         return Promise.resolve([]);
     }
 
+    private createTreeItemsFromData(data: any): TreeItem[] {
+        const items: TreeItem[] = [];
+        
+        // Add agents section
+        if (data.agents && data.agents.length > 0) {
+            const isExpanded = this.treeStateManager.isSectionExpanded('teamSection');
+            items.push(new TeamSectionItem(data.teamName, 'organization', data.agents, isExpanded));
+        }
+        
+        // Add tasks section
+        if (data.tasks && data.tasks.length > 0) {
+            items.push(new SectionItem('Tasks', 'tasklist'));
+            
+            // Show active tasks first, then pending tasks
+            const activeTasks = data.tasks.filter((t: any) => normalizeTaskStatus(t.status) === 'in-progress' || normalizeTaskStatus(t.status) === 'assigned');
+            const pendingTasks = data.tasks.filter((t: any) => normalizeTaskStatus(t.status) === 'queued');
+            
+            if (activeTasks.length > 0) {
+                items.push(...activeTasks.map((task: any) => new TaskItem(task, true)));
+            }
+            
+            if (pendingTasks.length > 0) {
+                items.push(...pendingTasks.map((task: any) => new TaskItem(task, false)));
+            }
+        }
+        
+        // Show message if no data
+        if (!data.hasData) {
+            items.push(new MessageItem('No agents or tasks available'));
+        }
+        
+        return items;
+    }
+
     private createTreeItem(item: any): TreeItem {
-        // Convert TreeStateManager items to TreeItems
+        // Legacy method - kept for backward compatibility
         if (item.type === 'teamSection') {
-            const isExpanded = this.treeStateManager.expandedSections?.has('teamSection') ?? true;
+            const isExpanded = this.treeStateManager.isSectionExpanded('teamSection');
             return new TeamSectionItem(item.label, item.icon, item.agents, isExpanded);
         } else if (item.type === 'section') {
             return new SectionItem(item.label, item.icon);
@@ -129,15 +164,18 @@ class AgentItem extends TreeItem {
         super(`  ${agent.name}`, vscode.TreeItemCollapsibleState.None);
         
         this.tooltip = `${agent.name} (${agent.type})`;
-        this.description = agent.status === 'working' 
-            ? `Working on: ${agent.currentTask?.title}`
-            : agent.status;
         
-        // Set icon based on status
+        // Normalize agent status for consistent display
+        const normalizedStatus = normalizeAgentStatus(agent.status);
+        this.description = normalizedStatus === 'working' 
+            ? `Working on: ${agent.currentTask?.title}`
+            : normalizedStatus;
+        
+        // Set icon based on normalized status
         this.iconPath = new vscode.ThemeIcon(
-            agent.status === 'working' ? 'debug-start' : 
-            agent.status === 'idle' ? 'check' : 
-            agent.status === 'error' ? 'error' : 'circle-outline'
+            normalizedStatus === 'working' ? 'debug-start' : 
+            normalizedStatus === 'idle' ? 'check' : 
+            normalizedStatus === 'error' ? 'error' : 'circle-outline'
         );
         
         // Set context value for context menu

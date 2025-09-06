@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import {
     ICommandHandler,
@@ -9,6 +8,8 @@ import {
     INotificationService,
     IConfigurationService,
     IMessagePersistenceService,
+    ILoggingService,
+    IConductorViewModel,
     SERVICE_TOKENS
 } from '../services/interfaces';
 import { AgentManager } from '../agents/AgentManager';
@@ -24,6 +25,7 @@ export class OrchestrationCommands implements ICommandHandler {
     private readonly commandService: ICommandService;
     private readonly notificationService: INotificationService;
     private readonly configService: IConfigurationService;
+    private readonly loggingService: ILoggingService;
     private readonly context: vscode.ExtensionContext;
     private readonly container: IContainer;
     private readonly messagePersistence: IMessagePersistenceService;
@@ -39,6 +41,7 @@ export class OrchestrationCommands implements ICommandHandler {
         this.commandService = container.resolve<ICommandService>(SERVICE_TOKENS.CommandService);
         this.notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
         this.configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
+        this.loggingService = container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
         this.context = container.resolve<vscode.ExtensionContext>(SERVICE_TOKENS.ExtensionContext);
         this.messagePersistence = container.resolve<IMessagePersistenceService>(SERVICE_TOKENS.MessagePersistenceService);
         
@@ -61,8 +64,8 @@ export class OrchestrationCommands implements ICommandHandler {
         if (this.conductorPanel) {
             this.conductorPanel.reveal();
         } else {
-            const viewModel = this.container.resolve(SERVICE_TOKENS.ConductorViewModel);
-            const loggingService = this.container.resolve(SERVICE_TOKENS.LoggingService);
+            const viewModel = this.container.resolve<IConductorViewModel>(SERVICE_TOKENS.ConductorViewModel);
+            const loggingService = this.container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
             this.conductorPanel = EnhancedConductorPanel.create(this.context, viewModel, loggingService);
         }
     }
@@ -74,9 +77,8 @@ export class OrchestrationCommands implements ICommandHandler {
         }
 
         if (!this.messageFlowDashboard) {
-            const viewModel = this.container.resolve(SERVICE_TOKENS.DashboardViewModel);
-            const loggingService = this.container.resolve(SERVICE_TOKENS.LoggingService);
-            this.messageFlowDashboard = new MessageFlowDashboard(this.context, viewModel, loggingService);
+            // Use the factory to create the dashboard on demand
+            this.messageFlowDashboard = this.container.resolve(SERVICE_TOKENS.MessageFlowDashboard);
         }
 
         await this.messageFlowDashboard.show();
@@ -137,7 +139,7 @@ export class OrchestrationCommands implements ICommandHandler {
                 try {
                     await this.messagePersistence.clear();
                 } catch (error) {
-                    console.warn('Failed to clear orchestration history:', error);
+                    this.loggingService?.warn('Failed to clear orchestration history:', error);
                     // Don't fail the entire reset for this
                 }
 
@@ -157,7 +159,7 @@ export class OrchestrationCommands implements ICommandHandler {
                 );
 
             } catch (error) {
-                console.error('Error resetting NofX:', error);
+                this.loggingService?.error('Error resetting NofX:', error);
                 await this.notificationService.showError(
                     `Failed to reset NofX: ${error instanceof Error ? error.message : 'Unknown error'}`
                 );

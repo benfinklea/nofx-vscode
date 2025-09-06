@@ -1,0 +1,265 @@
+name: Build Validation
+
+on:
+  push:
+    branches: [ main, develop, worktrees ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node-version: [18.x, 20.x]
+        exclude:
+          # Reduce matrix size for faster CI
+          - os: windows-latest
+            node-version: 18.x
+          - os: macos-latest
+            node-version: 18.x
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for better git operations
+    
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run TypeScript compilation
+      run: npm run compile
+    
+    - name: Validate build output (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: ./scripts/validate-build.sh
+      shell: bash
+    
+    - name: Validate build output (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        if (!(Test-Path 'out/extension.js')) { 
+          Write-Error 'Build output not found'
+          exit 1 
+        }
+        $size = (Get-Item 'out/extension.js').Length
+        if ($size -lt 1024) {
+          Write-Error 'Main extension file too small'
+          exit 1
+        }
+        Write-Host 'Build output validated successfully'
+      shell: pwsh
+    
+    - name: Run unit tests
+      run: npm run test:unit
+      env:
+        NOFX_TEST_MODE: true
+    
+    - name: Run integration tests
+      run: npm run test:integration
+      env:
+        NOFX_TEST_MODE: true
+      continue-on-error: true  # Integration tests may require VS Code environment
+    
+    - name: Run build validation tests
+      run: npm run test:build
+      if: ${{ always() }}
+    
+    - name: Run command registration tests
+      run: npm run test:commands
+      if: ${{ always() }}
+    
+    - name: Run service container tests
+      run: npm run test:services
+      if: ${{ always() }}
+    
+    - name: Check code coverage
+      run: npm run test:coverage
+    
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v4
+      if: ${{ matrix.node-version == '20.x' && matrix.os == 'ubuntu-latest' }}
+      with:
+        name: coverage-report
+        path: coverage/
+    
+    - name: Run linting
+      run: npm run lint
+    
+    - name: Package extension
+      run: npm run build
+    
+    - name: Verify VSIX package
+      run: |
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          pwsh -Command "& { 
+            $vsix = Get-ChildItem -Filter 'nofx-*.vsix' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if (-not $vsix) { 
+              Write-Error 'VSIX package not found'
+              exit 1 
+            }
+            if ($vsix.Length -lt 10000) {
+              Write-Error \"VSIX package too small (\$(\$vsix.Length) bytes)\"
+              exit 1
+            }
+            Write-Host 'VSIX package validated successfully'
+          }"
+        else
+          if ! ls nofx-*.vsix 1> /dev/null 2>&1; then
+            echo "Error: VSIX package not found"
+            exit 1
+          fi
+          size=$(stat -f%z nofx-*.vsix 2>/dev/null || stat -c%s nofx-*.vsix 2>/dev/null)
+          if [ "$size" -lt 10000 ]; then
+            echo "Error: VSIX package too small ($size bytes)"
+            exit 1
+          fi
+          echo "VSIX package validated successfully"
+        fi
+      shell: bash
+    
+    - name: Upload VSIX artifact
+      uses: actions/upload-artifact@v4
+      if: ${{ matrix.node-version == '20.x' && matrix.os == 'ubuntu-latest' }}
+      with:
+        name: vsix-package
+        path: nofx-*.vsix
+    
+    - name: Test extension manifest
+      run: |
+        node -e "
+          const pkg = require('./package.json');
+          const assert = require('assert');
+          
+          // Validate manifest structure
+          assert(pkg.name === 'nofx', 'Invalid extension name');
+          assert(pkg.main === './out/extension.js', 'Invalid main entry point');
+          assert(pkg.contributes, 'Missing contributes section');
+          const commandCount = pkg.contributes.commands.length;
+          assert(commandCount > 0, `Found ${commandCount} commands`);
+          assert(pkg.engines.vscode, 'Missing VS Code engine version');
+          assert(pkg.activationEvents.length > 0, 'Missing activation events');
+          
+          console.log('Extension manifest validated successfully');
+        "
+    
+    - name: Check for console.log in production
+      run: |
+        if grep -r "console\.log" out/ --include="*.js" --exclude-dir=test; then
+          echo "Warning: console.log statements found in production code"
+        fi
+      continue-on-error: true
+    
+    - name: Performance check
+      run: |
+        node -e "
+          const start = Date.now();
+          require('./out/extension.js');
+          const duration = Date.now() - start;
+          
+          if (duration > 5000) {
+            console.error('Extension load time too slow: ' + duration + 'ms');
+            process.exit(1);
+          }
+          console.log('Extension loaded in ' + duration + 'ms');
+        "
+      env:
+        NOFX_TEST_MODE: true
+
+  validate-commands:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Compile TypeScript
+      run: npm run compile
+    
+    - name: Validate all commands
+      run: |
+        node -e "
+          const pkg = require('./package.json');
+          const commands = pkg.contributes.commands;
+          const expectedCount = commands.length;
+          
+          console.log('Validating command registration...');
+          console.log('Found ' + commands.length + ' commands');
+          
+          if (commands.length === 0) {
+            console.error('No commands found in package.json');
+            process.exit(1);
+          }
+          
+          // Check for duplicate command IDs
+          const ids = commands.map(c => c.command);
+          const uniqueIds = new Set(ids);
+          if (ids.length !== uniqueIds.size) {
+            console.error('Duplicate command IDs found');
+            process.exit(1);
+          }
+          
+          // Validate command structure
+          let errors = 0;
+          commands.forEach(cmd => {
+            if (!cmd.command || !cmd.title) {
+              console.error('Invalid command structure:', cmd);
+              errors++;
+            }
+            if (!cmd.command.startsWith('nofx.')) {
+              console.error('Command does not follow naming convention:', cmd.command);
+              errors++;
+            }
+          });
+          
+          if (errors > 0) {
+            process.exit(1);
+          }
+          
+          console.log('✅ All commands validated successfully');
+        "
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Run npm audit
+      run: npm audit --audit-level=high
+      continue-on-error: true
+    
+    - name: Check for secrets
+      run: |
+        # Check for potential secrets or API keys
+        if grep -r "api[_-]key\|secret\|password\|token" . \
+           --include="*.ts" --include="*.js" \
+           --exclude-dir=node_modules \
+           --exclude-dir=coverage \
+           --exclude-dir=out \
+           --exclude-dir=.git | \
+           grep -v "SERVICE_TOKENS\|test\|mock\|example"; then
+          echo "Warning: Potential secrets found in code"
+        fi
+      continue-on-error: true

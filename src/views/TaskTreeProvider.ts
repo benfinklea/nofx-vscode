@@ -1,16 +1,16 @@
 import * as vscode from 'vscode';
-import { IUIStateManager, IContainer, SERVICE_TOKENS, TaskQueue } from '../services/interfaces';
+import { IUIStateManager, IContainer, SERVICE_TOKENS, ITaskQueue } from '../services/interfaces';
 import { TaskDTO, getStatusIcon, formatPriority, getPriorityColor } from '../types/ui';
 
 export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<TaskItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private disposables: vscode.Disposable[] = [];
-    private taskQueue?: TaskQueue;
+    private taskQueue?: ITaskQueue;
 
     constructor(private uiStateManager: IUIStateManager, container?: IContainer) {
         if (container) {
-            this.taskQueue = container.resolve<TaskQueue>(SERVICE_TOKENS.TaskQueue);
+            this.taskQueue = container.resolve<ITaskQueue>(SERVICE_TOKENS.TaskQueue);
         }
         // Subscribe to UI state changes
         this.disposables.push(
@@ -212,10 +212,13 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
 
     // Drag and drop support
     getDragAndDropController(): vscode.TreeDragAndDropController<TaskItem> {
+        // Capture taskQueue outside the returned controller to avoid 'this' binding issues
+        const taskQueue = this.taskQueue;
+        
         return {
             dragMimeTypes: ['application/vnd.code.tree.taskTree'],
             dropMimeTypes: ['application/vnd.code.tree.taskTree'],
-            handleDrag(source: TaskItem[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void | Thenable<void> {
+            handleDrag: (source: TaskItem[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void | Thenable<void> => {
                 // Store the dragged task IDs
                 const taskIds = source
                     .filter(item => item.type === 'task' && item.task)
@@ -225,8 +228,8 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
                     dataTransfer.set('application/vnd.code.tree.taskTree', new vscode.DataTransferItem(taskIds));
                 }
             },
-            handleDrop(target: TaskItem | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void | Thenable<void> {
-                if (!target || target.type !== 'task' || !target.task || !this.taskQueue) {
+            handleDrop: (target: TaskItem | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void | Thenable<void> => {
+                if (!target || target.type !== 'task' || !target.task || !taskQueue) {
                     return;
                 }
 
@@ -238,7 +241,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
                 // Create dependencies for each dragged task to the target task
                 for (const draggedTaskId of draggedTaskIds) {
                     if (draggedTaskId !== target.task.id) {
-                        this.taskQueue.addTaskDependency(draggedTaskId, target.task.id);
+                        taskQueue.addTaskDependency(draggedTaskId, target.task.id);
                     }
                 }
             }

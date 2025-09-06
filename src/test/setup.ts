@@ -1,107 +1,5 @@
-import * as vscode from 'vscode';
-
-// Mock VS Code API
-const mockVSCode = {
-  window: {
-    createOutputChannel: () => ({
-      appendLine: () => {},
-      show: () => {},
-      hide: () => {},
-      dispose: () => {}
-    }),
-    createTerminal: () => ({
-      show: () => {},
-      hide: () => {},
-      sendText: () => {},
-      dispose: () => {}
-    }),
-    showInformationMessage: () => Promise.resolve(undefined),
-    showWarningMessage: () => Promise.resolve(undefined),
-    showErrorMessage: () => Promise.resolve(undefined),
-    showQuickPick: () => Promise.resolve(undefined),
-    showInputBox: () => Promise.resolve(undefined),
-    createWebviewPanel: () => ({
-      webview: {
-        html: '',
-        onDidReceiveMessage: () => ({ dispose: () => {} }),
-        postMessage: () => Promise.resolve(true)
-      },
-      onDidDispose: () => ({ dispose: () => {} }),
-      reveal: () => {},
-      dispose: () => {}
-    }),
-    registerTreeDataProvider: () => {},
-    createTreeView: () => ({
-      onDidChangeSelection: () => ({ dispose: () => {} }),
-      reveal: () => {},
-      dispose: () => {}
-    })
-  },
-  workspace: {
-    getConfiguration: () => ({
-      get: () => {},
-      update: () => Promise.resolve(),
-      has: () => false,
-      inspect: () => undefined
-    }),
-    workspaceFolders: [],
-    onDidChangeConfiguration: () => ({ dispose: () => {} }),
-    onDidChangeWorkspaceFolders: () => ({ dispose: () => {} }),
-    onDidOpenTextDocument: () => ({ dispose: () => {} }),
-    onDidCloseTextDocument: () => ({ dispose: () => {} }),
-    onDidSaveTextDocument: () => ({ dispose: () => {} }),
-    openTextDocument: () => Promise.resolve({} as vscode.TextDocument),
-    saveAll: () => Promise.resolve(false),
-    applyEdit: () => Promise.resolve(false),
-    asRelativePath: () => ''
-  },
-  commands: {
-    registerCommand: () => ({ dispose: () => {} }),
-    executeCommand: () => Promise.resolve(undefined),
-    getCommands: () => Promise.resolve([])
-  },
-  Uri: {
-    file: (path: string) => ({ fsPath: path, scheme: 'file' } as vscode.Uri),
-    parse: (uri: string) => ({ fsPath: uri, scheme: 'file' } as vscode.Uri),
-    joinPath: () => ({} as vscode.Uri)
-  },
-  Range: () => ({} as vscode.Range),
-  Position: () => ({} as vscode.Position),
-  Location: () => ({} as vscode.Location),
-  Diagnostic: () => ({} as vscode.Diagnostic),
-  DiagnosticSeverity: {
-    Error: 0,
-    Warning: 1,
-    Information: 2,
-    Hint: 3
-  },
-  languages: {
-    registerCodeLensProvider: () => ({ dispose: () => {} }),
-    registerHoverProvider: () => ({ dispose: () => {} }),
-    registerCompletionItemProvider: () => ({ dispose: () => {} }),
-    createDiagnosticCollection: () => ({
-      set: () => {},
-      clear: () => {},
-      dispose: () => {}
-    })
-  },
-  env: {
-    machineId: 'test-machine-id',
-    sessionId: 'test-session-id',
-    language: 'en'
-  },
-  version: '1.85.0',
-  extensions: {
-    getExtension: () => undefined,
-    all: []
-  }
-};
-
-// Set up global mocks
-Object.defineProperty(global, 'vscode', {
-  value: mockVSCode,
-  writable: true
-});
+// The vscode module is now mocked via jest.config.js moduleNameMapper
+// pointing to src/test/__mocks__/vscode.ts
 
 // Mock WebSocket
 class MockWebSocket {
@@ -162,8 +60,13 @@ const mockChildProcess = {
     kill: () => {},
     pid: 12345
   }),
-  exec: (command: any, callback: any) => {
-    if (callback) {
+  exec: (command: any, options: any, callback: any) => {
+    if (typeof options === 'function') {
+      // Called with (command, callback)
+      callback = options;
+      options = {};
+    }
+    if (callback && typeof callback === 'function') {
       callback(null, 'mock output', '');
     }
     return { kill: () => {} };
@@ -174,15 +77,28 @@ const mockChildProcess = {
 jest.mock('fs', () => mockFs);
 jest.mock('child_process', () => mockChildProcess);
 
-// Mock process
-Object.defineProperty(global, 'process', {
-  value: {
-    ...process,
-    platform: 'darwin',
-    cwd: () => '/test/workspace',
-    env: { ...process.env, NODE_ENV: 'test' }
-  },
-  writable: true
+// Mock process properties without overriding the entire object
+const originalProcess = process;
+let processSpy: jest.SpyInstance;
+
+beforeAll(() => {
+  // Set environment variables
+  process.env.NODE_ENV = 'test';
+  process.env.CI = 'true';
+  
+  // Mock process.cwd() instead of overriding the entire process object
+  processSpy = jest.spyOn(process, 'cwd').mockReturnValue('/test/workspace');
+});
+
+afterAll(() => {
+  // Restore original process.cwd
+  if (processSpy) {
+    processSpy.mockRestore();
+  }
+  
+  // Restore environment variables
+  delete process.env.NODE_ENV;
+  delete process.env.CI;
 });
 
 // Test utilities
@@ -262,7 +178,7 @@ export const createTestContainer = () => {
     setLoggingService: (service: any) => {
       loggingService = service;
     },
-    dispose: () => {
+    dispose: async () => {
       services.clear();
       loggingService = null;
     }
@@ -368,7 +284,8 @@ export const measureTime = async (fn: () => Promise<any>) => {
 // Cleanup after each test
 afterEach(() => {
   jest.clearAllMocks();
-  jest.restoreAllMocks();
+  // Don't restore all mocks here as it would interfere with process.cwd spy
+  // jest.restoreAllMocks();
 });
 
 // Suppress console output during tests unless explicitly enabled

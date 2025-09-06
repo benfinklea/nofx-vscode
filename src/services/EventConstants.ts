@@ -10,6 +10,12 @@ export const DOMAIN_EVENTS = {
     AGENT_REMOVED: 'agent.removed',
     AGENT_STATUS_CHANGED: 'agent.status.changed',
     
+    // Agent lifecycle events
+    AGENT_LIFECYCLE_SPAWNING: 'agent.lifecycle.spawning',
+    AGENT_LIFECYCLE_SPAWNED: 'agent.lifecycle.spawned',
+    AGENT_LIFECYCLE_REMOVING: 'agent.lifecycle.removing',
+    AGENT_LIFECYCLE_REMOVED: 'agent.lifecycle.removed',
+    
     // Task events
     TASK_CREATED: 'task.created',
     TASK_ASSIGNED: 'task.assigned',
@@ -25,6 +31,7 @@ export const DOMAIN_EVENTS = {
     TASK_SOFT_DEPENDENCY_ADDED: 'task.soft-dependency.added',
     TASK_SOFT_DEPENDENCY_REMOVED: 'task.soft-dependency.removed',
     TASK_SOFT_DEPENDENCY_SATISFIED: 'task.soft-dependency.satisfied',
+    TASK_PRIORITY_UPDATED: 'task.priority.updated',
     TASK_CONFLICT_DETECTED: 'task.conflict.detected',
     TASK_CONFLICT_RESOLVED: 'task.conflict.resolved',
     TASK_CONFLICT_DECISION: 'task.conflict.decision',
@@ -41,7 +48,28 @@ export const DOMAIN_EVENTS = {
     // Worktree events
     WORKTREE_CREATED: 'worktree.created',
     WORKTREE_REMOVED: 'worktree.removed',
-    WORKTREE_MERGED: 'worktree.merged'
+    WORKTREE_MERGED: 'worktree.merged',
+    
+    // Terminal events
+    TERMINAL_CREATED: 'terminal.created',
+    TERMINAL_CLOSED: 'terminal.closed',
+    TERMINAL_DISPOSED: 'terminal.disposed',
+    
+    // Agent task events
+    AGENT_TASK_ASSIGNED: 'agent.task.assigned',
+    AGENT_TASK_COMPLETED: 'agent.task.completed',
+    AGENT_TASK_INTERRUPTED: 'agent.task.interrupted'
+} as const;
+
+// Configuration events
+export const CONFIG_EVENTS = {
+    CONFIG_CHANGED: 'configuration.changed',
+    CONFIG_UPDATED: 'configuration.updated',
+    CONFIG_VALIDATION_FAILED: 'configuration.validation.failed',
+    CONFIG_API_ERROR: 'configuration.api.error',
+    CONFIG_UPDATE_FAILED: 'configuration.update.failed',
+    CONFIG_BACKED_UP: 'configuration.backed.up',
+    CONFIG_RESTORED: 'configuration.restored'
 } as const;
 
 // Orchestration events - specific to orchestration server

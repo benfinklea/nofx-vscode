@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { IUIStateManager, ICommandService, IEventBus, ILoggingService, INotificationService, IConductorViewModel } from '../services/interfaces';
-import { ConductorViewState, WebviewCommand } from '../types/ui';
+import { ConductorViewState, WebviewCommand, WEBVIEW_COMMANDS } from '../types/ui';
 import { DOMAIN_EVENTS } from '../services/EventConstants';
 
 export class ConductorViewModel implements IConductorViewModel {
@@ -53,22 +53,22 @@ export class ConductorViewModel implements IConductorViewModel {
             this.loggingService.debug('ConductorViewModel: Handling command', { command, data });
             
             switch (command as WebviewCommand) {
-                case 'spawnAgentGroup':
+                case WEBVIEW_COMMANDS.SPAWN_AGENT_GROUP:
                     await this.spawnAgentGroup(data?.groupName || 'Default Group');
                     break;
-                case 'spawnCustomAgent':
+                case WEBVIEW_COMMANDS.SPAWN_CUSTOM_AGENT:
                     await this.spawnCustomAgent(data?.templateKey || 'default');
                     break;
-                case 'createTask':
+                case WEBVIEW_COMMANDS.CREATE_TASK:
                     await this.createTask();
                     break;
-                case 'removeAgent':
+                case WEBVIEW_COMMANDS.REMOVE_AGENT:
                     await this.removeAgent(data?.agentId);
                     break;
-                case 'toggleTheme':
+                case WEBVIEW_COMMANDS.TOGGLE_THEME:
                     await this.toggleTheme(data?.theme || 'light');
                     break;
-                case 'showAgentPrompt':
+                case WEBVIEW_COMMANDS.SHOW_AGENT_PROMPT:
                     await this.showAgentPrompt();
                     break;
                 default:

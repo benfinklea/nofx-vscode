@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { IConfigurationService, CONFIG_KEYS, IConfigurationValidator, ValidationError, IEventBus } from './interfaces';
+import { CONFIG_EVENTS } from './EventConstants';
 
 export class ConfigurationService implements IConfigurationService {
     private static readonly CONFIG_SECTION = 'nofx';
@@ -20,7 +21,7 @@ export class ConfigurationService implements IConfigurationService {
         const disposable = vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(ConfigurationService.CONFIG_SECTION)) {
                 this.initializeCache();
-                this.eventBus?.publish('configuration.changed', { section: ConfigurationService.CONFIG_SECTION });
+                this.eventBus?.publish(CONFIG_EVENTS.CONFIG_CHANGED, { section: ConfigurationService.CONFIG_SECTION });
             }
         });
         this.disposables.push(disposable);
@@ -49,7 +50,7 @@ export class ConfigurationService implements IConfigurationService {
             if (this.validator) {
                 const validation = this.validateConfigurationKey(key, cachedValue);
                 if (!validation.isValid) {
-                    this.eventBus?.publish('configuration.validation.failed', { key, errors: validation.errors });
+                    this.eventBus?.publish(CONFIG_EVENTS.CONFIG_VALIDATION_FAILED, { key, errors: validation.errors });
                     // Remove invalid value from cache and return default
                     this.configCache.delete(key);
                     return defaultValue as T;
@@ -59,22 +60,33 @@ export class ConfigurationService implements IConfigurationService {
             return cachedValue;
         }
 
-        // Fall back to configuration API
-        const value = this.config.get<T>(key);
-        if (value !== undefined) {
-            this.configCache.set(key, value);
-            
-            // Validate the value if validator is available
-            if (this.validator) {
-                const validation = this.validateConfigurationKey(key, value);
-                if (!validation.isValid) {
-                    this.eventBus?.publish('configuration.validation.failed', { key, errors: validation.errors });
-                    // Don't cache invalid values, return default
-                    return defaultValue as T;
+        // Fall back to configuration API with error handling
+        try {
+            const value = this.config.get<T>(key);
+            if (value !== undefined) {
+                this.configCache.set(key, value);
+                
+                // Validate the value if validator is available
+                if (this.validator) {
+                    const validation = this.validateConfigurationKey(key, value);
+                    if (!validation.isValid) {
+                        this.eventBus?.publish(CONFIG_EVENTS.CONFIG_VALIDATION_FAILED, { key, errors: validation.errors });
+                        // Don't cache invalid values, return default
+                        return defaultValue as T;
+                    }
                 }
+                
+                return value;
             }
-            
-            return value;
+        } catch (error) {
+            // Handle VS Code API errors gracefully
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.eventBus?.publish(CONFIG_EVENTS.CONFIG_API_ERROR, { 
+                key, 
+                error: errorMessage, 
+                operation: 'get' 
+            });
+            // Return default value on API error
         }
 
         return defaultValue as T;
@@ -104,14 +116,26 @@ export class ConfigurationService implements IConfigurationService {
             }
         }
         
-        await this.config.update(key, value, target);
-        this.configCache.set(key, value);
-        
-        // Clear validation cache for this key
-        this.validationCache.delete(key);
-        
-        // Publish configuration update event
-        this.eventBus?.publish('configuration.updated', { key, value, target });
+        try {
+            await this.config.update(key, value, target);
+            this.configCache.set(key, value);
+            
+            // Clear validation cache for this key
+            this.validationCache.delete(key);
+            
+            // Publish configuration update event
+            this.eventBus?.publish(CONFIG_EVENTS.CONFIG_UPDATED, { key, value, target });
+        } catch (error) {
+            // Handle VS Code API errors and provide context
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.eventBus?.publish(CONFIG_EVENTS.CONFIG_UPDATE_FAILED, { 
+                key, 
+                value, 
+                target, 
+                error: errorMessage 
+            });
+            throw new Error(`Failed to update configuration key '${key}': ${errorMessage}`);
+        }
     }
 
     onDidChange(callback: (e: vscode.ConfigurationChangeEvent) => void): vscode.Disposable {
@@ -124,7 +148,7 @@ export class ConfigurationService implements IConfigurationService {
 
     // NofX specific configuration methods
     getMaxAgents(): number {
-        return this.get<number>(CONFIG_KEYS.MAX_AGENTS, 5);
+        return this.get<number>(CONFIG_KEYS.MAX_AGENTS, 3);
     }
 
     getClaudePath(): string {
@@ -136,7 +160,11 @@ export class ConfigurationService implements IConfigurationService {
     }
 
     isUseWorktrees(): boolean {
-        return this.get<boolean>(CONFIG_KEYS.USE_WORKTREES, false);
+        return this.get<boolean>(CONFIG_KEYS.USE_WORKTREES, true);
+    }
+
+    isShowAgentTerminalOnSpawn(): boolean {
+        return this.get<boolean>(CONFIG_KEYS.SHOW_AGENT_TERMINAL_ON_SPAWN, false);
     }
 
     getTemplatesPath(): string {
@@ -179,7 +207,44 @@ export class ConfigurationService implements IConfigurationService {
         }
         
         const allConfig = this.getAll();
-        return this.validator.validateConfiguration(allConfig);
+        const nestedConfig = this.nestKeys(allConfig);
+        
+        // Validate basic configuration schema
+        const schemaValidation = this.validator.validateConfiguration(nestedConfig);
+        
+        // Validate NofX-specific cross-field rules
+        const nofxValidation = this.validator.validateNofXConfiguration(nestedConfig);
+        
+        // Merge errors from both validations
+        const allErrors = [...schemaValidation.errors, ...nofxValidation.errors];
+        
+        // Determine overall validity based on error severity
+        const hasErrors = allErrors.some(error => error.severity === 'error');
+        const isValid = !hasErrors;
+        
+        return { isValid, errors: allErrors };
+    }
+
+    getNestedConfig(flat: Record<string, any>): Record<string, any> {
+        return this.nestKeys(flat);
+    }
+
+    private nestKeys(flat: Record<string, any>): Record<string, any> {
+        const nested: any = {};
+        for (const [k, v] of Object.entries(flat)) {
+            if (k.includes('.')) {
+                const [root, ...rest] = k.split('.');
+                nested[root] = nested[root] || {};
+                let cur = nested[root];
+                for (let i = 0; i < rest.length - 1; i++) {
+                    cur = cur[rest[i]] = cur[rest[i]] || {};
+                }
+                cur[rest[rest.length - 1]] = v;
+            } else {
+                nested[k] = v;
+            }
+        }
+        return nested;
     }
 
     getValidationErrors(): ValidationError[] {
@@ -210,14 +275,15 @@ export class ConfigurationService implements IConfigurationService {
     // Configuration migration and backup methods
     async backupConfiguration(): Promise<Record<string, any>> {
         const backup = this.getAll();
-        this.eventBus?.publish('configuration.backed.up', { keys: Object.keys(backup) });
+        this.eventBus?.publish(CONFIG_EVENTS.CONFIG_BACKED_UP, { keys: Object.keys(backup) });
         return backup;
     }
 
     async restoreConfiguration(backup: Record<string, any>): Promise<void> {
         // Validate the backup before restoring
         if (this.validator) {
-            const validation = this.validator.validateConfiguration(backup);
+            const nested = this.nestKeys(backup);
+            const validation = this.validator.validateConfiguration(nested);
             if (!validation.isValid) {
                 throw new Error(`Backup validation failed: ${validation.errors.map(e => e.message).join('; ')}`);
             }
@@ -228,7 +294,7 @@ export class ConfigurationService implements IConfigurationService {
             await this.update(key, value);
         }
         
-        this.eventBus?.publish('configuration.restored', { keys: Object.keys(backup) });
+        this.eventBus?.publish(CONFIG_EVENTS.CONFIG_RESTORED, { keys: Object.keys(backup) });
     }
 
     // Performance optimization methods

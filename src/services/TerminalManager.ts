@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ITerminalManager, IConfigurationService, ILoggingService, IEventBus, IErrorHandler } from './interfaces';
+import { DOMAIN_EVENTS } from './EventConstants';
 
 export class TerminalManager implements ITerminalManager {
     private terminals = new Map<string, vscode.Terminal>();
@@ -31,7 +32,7 @@ export class TerminalManager implements ITerminalManager {
                         
                         // Publish event to EventBus
                         if (this.eventBus) {
-                            this.eventBus.publish('terminal.closed', { agentId, terminal });
+                            this.eventBus.publish(DOMAIN_EVENTS.TERMINAL_CLOSED, { agentId, terminal });
                         }
                         
                         this.loggingService?.debug(`Terminal closed for agent ${agentId}`);
@@ -65,7 +66,7 @@ export class TerminalManager implements ITerminalManager {
         
         // Publish event to EventBus
         if (this.eventBus) {
-            this.eventBus.publish('terminal.created', { agentId, terminal, agentConfig });
+            this.eventBus.publish(DOMAIN_EVENTS.TERMINAL_CREATED, { agentId, terminal, agentConfig });
         }
         
         this.loggingService?.debug(`Terminal created for agent ${agentId}`);
@@ -84,7 +85,7 @@ export class TerminalManager implements ITerminalManager {
             
             // Publish event to EventBus
             if (this.eventBus) {
-                this.eventBus.publish('terminal.disposed', { agentId, terminal });
+                this.eventBus.publish(DOMAIN_EVENTS.TERMINAL_DISPOSED, { agentId, terminal });
             }
             
             this.loggingService?.debug(`Terminal disposed for agent ${agentId}`);
@@ -113,14 +114,54 @@ export class TerminalManager implements ITerminalManager {
             this.loggingService?.debug(`Starting ${agent.name} with system prompt`);
             // Combine the template prompt with team instructions
             const fullPrompt = agent.template.systemPrompt + '\n\nYou are part of a NofX.dev coding team. Please wait for further instructions. Don\'t do anything yet. Just wait.';
-            // Escape single quotes for shell
-            const escapedPrompt = fullPrompt.replace(/'/g, "'\\''");
-            // Start Claude with the system prompt
-            terminal.sendText(`${claudePath} --append-system-prompt '${escapedPrompt}'`);
+            // Handle platform-specific quoting
+            const quotedPrompt = this.quotePromptForShell(fullPrompt);
+            // Start Claude with the system prompt - quote the claudePath
+            terminal.sendText(`"${claudePath}" --append-system-prompt ${quotedPrompt}`);
         } else {
             // No template, just basic prompt
             const basicPrompt = 'You are a general purpose agent, part of a NofX.dev coding team. Please wait for instructions.';
-            terminal.sendText(`${claudePath} --append-system-prompt '${basicPrompt}'`);
+            const quotedPrompt = this.quotePromptForShell(basicPrompt);
+            terminal.sendText(`"${claudePath}" --append-system-prompt ${quotedPrompt}`);
+        }
+
+        // Show terminal if configured to do so
+        if (this.configService.isShowAgentTerminalOnSpawn()) {
+            terminal.show();
+        }
+    }
+
+    createEphemeralTerminal(name: string): vscode.Terminal {
+        return vscode.window.createTerminal(name);
+    }
+
+    private quotePromptForShell(prompt: string): string {
+        const platform = process.platform;
+        const shell = vscode.env.shell;
+        
+        // Detect Windows shells
+        const isWindows = platform === 'win32';
+        const isPowerShell = shell?.includes('powershell') || shell?.includes('pwsh');
+        const isCmd = shell?.includes('cmd.exe');
+        
+        if (isWindows) {
+            if (isPowerShell) {
+                // PowerShell: Use double quotes and escape internal double quotes
+                const escaped = prompt.replace(/"/g, '""');
+                return `"${escaped}"`;
+            } else if (isCmd) {
+                // CMD: Use double quotes and escape internal double quotes
+                const escaped = prompt.replace(/"/g, '\\"');
+                return `"${escaped}"`;
+            } else {
+                // Fallback for other Windows shells
+                const escaped = prompt.replace(/"/g, '\\"');
+                return `"${escaped}"`;
+            }
+        } else {
+            // POSIX shells (bash, zsh, etc.): Use single quotes and escape internal single quotes
+            const escaped = prompt.replace(/'/g, "'\\''");
+            return `'${escaped}'`;
         }
     }
 

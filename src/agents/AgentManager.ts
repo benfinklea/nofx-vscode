@@ -11,6 +11,7 @@ export class AgentManager implements IAgentReader {
     private _onAgentUpdate = new vscode.EventEmitter<void>();
     public readonly onAgentUpdate = this._onAgentUpdate.event;
     private disposables: vscode.Disposable[] = [];
+    private isDisposing: boolean = false;
 
     private agentLifecycleManager?: IAgentLifecycleManager;
     private terminalManager?: ITerminalManager;
@@ -22,25 +23,9 @@ export class AgentManager implements IAgentReader {
     private errorHandler?: IErrorHandler;
     private metricsService?: IMetricsService;
 
-    constructor(context: vscode.ExtensionContext) {
+    constructor(context: vscode.ExtensionContext, persistence?: AgentPersistence) {
         this.context = context;
-        
-        // Initialize persistence if we have a workspace
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (this.loggingService) {
-            this.loggingService.debug(`Workspace folder: ${workspaceFolder?.uri.fsPath || 'None'}`);
-        }
-        
-        if (workspaceFolder) {
-            this.persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
-            if (this.loggingService) {
-                this.loggingService.debug('Persistence initialized');
-            }
-        } else {
-            if (this.loggingService) {
-                this.loggingService.warn('No workspace folder - persistence disabled');
-            }
-        }
+        this.persistence = persistence;
 
         // Terminal close event listener will be set up after dependencies are injected
     }
@@ -68,6 +53,11 @@ export class AgentManager implements IAgentReader {
 
         // Set up terminal close event listener
         const terminalCloseDisposable = this.terminalManager.onTerminalClosed((terminal) => {
+            // Bail out if we're already disposing to prevent double-dispose
+            if (this.isDisposing) {
+                return;
+            }
+            
             const agent = this.findAgentByTerminal(terminal);
             if (agent) {
                 // If agent was working, mark as idle and task as interrupted
@@ -80,7 +70,7 @@ export class AgentManager implements IAgentReader {
                     // Publish event to EventBus
                     if (this.eventBus) {
                         this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, { agentId: agent.id, status: 'idle' });
-                        this.eventBus.publish('agent.task.interrupted', { agentId: agent.id, task });
+                        this.eventBus.publish(DOMAIN_EVENTS.AGENT_TASK_INTERRUPTED, { agentId: agent.id, task });
                     }
                     
                     this.notificationService?.showWarning(
@@ -96,6 +86,16 @@ export class AgentManager implements IAgentReader {
     async initialize(showSetupDialog: boolean = false) {
         if (!this.agentLifecycleManager || !this.configService) {
             throw new Error('AgentManager dependencies not set. Call setDependencies() first.');
+        }
+        
+        // Log persistence status
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        this.loggingService?.debug(`Workspace folder: ${workspaceFolder?.uri.fsPath || 'None'}`);
+        
+        if (this.persistence) {
+            this.loggingService?.debug('Persistence initialized');
+        } else {
+            this.loggingService?.warn('No persistence available - agent state will not be saved');
         }
         
         // Initialize the agent lifecycle manager
@@ -119,9 +119,11 @@ export class AgentManager implements IAgentReader {
             );
             
             if (selection === 'Test Claude') {
-                const terminal = vscode.window.createTerminal('Claude Test');
-                terminal.show();
-                terminal.sendText(`${claudePath} --version || echo "Claude not found. Please check installation."`);            
+                const terminal = this.terminalManager?.createEphemeralTerminal('Claude Test');
+                if (terminal) {
+                    terminal.show();
+                    terminal.sendText(`${claudePath} --version || echo "Claude not found. Please check installation."`);
+                }
             } else if (selection === 'Change Path') {
                 const newPath = await this.notificationService?.showInputBox({
                     prompt: 'Enter Claude command or path',
@@ -300,7 +302,7 @@ export class AgentManager implements IAgentReader {
         // Publish event to EventBus
         if (this.eventBus) {
             this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, { agentId: agent.id, status: 'working' });
-            this.eventBus.publish('agent.task.assigned', { agentId: agent.id, task });
+            this.eventBus.publish(DOMAIN_EVENTS.AGENT_TASK_ASSIGNED, { agentId: agent.id, task });
         }
         
         // Save state after update
@@ -437,7 +439,7 @@ export class AgentManager implements IAgentReader {
         // Publish event to EventBus
         if (this.eventBus) {
             this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, { agentId: agent.id, status: 'idle' });
-            this.eventBus.publish('agent.task.completed', { agentId: agent.id, task });
+            this.eventBus.publish(DOMAIN_EVENTS.AGENT_TASK_COMPLETED, { agentId: agent.id, task });
         }
         
         // Save state after update
@@ -515,6 +517,17 @@ export class AgentManager implements IAgentReader {
             return undefined;
         }
         return this.terminalManager.getTerminal(agentId);
+    }
+
+    getAgentStats(): { total: number; idle: number; working: number; error: number; offline: number } {
+        const allAgents = Array.from(this.agents.values());
+        return {
+            total: allAgents.length,
+            idle: allAgents.filter(a => a.status === 'idle').length,
+            working: allAgents.filter(a => a.status === 'working').length,
+            error: allAgents.filter(a => a.status === 'error').length,
+            offline: allAgents.filter(a => a.status === 'offline').length
+        };
     }
 
     private findAgentByTerminal(terminal: vscode.Terminal): Agent | undefined {
@@ -601,6 +614,10 @@ export class AgentManager implements IAgentReader {
         this.configService?.update('useWorktrees', value, vscode.ConfigurationTarget.Workspace);
     }
 
+    public notifyAgentUpdated(): void {
+        this._onAgentUpdate.fire();
+    }
+
     private async saveAgentState() {
         if (!this.persistence) return;
         
@@ -624,14 +641,15 @@ export class AgentManager implements IAgentReader {
         }
     }
 
-    dispose() {
-        // Save final state before disposal
-        this.saveAgentState();
+    async dispose(): Promise<void> {
+        // Set disposing flag to prevent double-dispose
+        this.isDisposing = true;
         
-        // Clean up all agents
-        for (const agentId of this.agents.keys()) {
-            this.removeAgent(agentId);
-        }
+        // Save final state before disposal
+        await this.saveAgentState();
+        
+        // Clean up all agents - await removal operations
+        await Promise.allSettled([...this.agents.keys()].map(id => this.removeAgent(id)));
         
         // Dispose services
         this.agentLifecycleManager?.dispose();

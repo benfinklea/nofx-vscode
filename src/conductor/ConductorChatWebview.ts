@@ -10,6 +10,7 @@ import {
     extractJsonFromClaudeOutput,
     OrchestratorMessage
 } from '../orchestration/MessageProtocol';
+import { ILoggingService, INotificationService } from '../services/interfaces';
 
 export class ConductorChatWebview {
     private panel: vscode.WebviewPanel | undefined;
@@ -29,7 +30,9 @@ export class ConductorChatWebview {
     constructor(
         context: vscode.ExtensionContext,
         agentManager: AgentManager,
-        taskQueue: TaskQueue
+        taskQueue: TaskQueue,
+        private loggingService?: ILoggingService,
+        private notificationService?: INotificationService
     ) {
         this.context = context;
         this.agentManager = agentManager;
@@ -74,16 +77,16 @@ export class ConductorChatWebview {
         // Handle messages from webview
         this.panel.webview.onDidReceiveMessage(
             async message => {
-                console.log('[ConductorChat] Webview message:', message);
+                this.loggingService?.debug('[ConductorChat] Webview message:', message);
                 switch (message.command) {
                     case 'ready':
-                        console.log('[ConductorChat] Webview ready - sending initial state');
+                        this.loggingService?.debug('[ConductorChat] Webview ready - sending initial state');
                         // Send initial state
                         this.updateWebview();
                         // Greeting will be sent by startClaude or useMockClaude
                         break;
                     case 'sendMessage':
-                        console.log('[ConductorChat] User message received:', message.text);
+                        this.loggingService?.debug('[ConductorChat] User message received:', message.text);
                         await this.handleUserMessage(message.text);
                         break;
                     // Level changing removed - only VP level now
@@ -122,10 +125,10 @@ export class ConductorChatWebview {
 
         const systemPrompt = this.getSystemPrompt();
         
-        console.log('[ConductorChat] Attempting to start Claude process...');
-        console.log('[ConductorChat] Claude path:', this.claudePath);
-        console.log('[ConductorChat] Working directory:', process.cwd());
-        console.log('[ConductorChat] PATH environment:', process.env.PATH);
+        this.loggingService?.info('[ConductorChat] Attempting to start Claude process...');
+        this.loggingService?.debug('[ConductorChat] Claude path:', this.claudePath);
+        this.loggingService?.debug('[ConductorChat] Working directory:', process.cwd());
+        this.loggingService?.debug('[ConductorChat] PATH environment:', process.env.PATH);
         
         // Show user we're attempting to connect
         this.addMessage('conductor', `🔄 Attempting to connect to Claude at: ${this.claudePath}...`);
@@ -133,7 +136,7 @@ export class ConductorChatWebview {
         // Try to spawn Claude WITHOUT --append-system-prompt flag
         // Instead we'll send the prompt via stdin after it starts
         try {
-            console.log('[ConductorChat] Spawning Claude process without flags...');
+            this.loggingService?.debug('[ConductorChat] Spawning Claude process without flags...');
             
             // Just spawn claude directly without any arguments
             this.claudeProcess = spawn(this.claudePath, [], {
@@ -148,7 +151,7 @@ export class ConductorChatWebview {
             }
             
             // Log process spawn
-            console.log('[ConductorChat] Claude process spawned with PID:', this.claudeProcess.pid);
+            this.loggingService?.info('[ConductorChat] Claude process spawned with PID:', this.claudeProcess.pid);
             this.addMessage('conductor', `✅ Claude process started (PID: ${this.claudeProcess.pid}). Sending system prompt...`);
             
             // Set up handlers immediately
@@ -157,7 +160,7 @@ export class ConductorChatWebview {
             // Send system prompt after a delay (like regular agents do)
             setTimeout(() => {
                 if (this.claudeProcess && this.claudeProcess.stdin && !this.claudeProcess.killed) {
-                    console.log('[ConductorChat] Sending system prompt to Claude...');
+                    this.loggingService?.debug('[ConductorChat] Sending system prompt to Claude...');
                     this.claudeProcess.stdin.write(systemPrompt + '\n\n');
                     this.claudeProcess.stdin.write('Please acknowledge that you understand your role as the NofX Conductor.\n');
                 }
@@ -167,8 +170,8 @@ export class ConductorChatWebview {
             this.simulatedClaude = false;
             
         } catch (spawnError: any) {
-            console.error('[ConductorChat] Failed to spawn Claude:', spawnError);
-            console.error('[ConductorChat] Error stack:', spawnError.stack);
+            this.loggingService?.error('[ConductorChat] Failed to spawn Claude:', spawnError);
+            this.loggingService?.error('[ConductorChat] Error stack:', spawnError.stack);
             
             // Detailed error message for user
             let errorDetails = `❌ Failed to connect to Claude\n\n`;
@@ -188,17 +191,17 @@ export class ConductorChatWebview {
     
     private setupClaudeHandlers() {
         if (!this.claudeProcess) {
-            console.error('[ConductorChat] No Claude process to set up handlers for');
+            this.loggingService?.error('[ConductorChat] No Claude process to set up handlers for');
             return;
         }
 
-        console.log('[ConductorChat] Setting up Claude handlers');
+        this.loggingService?.debug('[ConductorChat] Setting up Claude handlers');
 
         // Handle Claude output
         this.claudeProcess.stdout?.on('data', (data: Buffer) => {
             const text = data.toString();
-            console.log('[ConductorChat] Claude stdout received, length:', text.length);
-            console.log('[ConductorChat] Claude stdout content:', text);
+            this.loggingService?.debug('[ConductorChat] Claude stdout received, length:', text.length);
+            this.loggingService?.debug('[ConductorChat] Claude stdout content:', text);
             
             // Show first output to user for debugging
             if (!this.currentResponse && text.trim()) {
@@ -210,21 +213,21 @@ export class ConductorChatWebview {
             // Check for JSON commands in the output
             const command = extractJsonFromClaudeOutput(text);
             if (command && this.isConnectedToOrchestrator) {
-                console.log('[ConductorChat] JSON command detected:', command);
+                this.loggingService?.debug('[ConductorChat] JSON command detected:', command);
                 // Send command through WebSocket
                 this.sendToOrchestrator(command);
             }
             
             // If we're processing a user message, collect the response
             if (this.isProcessing) {
-                console.log('[ConductorChat] Processing user message, response so far:', this.currentResponse.length, 'chars');
+                this.loggingService?.debug('[ConductorChat] Processing user message, response so far:', { length: this.currentResponse.length });
             }
         });
 
         // Handle Claude errors
         this.claudeProcess.stderr?.on('data', (data: Buffer) => {
             const errorText = data.toString();
-            console.error('[ConductorChat] Claude stderr received:', errorText);
+            this.loggingService?.error('[ConductorChat] Claude stderr received:', errorText);
             
             // Always show stderr to user for debugging
             this.addMessage('conductor', `⚠️ Claude stderr: ${errorText}`);
@@ -240,7 +243,7 @@ export class ConductorChatWebview {
 
         // Handle process exit
         this.claudeProcess.on('exit', (code) => {
-            console.log('[ConductorChat] Claude process exited with code:', code);
+            this.loggingService?.info('[ConductorChat] Claude process exited with code:', code);
             this.claudeProcess = undefined;
             // this.simulatedClaude = true; // Fall back to simulation
             this.simulatedClaude = false; // Don't fall back to simulation
@@ -257,7 +260,7 @@ export class ConductorChatWebview {
 
         // Handle process errors
         this.claudeProcess.on('error', (error) => {
-            console.error('[ConductorChat] Claude process error:', error);
+            this.loggingService?.error('[ConductorChat] Claude process error:', error);
             // this.simulatedClaude = true;
             this.simulatedClaude = false; // Don't use simulation
             this.addMessage('conductor', `❌ Claude process error: ${error.message}`);
@@ -265,7 +268,9 @@ export class ConductorChatWebview {
         
         // Don't send greeting here - Claude will greet based on the system prompt
         // Connect to orchestration server
-        this.connectToOrchestrator().catch(console.error);
+        this.connectToOrchestrator().catch(error => {
+            this.loggingService?.error('[ConductorChat] Failed to connect to orchestrator:', error);
+        });
     }
     
     /**
@@ -273,7 +278,7 @@ export class ConductorChatWebview {
      * COMMENTED OUT - We want to see real connection status
      */
     private useMockClaude() {
-        console.log('Mock Claude disabled - we want to see real connection status');
+        this.loggingService?.debug('Mock Claude disabled - we want to see real connection status');
         
         // // Send initial greeting
         // const greeting = this.getGreeting();
@@ -309,14 +314,14 @@ export class ConductorChatWebview {
             try {
                 await this.tryConnectToPort(port);
                 this.orchestrationPort = port;
-                console.log(`Conductor connected to orchestration server on port ${port}`);
+                this.loggingService?.info(`Conductor connected to orchestration server on port ${port}`);
                 return;
             } catch (error) {
                 // Try next port
             }
         }
         
-        console.warn('Could not connect to orchestration server on any port - continuing without orchestration');
+        this.loggingService?.warn('Could not connect to orchestration server on any port - continuing without orchestration');
     }
     
     private async tryConnectToPort(port: number): Promise<void> {
@@ -362,7 +367,7 @@ export class ConductorChatWebview {
                 
                 // Handle ping from server (required to avoid timeout)
                 ws.on('ping', () => {
-                    console.log('[ConductorChat] Received ping from orchestration server');
+                    this.loggingService?.debug('[ConductorChat] Received ping from orchestration server');
                     ws.pong();
                 });
                 
@@ -376,7 +381,7 @@ export class ConductorChatWebview {
                 }, 20000); // Send pong every 20 seconds
                 
                 ws.on('close', () => {
-                    console.log('Conductor disconnected from orchestration server');
+                    this.loggingService?.info('Conductor disconnected from orchestration server');
                     clearInterval(keepAlive);
                     this.isConnectedToOrchestrator = false;
                     this.panel?.webview.postMessage({
@@ -389,7 +394,7 @@ export class ConductorChatWebview {
                     if (!connected) {
                         // Connection failed, will be handled by timeout
                     } else {
-                        console.error('WebSocket error:', error);
+                        this.loggingService?.error('WebSocket error:', error);
                         this.isConnectedToOrchestrator = false;
                     }
                 });
@@ -433,7 +438,7 @@ export class ConductorChatWebview {
         // Handle different message types
         switch (message.type) {
             case MessageType.CONNECTION_ESTABLISHED:
-                console.log('Conductor registered with orchestrator');
+                this.loggingService?.info('Conductor registered with orchestrator');
                 break;
                 
             case MessageType.AGENT_READY:
@@ -461,10 +466,10 @@ export class ConductorChatWebview {
     }
 
     private async handleUserMessage(text: string) {
-        console.log('[ConductorChat] handleUserMessage called with:', text);
+        this.loggingService?.debug('[ConductorChat] handleUserMessage called with:', text);
         
         if (this.isProcessing) {
-            console.log('[ConductorChat] Already processing, ignoring message');
+            this.loggingService?.debug('[ConductorChat] Already processing, ignoring message');
             return;
         }
         
@@ -473,7 +478,7 @@ export class ConductorChatWebview {
         
         // Check if we have a real Claude process or using simulation
         if (this.simulatedClaude || !this.claudeProcess) {
-            console.log('[ConductorChat] No Claude process available');
+            this.loggingService?.warn('[ConductorChat] No Claude process available');
             // this.handleSimulatedResponse(text);
             this.addMessage('conductor', '❌ Claude is not connected. Please restart the conductor.');
             this.isProcessing = false;
@@ -481,31 +486,31 @@ export class ConductorChatWebview {
         }
         
         // Send to actual Claude process
-        console.log('[ConductorChat] Sending to Claude process');
+        this.loggingService?.debug('[ConductorChat] Sending to Claude process');
         this.isProcessing = true;
         this.currentResponse = '';
         
         // Send message to Claude
         if (this.claudeProcess && this.claudeProcess.stdin && !this.claudeProcess.killed) {
-            console.log('[ConductorChat] Writing to Claude stdin:', text);
+            this.loggingService?.debug('[ConductorChat] Writing to Claude stdin:', text);
             try {
                 // Write the message and ensure it's flushed
                 this.claudeProcess.stdin.write(text + '\n', (error) => {
                     if (error) {
-                        console.error('[ConductorChat] Error writing to stdin:', error);
+                        this.loggingService?.error('[ConductorChat] Error writing to stdin:', error);
                         this.addMessage('conductor', `❌ Error sending message: ${error.message}`);
                         this.isProcessing = false;
                     } else {
-                        console.log('[ConductorChat] Message sent to Claude stdin successfully');
+                        this.loggingService?.debug('[ConductorChat] Message sent to Claude stdin successfully');
                     }
                 });
             } catch (error: any) {
-                console.error('[ConductorChat] Exception writing to stdin:', error);
+                this.loggingService?.error('[ConductorChat] Exception writing to stdin:', error);
                 this.addMessage('conductor', `❌ Failed to send message: ${error.message}`);
                 this.isProcessing = false;
             }
         } else {
-            console.error('[ConductorChat] Claude process not available for writing');
+            this.loggingService?.error('[ConductorChat] Claude process not available for writing');
             this.addMessage('conductor', '❌ Claude process not available');
             this.isProcessing = false;
         }
@@ -521,11 +526,11 @@ export class ConductorChatWebview {
             if ((this.currentResponse.length > 0 && this.currentResponse.length === lastResponseLength) || checkCount > 60) {
                 // Response complete or timeout after 30 seconds
                 if (this.currentResponse) {
-                    console.log('[ConductorChat] Claude response complete, length:', this.currentResponse.length);
+                    this.loggingService?.debug('[ConductorChat] Claude response complete, length:', this.currentResponse.length);
                     this.addMessage('conductor', this.currentResponse);
                     this.currentResponse = '';
                 } else if (checkCount > 60) {
-                    console.log('[ConductorChat] Claude response timeout');
+                    this.loggingService?.warn('[ConductorChat] Claude response timeout');
                     // this.handleSimulatedResponse(text);
                     this.addMessage('conductor', '⏱️ Response timeout - Claude may not be responding.');
                 }
@@ -540,7 +545,7 @@ export class ConductorChatWebview {
      * Handle simulated responses when Claude is not available
      */
     private handleSimulatedResponse(text: string) {
-        console.log('[ConductorChat] handleSimulatedResponse for:', text);
+        this.loggingService?.debug('[ConductorChat] handleSimulatedResponse for:', text);
         this.isProcessing = true;
         
         // Don't show typing indicator - it causes issues
@@ -684,7 +689,7 @@ Any specific requirements or constraints I should know about?`;
                 }
             }
             
-            console.log('[ConductorChat] Sending conductor response:', response.substring(0, 50) + '...');
+            this.loggingService?.debug('[ConductorChat] Sending conductor response:', response.substring(0, 50) + '...');
             this.addMessage('conductor', response);
             this.isProcessing = false;
         }, 1000);
@@ -787,13 +792,13 @@ What would you like to build? I'll create a comprehensive plan and manage the te
 
         // Ensure panel exists before sending message
         if (this.panel) {
-            console.log('Sending message to webview:', message);
+            this.loggingService?.debug('Sending message to webview:', message);
             this.panel.webview.postMessage({
                 command: 'addMessage',
                 message
             });
         } else {
-            console.error('Panel not available to send message');
+            this.loggingService?.error('Panel not available to send message');
         }
     }
 

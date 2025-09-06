@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { IAgentLifecycleManager, ITerminalManager, IWorktreeService, IConfigurationService, INotificationService, ILoggingService, IEventBus, IErrorHandler } from './interfaces';
 import { Agent, AgentConfig, AgentStatus } from '../agents/types';
-import { AgentPersistence } from '../persistence/AgentPersistence';
+import { DOMAIN_EVENTS } from './EventConstants';
 
 export class AgentLifecycleManager implements IAgentLifecycleManager {
     private outputChannels = new Map<string, vscode.OutputChannel>();
@@ -14,7 +14,6 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         private worktreeService: IWorktreeService,
         private configService: IConfigurationService,
         private notificationService: INotificationService,
-        private agentPersistence: AgentPersistence | undefined,
         private onAgentUpdate: () => void,
         loggingService?: ILoggingService,
         eventBus?: IEventBus,
@@ -54,11 +53,9 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
             terminalIcon
         });
 
-        // Create output channel for agent logs
-        const outputChannel = vscode.window.createOutputChannel(
-            `n of x: ${config.name}`,
-            'nofx-agent'
-        );
+        // Create output channel for agent logs using LoggingService
+        const outputChannel = this.loggingService?.getChannel(`Agent: ${config.name}`) || 
+            vscode.window.createOutputChannel(`n of x: ${config.name}`);
 
         // Create agent object
         const agent: Agent = {
@@ -77,7 +74,7 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
 
         // Publish event to EventBus
         if (this.eventBus) {
-            this.eventBus.publish('agent.lifecycle.spawning', { agentId, config });
+            this.eventBus.publish(DOMAIN_EVENTS.AGENT_LIFECYCLE_SPAWNING, { agentId, config });
         }
 
         // Store output channel
@@ -86,26 +83,19 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         // Setup worktree if enabled
         let workingDirectory: string | undefined;
         if (this.worktreeService.isAvailable()) {
-            try {
-                workingDirectory = await this.worktreeService.createForAgent(agent);
-                if (workingDirectory) {
-                    this.loggingService?.debug(`Created worktree for ${agent.name} at ${workingDirectory}`);
+            workingDirectory = await this.errorHandler?.handleAsync(async () => {
+                const result = await this.worktreeService.createForAgent(agent);
+                if (result) {
+                    this.loggingService?.debug(`Created worktree for ${agent.name} at ${result}`);
                 }
-            } catch (error) {
-                const err = error instanceof Error ? error : new Error(String(error));
-                this.errorHandler?.handleError(err, `Failed to create worktree for ${agent.name}`);
-            }
+                return result;
+            }, `Failed to create worktree for ${agent.name}`) || undefined;
         }
 
         // Initialize agent terminal
-        try {
+        await this.errorHandler?.handleAsync(async () => {
             await this.terminalManager.initializeAgentTerminal(agent, workingDirectory);
-        } catch (error) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            this.errorHandler?.handleError(err, 'Error initializing agent terminal');
-        }
-
-        // Note: Agent updates are now handled by AgentManager
+        }, 'Error initializing agent terminal');
 
         outputChannel.appendLine(`✅ Agent ${config.name} (${config.type}) initialized`);
         outputChannel.appendLine(`ID: ${agentId}`);
@@ -116,7 +106,7 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
 
         // Publish event to EventBus
         if (this.eventBus) {
-            this.eventBus.publish('agent.lifecycle.spawned', { agentId, agent });
+            this.eventBus.publish(DOMAIN_EVENTS.AGENT_LIFECYCLE_SPAWNED, { agentId, agent });
         }
 
         // Note: Persistence is now handled by AgentManager
@@ -129,7 +119,7 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
 
         // Publish event to EventBus
         if (this.eventBus) {
-            this.eventBus.publish('agent.lifecycle.removing', { agentId });
+            this.eventBus.publish(DOMAIN_EVENTS.AGENT_LIFECYCLE_REMOVING, { agentId });
         }
 
         // Clean up worktree if it exists
@@ -141,18 +131,19 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         // Clean up terminal using TerminalManager
         this.terminalManager.disposeTerminal(agentId);
 
-        // Clean up output channel
+        // Clean up output channel (only if not managed by LoggingService)
         const outputChannel = this.outputChannels.get(agentId);
         if (outputChannel) {
-            outputChannel.dispose();
+            // Only dispose if it's not managed by LoggingService
+            if (!this.loggingService) {
+                outputChannel.dispose();
+            }
             this.outputChannels.delete(agentId);
         }
 
-        // Note: Agent updates are now handled by AgentManager
-
         // Publish event to EventBus
         if (this.eventBus) {
-            this.eventBus.publish('agent.lifecycle.removed', { agentId });
+            this.eventBus.publish(DOMAIN_EVENTS.AGENT_LIFECYCLE_REMOVED, { agentId });
         }
 
         // Note: Persistence is now handled by AgentManager
@@ -163,9 +154,11 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
     }
 
     dispose(): void {
-        // Dispose all output channels
+        // Dispose all output channels (only if not managed by LoggingService)
         for (const outputChannel of this.outputChannels.values()) {
-            outputChannel.dispose();
+            if (!this.loggingService) {
+                outputChannel.dispose();
+            }
         }
         this.outputChannels.clear();
     }

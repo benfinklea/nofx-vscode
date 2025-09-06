@@ -3,14 +3,19 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 import { Agent } from '../agents/types';
+import { ILoggingService, INotificationService } from '../services/interfaces';
 
 export class WorktreeManager {
     private worktrees: Map<string, string> = new Map(); // agentId -> worktree path
     private baseDir: string;
     private workspacePath: string;
+    private loggingService?: ILoggingService;
+    private notificationService?: INotificationService;
     
-    constructor(workspacePath: string) {
+    constructor(workspacePath: string, loggingService?: ILoggingService, notificationService?: INotificationService) {
         this.workspacePath = workspacePath;
+        this.loggingService = loggingService;
+        this.notificationService = notificationService;
         // Create worktrees in a .nofx-worktrees directory adjacent to the project
         this.baseDir = path.join(path.dirname(workspacePath), '.nofx-worktrees');
         
@@ -43,7 +48,7 @@ export class WorktreeManager {
             // Create the worktree with a new branch
             const command = `git worktree add -b ${branchName} "${worktreePath}" ${currentBranch || 'HEAD'}`;
             
-            console.log(`[WorktreeManager] Creating worktree for ${agent.name}: ${command}`);
+            this.loggingService?.debug(`Creating worktree for ${agent.name}: ${command}`);
             
             execSync(command, {
                 cwd: this.workspacePath,
@@ -74,11 +79,11 @@ export class WorktreeManager {
                 fs.writeFileSync(gitignorePath, '# NofX agent worktree marker\n.nofx-agent\n');
             }
             
-            console.log(`[WorktreeManager] Created worktree for ${agent.name} at ${worktreePath}`);
+            this.loggingService?.info(`Created worktree for ${agent.name} at ${worktreePath}`);
             
             return worktreePath;
         } catch (error) {
-            console.error(`[WorktreeManager] Error creating worktree for ${agent.name}:`, error);
+            this.loggingService?.error(`Error creating worktree for ${agent.name}:`, error);
             throw error;
         }
     }
@@ -90,14 +95,14 @@ export class WorktreeManager {
         try {
             const worktreePath = this.worktrees.get(agentId);
             if (!worktreePath) {
-                console.log(`[WorktreeManager] No worktree found for agent ${agentId}`);
+                this.loggingService?.debug(`No worktree found for agent ${agentId}`);
                 return;
             }
             
             // Remove the worktree
             const command = `git worktree remove "${worktreePath}" --force`;
             
-            console.log(`[WorktreeManager] Removing worktree: ${command}`);
+            this.loggingService?.debug(`Removing worktree: ${command}`);
             
             execSync(command, {
                 cwd: this.workspacePath,
@@ -107,9 +112,9 @@ export class WorktreeManager {
             // Remove from our map
             this.worktrees.delete(agentId);
             
-            console.log(`[WorktreeManager] Removed worktree for agent ${agentId}`);
+            this.loggingService?.info(`Removed worktree for agent ${agentId}`);
         } catch (error) {
-            console.error(`[WorktreeManager] Error removing worktree for ${agentId}:`, error);
+            this.loggingService?.error(`Error removing worktree for ${agentId}:`, error);
             // Try to clean up the directory manually if git command failed
             const worktreePath = this.worktrees.get(agentId);
             if (worktreePath && fs.existsSync(worktreePath)) {
@@ -117,7 +122,7 @@ export class WorktreeManager {
                     fs.rmSync(worktreePath, { recursive: true, force: true });
                     this.worktrees.delete(agentId);
                 } catch (cleanupError) {
-                    console.error(`[WorktreeManager] Error cleaning up worktree directory:`, cleanupError);
+                    this.loggingService?.error(`Error cleaning up worktree directory:`, cleanupError);
                 }
             }
         }
@@ -145,7 +150,7 @@ export class WorktreeManager {
             
             return worktrees;
         } catch (error) {
-            console.error('[WorktreeManager] Error listing worktrees:', error);
+            this.loggingService?.error('Error listing worktrees:', error);
             return [];
         }
     }
@@ -172,7 +177,7 @@ export class WorktreeManager {
                     
                     // If we don't have this agent in our map, it's orphaned
                     if (!this.worktrees.has(markerData.agentId)) {
-                        console.log(`[WorktreeManager] Found orphaned worktree for agent ${markerData.agentName}, cleaning up...`);
+                        this.loggingService?.info(`Found orphaned worktree for agent ${markerData.agentName}, cleaning up...`);
                         
                         try {
                             execSync(`git worktree remove "${worktreePath}" --force`, {
@@ -180,13 +185,13 @@ export class WorktreeManager {
                                 encoding: 'utf-8'
                             });
                         } catch (removeError) {
-                            console.error(`[WorktreeManager] Error removing orphaned worktree:`, removeError);
+                            this.loggingService?.error(`Error removing orphaned worktree:`, removeError);
                         }
                     }
                 }
             }
         } catch (error) {
-            console.error('[WorktreeManager] Error cleaning up orphaned worktrees:', error);
+            this.loggingService?.error('Error cleaning up orphaned worktrees:', error);
         }
     }
     
@@ -262,7 +267,7 @@ export class WorktreeManager {
                 worktrees.push(currentWorktree);
             }
         } catch (error) {
-            console.error('[NofX] Error listing worktrees:', error);
+            this.loggingService?.error('Error listing worktrees:', error);
         }
         
         return worktrees.filter(w => w.branch.startsWith('agent-'));
@@ -290,7 +295,7 @@ export class WorktreeManager {
                 });
             } catch (commitError) {
                 // No changes to commit, that's okay
-                console.log('[WorktreeManager] No changes to commit in worktree');
+                this.loggingService?.debug('No changes to commit in worktree');
             }
             
             // Switch to main branch in the main workspace
@@ -305,13 +310,13 @@ export class WorktreeManager {
                 encoding: 'utf-8'
             });
             
-            console.log(`[WorktreeManager] Merged agent ${markerData.agentName} work from ${markerData.branchName}`);
+            this.loggingService?.info(`Merged agent ${markerData.agentName} work from ${markerData.branchName}`);
             
-            vscode.window.showInformationMessage(
+            this.notificationService?.showInformation(
                 `✅ Merged ${markerData.agentName}'s work from branch ${markerData.branchName}`
             );
         } catch (error) {
-            console.error(`[WorktreeManager] Error merging agent work:`, error);
+            this.loggingService?.error(`Error merging agent work:`, error);
             throw error;
         }
     }

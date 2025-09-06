@@ -13,7 +13,6 @@ export class TreeViewHost implements ITreeViewHost {
         this.loggingService = loggingService;
         
         this.loggingService?.debug('TreeViewHost: Created for tree view', { 
-            id: treeView.id,
             title: treeView.title 
         });
     }
@@ -70,7 +69,7 @@ export class TreeViewHost implements ITreeViewHost {
 
     getSelection(): any[] {
         try {
-            return this.treeView.selection;
+            return [...this.treeView.selection];
         } catch (error) {
             this.loggingService?.error('TreeViewHost: Error getting selection', error);
             return [];
@@ -97,7 +96,7 @@ export class TreeViewHost implements ITreeViewHost {
     }
 
     get title(): string {
-        return this.treeView.title;
+        return this.treeView.title || '';
     }
 
     set title(value: string) {
@@ -106,7 +105,7 @@ export class TreeViewHost implements ITreeViewHost {
     }
 
     get message(): string {
-        return this.treeView.message;
+        return this.treeView.message || '';
     }
 
     set message(value: string) {
@@ -115,7 +114,7 @@ export class TreeViewHost implements ITreeViewHost {
     }
 
     get description(): string {
-        return this.treeView.description;
+        return this.treeView.description || '';
     }
 
     set description(value: string) {

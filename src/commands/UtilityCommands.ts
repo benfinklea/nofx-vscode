@@ -7,6 +7,7 @@ import {
     ICommandService,
     INotificationService,
     IConfigurationService,
+    ILoggingService,
     SERVICE_TOKENS
 } from '../services/interfaces';
 import { PickItem } from '../types/ui';
@@ -15,15 +16,18 @@ export class UtilityCommands implements ICommandHandler {
     private readonly commandService: ICommandService;
     private readonly notificationService: INotificationService;
     private readonly configService: IConfigurationService;
+    private readonly loggingService?: ILoggingService;
 
     constructor(container: IContainer) {
         this.commandService = container.resolve<ICommandService>(SERVICE_TOKENS.CommandService);
         this.notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
         this.configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
+        this.loggingService = container.resolveOptional<ILoggingService>(SERVICE_TOKENS.LoggingService);
     }
 
     register(): void {
         this.commandService.register('nofx.testClaude', this.testClaude.bind(this));
+        this.commandService.register('nofx.debug.verifyCommands', this.verifyCommands.bind(this));
     }
 
     private async testClaude(): Promise<void> {
@@ -93,6 +97,91 @@ EOF`;
         await this.notificationService.showInformation(
             'Claude test started. Check the terminal for output.'
         );
+    }
+
+    /**
+     * Debug command to verify all expected commands are registered.
+     * Only runs in test mode or development.
+     */
+    private async verifyCommands(): Promise<void> {
+        // Check if we're in test mode or development
+        const config = vscode.workspace.getConfiguration('nofx');
+        const testMode = config.get<boolean>('testMode', false);
+        const isDev = process.env.NODE_ENV === 'development';
+        
+        if (!testMode && !isDev) {
+            await this.notificationService.showWarning(
+                'Command verification is only available in test mode. Set nofx.testMode to true in settings.'
+            );
+            return;
+        }
+
+        try {
+            // Get all registered commands
+            const registeredCommands = await this.commandService.getCommands(true);
+            const registeredSet = new Set(registeredCommands);
+
+            // Get expected commands from package.json
+            const extension = vscode.extensions.getExtension('nofx.nofx');
+            if (!extension) {
+                throw new Error('NofX extension not found');
+            }
+            
+            const packageJson = extension.packageJSON;
+            const expectedCommands = packageJson.contributes?.commands?.map((cmd: any) => cmd.command) || [];
+
+            // Find missing commands
+            const missingCommands = expectedCommands.filter((cmd: string) => !registeredSet.has(cmd));
+            
+            // Log results
+            const outputChannel = vscode.window.createOutputChannel('NofX Command Verification');
+            outputChannel.show();
+            outputChannel.appendLine('=== NofX Command Verification ===');
+            outputChannel.appendLine(`Total expected commands: ${expectedCommands.length}`);
+            outputChannel.appendLine(`Total registered commands: ${registeredCommands.filter(cmd => cmd.startsWith('nofx.')).length}`);
+            outputChannel.appendLine('');
+            
+            if (missingCommands.length > 0) {
+                outputChannel.appendLine('❌ Missing Commands:');
+                missingCommands.forEach((cmd: string) => {
+                    outputChannel.appendLine(`  - ${cmd}`);
+                });
+                
+                this.loggingService?.warn(`Missing commands detected: ${missingCommands.join(', ')}`);
+                await this.notificationService.showWarning(
+                    `${missingCommands.length} commands are not registered. Check the output channel for details.`
+                );
+            } else {
+                outputChannel.appendLine('✅ All expected commands are registered!');
+                
+                this.loggingService?.info(`All ${expectedCommands.length} expected commands are registered`);
+                await this.notificationService.showInformation(
+                    `All ${expectedCommands.length} commands verified successfully!`
+                );
+            }
+
+            // Also log any extra registered nofx commands not in package.json
+            const nofxCommands = registeredCommands.filter(cmd => cmd.startsWith('nofx.'));
+            const extraCommands = nofxCommands.filter(cmd => !expectedCommands.includes(cmd));
+            
+            if (extraCommands.length > 0) {
+                outputChannel.appendLine('');
+                outputChannel.appendLine('📝 Extra Commands (not in package.json):');
+                extraCommands.forEach((cmd: string) => {
+                    outputChannel.appendLine(`  - ${cmd}`);
+                });
+                
+                this.loggingService?.debug(`Extra commands registered: ${extraCommands.join(', ')}`);
+            }
+
+            outputChannel.appendLine('');
+            outputChannel.appendLine('=== End of Verification ===');
+
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.loggingService?.error('Error verifying commands', err);
+            await this.notificationService.showError(`Failed to verify commands: ${err.message}`);
+        }
     }
 
     dispose(): void {

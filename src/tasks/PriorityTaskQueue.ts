@@ -1,5 +1,5 @@
 import { Task } from '../agents/types';
-import { ILoggingService, IPriorityTaskQueue, ITaskDependencyManager } from '../services/interfaces';
+import { ILoggingService, IPriorityTaskQueue, ITaskDependencyManager, ITaskStateMachine } from '../services/interfaces';
 import { priorityToNumeric } from './priority';
 
 interface QueueItem {
@@ -25,11 +25,13 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
     private taskIndexReady: Map<string, number> = new Map(); // Maps task ID to readyHeap index
     private taskIndexValidated: Map<string, number> = new Map(); // Maps task ID to validatedHeap index
     private dependencyManager?: ITaskDependencyManager;
+    private taskStateMachine?: ITaskStateMachine;
     private depthHistory: number[] = []; // Ring buffer of recent queue sizes
 
-    constructor(loggingService: ILoggingService, dependencyManager?: ITaskDependencyManager) {
+    constructor(loggingService: ILoggingService, dependencyManager?: ITaskDependencyManager, taskStateMachine?: ITaskStateMachine) {
         this.logger = loggingService;
         this.dependencyManager = dependencyManager;
+        this.taskStateMachine = taskStateMachine;
     }
 
     /**
@@ -339,20 +341,6 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
         return basePriority + softDepAdjustment;
     }
 
-    /**
-     * Calculates soft dependency adjustment for a task
-     * Returns +5 if all preferred tasks are completed, -5 if some are still pending
-     */
-    private calculateSoftDependencyAdjustment(task: Task): number {
-        if (!this.dependencyManager || !task.prefers || task.prefers.length === 0) {
-            return 0;
-        }
-
-        // This method will be called with proper task completion context from TaskQueue
-        // For now, return 0 - the actual calculation will be done in TaskQueue where
-        // we have access to all task completion statuses
-        return 0;
-    }
 
     /**
      * Calculates soft dependency adjustment with access to all tasks
@@ -388,14 +376,17 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
 
     /**
      * Moves a task to the ready heap (from validated heap or adds to ready heap)
-     * This is a helper method to simplify state-change migrations
+     * Assumes task is already in 'ready' state. Does not change state.
      */
     moveToReady(task: Task): void {
+        // Guard: only enqueue if task is already in ready state
+        if (task.status !== 'ready') {
+            this.logger.warn(`Task ${task.id} is not in 'ready' state (current: ${task.status}), skipping enqueue`);
+            return;
+        }
+        
         // Remove from any heap first
         this.remove(task.id);
-        
-        // Update task status to ready
-        task.status = 'ready';
         
         // Enqueue to ready heap
         this.enqueue(task);

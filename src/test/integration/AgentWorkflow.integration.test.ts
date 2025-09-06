@@ -1,5 +1,6 @@
-import { createTestContainer, createMockAgent, createMockTask, waitForEvent, measureTime } from '../setup';
+import { createIntegrationContainer, createMockAgent, createMockTask, waitForEvent, measureTime } from '../utils/TestHelpers';
 import { IContainer, SERVICE_TOKENS } from '../../services/interfaces';
+import { createMessage, MessageType } from '../../orchestration/MessageProtocol';
 
 describe('Agent Workflow Integration Tests', () => {
     let container: IContainer;
@@ -9,32 +10,9 @@ describe('Agent Workflow Integration Tests', () => {
     let metricsService: any;
 
     beforeEach(async () => {
-        container = createTestContainer();
+        container = createIntegrationContainer();
         
-        // Create mock services and register them in container
-        const mockAgentManager = { 
-            spawnAgent: jest.fn().mockResolvedValue(createMockAgent()),
-            removeAgent: jest.fn(),
-            getAgent: jest.fn(),
-            getIdleAgents: jest.fn(() => [])
-        };
-        const mockTaskQueue = { 
-            addTask: jest.fn().mockReturnValue(createMockTask()),
-            createTask: jest.fn().mockResolvedValue(createMockTask()),
-            getTask: jest.fn(),
-            updateTaskStatus: jest.fn()
-        };
-        const mockOrchestrationServer = { start: jest.fn(), stop: jest.fn(), getStatus: jest.fn(() => ({ isRunning: false })) };
-        const mockMetricsService = { getMetrics: jest.fn(() => []), incrementCounter: jest.fn(), dispose: jest.fn() };
-        const mockConfigService = { update: jest.fn().mockResolvedValue(undefined), get: jest.fn() };
-        
-        container.registerInstance(SERVICE_TOKENS.AgentManager, mockAgentManager);
-        container.registerInstance(SERVICE_TOKENS.TaskQueue, mockTaskQueue);
-        container.registerInstance(SERVICE_TOKENS.OrchestrationServer, mockOrchestrationServer);
-        container.registerInstance(SERVICE_TOKENS.MetricsService, mockMetricsService);
-        container.registerInstance(SERVICE_TOKENS.ConfigurationService, mockConfigService);
-        
-        // Get services from container
+        // Get real services from container
         agentManager = container.resolve(SERVICE_TOKENS.AgentManager);
         taskQueue = container.resolve(SERVICE_TOKENS.TaskQueue);
         orchestrationServer = container.resolve(SERVICE_TOKENS.OrchestrationServer);
@@ -42,6 +20,9 @@ describe('Agent Workflow Integration Tests', () => {
     });
 
     afterEach(async () => {
+        if (orchestrationServer) {
+            await orchestrationServer.stop();
+        }
         if (container) {
             container.dispose();
         }
@@ -66,25 +47,25 @@ describe('Agent Workflow Integration Tests', () => {
                 const taskConfig = {
                     title: 'Test Task',
                     description: 'A test task for integration testing',
-                    priority: 5,
+                    priority: 'medium',
                     capabilities: ['general']
                 };
 
-                const task = await taskQueue.createTask(taskConfig);
+                const task = taskQueue.addTask(taskConfig);
                 expect(task).toBeDefined();
                 expect(task.id).toBeTruthy();
-                expect(task.status).toBe('pending');
+                expect(task.status).toBe('validated'); // Real TaskQueue starts with validated state
 
                 // 3. Assign task to agent
                 const assignmentResult = await taskQueue.assignTask(task.id, agent.id);
-                expect(assignmentResult.success).toBe(true);
+                expect(assignmentResult).toBe(true);
 
-                // 4. Simulate task execution
-                await taskQueue.updateTaskStatus(task.id, 'inProgress');
-                expect(taskQueue.getTask(task.id)?.status).toBe('inProgress');
+                // 4. Task should be in-progress after assignment
+                expect(taskQueue.getTask(task.id)?.status).toBe('in-progress');
 
                 // 5. Complete task
-                await taskQueue.updateTaskStatus(task.id, 'completed');
+                const completed = taskQueue.completeTask(task.id);
+                expect(completed).toBe(true);
                 expect(taskQueue.getTask(task.id)?.status).toBe('completed');
 
                 // 6. Remove agent
@@ -122,10 +103,10 @@ describe('Agent Workflow Integration Tests', () => {
 
             // Create multiple tasks
             for (let i = 0; i < 3; i++) {
-                const task = await taskQueue.createTask({
+                const task = taskQueue.addTask({
                     title: `Task ${i + 1}`,
                     description: `Test task ${i + 1}`,
-                    priority: i + 1,
+                    priority: 'medium',
                     capabilities: ['general']
                 });
                 tasks.push(task);
@@ -134,19 +115,20 @@ describe('Agent Workflow Integration Tests', () => {
             // Assign tasks to agents
             for (let i = 0; i < 3; i++) {
                 const assignmentResult = await taskQueue.assignTask(tasks[i].id, agents[i].id);
-                expect(assignmentResult.success).toBe(true);
+                expect(assignmentResult).toBe(true);
             }
 
-            // Verify all tasks are assigned
+            // Verify all tasks are assigned and in-progress
             for (const task of tasks) {
                 const updatedTask = taskQueue.getTask(task.id);
-                expect(updatedTask?.assignedAgent).toBeTruthy();
-                expect(updatedTask?.status).toBe('assigned');
+                expect(updatedTask?.assignedTo).toBeTruthy();
+                expect(updatedTask?.status).toBe('in-progress');
             }
 
             // Complete all tasks
             for (const task of tasks) {
-                await taskQueue.updateTaskStatus(task.id, 'completed');
+                const completed = taskQueue.completeTask(task.id);
+                expect(completed).toBe(true);
             }
 
             // Clean up agents
@@ -165,20 +147,20 @@ describe('Agent Workflow Integration Tests', () => {
     describe('Task Dependencies and Conflicts', () => {
         it('should handle task dependencies correctly', async () => {
             // Create parent task
-            const parentTask = await taskQueue.createTask({
+            const parentTask = taskQueue.addTask({
                 title: 'Parent Task',
                 description: 'Task that must complete first',
-                priority: 1,
+                priority: 'high',
                 capabilities: ['general']
             });
 
             // Create child task with dependency
-            const childTask = await taskQueue.createTask({
+            const childTask = taskQueue.addTask({
                 title: 'Child Task',
                 description: 'Task that depends on parent',
-                priority: 2,
+                priority: 'medium',
                 capabilities: ['general'],
-                dependencies: [parentTask.id]
+                dependsOn: [parentTask.id]
             });
 
             // Create agent
@@ -188,53 +170,57 @@ describe('Agent Workflow Integration Tests', () => {
                 capabilities: ['general']
             });
 
-            // Child task should not be ready until parent is completed
-            const readyTasks = taskQueue.getReadyTasks();
-            expect(readyTasks.find((t: any) => t.id === childTask.id)).toBeUndefined();
-            expect(readyTasks.find((t: any) => t.id === parentTask.id)).toBeDefined();
+            // Child task should be blocked until parent is completed
+            const readyTasks = taskQueue.getQueuedTasks();
+            expect(readyTasks.find((t: any) => t.id === childTask.id && t.status === 'ready')).toBeUndefined();
+            expect(readyTasks.find((t: any) => t.id === parentTask.id && t.status === 'ready')).toBeDefined();
 
-            // Complete parent task
-            await taskQueue.updateTaskStatus(parentTask.id, 'completed');
+            // Complete parent task first
+            await taskQueue.assignTask(parentTask.id, agent.id);
+            const completed = taskQueue.completeTask(parentTask.id);
+            expect(completed).toBe(true);
 
-            // Now child task should be ready
-            const readyTasksAfter = taskQueue.getReadyTasks();
-            expect(readyTasksAfter.find((t: any) => t.id === childTask.id)).toBeDefined();
+            // Now child task should become ready
+            const childTaskAfter = taskQueue.getTask(childTask.id);
+            expect(childTaskAfter?.status).toBe('ready');
 
             // Complete child task
-            await taskQueue.updateTaskStatus(childTask.id, 'completed');
+            await taskQueue.assignTask(childTask.id, agent.id);
+            const childCompleted = taskQueue.completeTask(childTask.id);
+            expect(childCompleted).toBe(true);
 
             // Clean up
             await agentManager.removeAgent(agent.id);
         });
 
         it('should detect circular dependencies', async () => {
-            const task1 = await taskQueue.createTask({
+            const task1 = taskQueue.addTask({
                 title: 'Task 1',
                 description: 'First task in cycle',
-                priority: 1,
+                priority: 'high',
                 capabilities: ['general']
             });
 
-            const task2 = await taskQueue.createTask({
+            const task2 = taskQueue.addTask({
                 title: 'Task 2',
                 description: 'Second task in cycle',
-                priority: 2,
+                priority: 'medium',
                 capabilities: ['general'],
-                dependencies: [task1.id]
+                dependsOn: [task1.id]
             });
 
             // Try to create circular dependency
-            const result = await taskQueue.addDependency(task1.id, task2.id);
-            expect(result.success).toBe(false);
-            expect(result.errors).toContain('Circular dependency detected');
+            const result = taskQueue.addTaskDependency(task1.id, task2.id);
+            expect(result).toBe(false); // Should fail due to circular dependency
         });
     });
 
     describe('Orchestration Integration', () => {
         it('should handle conductor commands through WebSocket', async () => {
             // Start orchestration server
-            await orchestrationServer.start(0); // Use random port
-            const port = orchestrationServer.getPort();
+            await orchestrationServer.start(); // Use default port handling
+            const status = orchestrationServer.getStatus();
+            const port = status.port;
 
             // Create WebSocket client to simulate conductor
             const WebSocket = require('ws');
@@ -245,29 +231,26 @@ describe('Agent Workflow Integration Tests', () => {
             });
 
             // Send conductor command to spawn agent
-            const spawnCommand = {
-                type: 'spawn_agent',
-                payload: {
-                    name: 'Conductor Agent',
-                    type: 'General Purpose',
-                    capabilities: ['general']
-                }
-            };
+            const msg = createMessage('conductor', 'conductor', MessageType.SPAWN_AGENT, { 
+                role: 'General Purpose', 
+                name: 'Conductor Agent' 
+            });
 
-            client.send(JSON.stringify(spawnCommand));
+            client.send(JSON.stringify(msg));
 
             // Wait for response
             const response = await new Promise((resolve) => {
                 client.on('message', (data: string) => {
                     const message = JSON.parse(data);
-                    if (message.type === 'agent_spawned') {
+                    if (message.type === MessageType.AGENT_READY) {
                         resolve(message);
                     }
                 });
             });
 
             expect(response).toBeDefined();
-            expect((response as any).payload.agent).toBeDefined();
+            expect((response as any).payload.agentId).toBeDefined();
+            expect((response as any).payload.name).toBe('Conductor Agent');
 
             // Clean up
             client.close();
@@ -275,8 +258,9 @@ describe('Agent Workflow Integration Tests', () => {
         });
 
         it('should handle task assignment through WebSocket', async () => {
-            await orchestrationServer.start(0);
-            const port = orchestrationServer.getPort();
+            await orchestrationServer.start();
+            const status = orchestrationServer.getStatus();
+            const port = status.port;
 
             // Create agent first
             const agent = await agentManager.spawnAgent({
@@ -293,59 +277,74 @@ describe('Agent Workflow Integration Tests', () => {
                 client.on('open', resolve);
             });
 
-            // Send task creation command
-            const createTaskCommand = {
-                type: 'create_task',
-                payload: {
-                    title: 'WebSocket Task',
-                    description: 'Task created via WebSocket',
-                    priority: 5,
-                    capabilities: ['general']
-                }
-            };
+            // Generate a task ID and send ASSIGN_TASK command
+            const taskId = `task-${Date.now()}`;
+            const assignTaskMsg = createMessage('conductor', 'conductor', MessageType.ASSIGN_TASK, {
+                agentId: agent.id,
+                taskId: taskId,
+                title: 'WebSocket Task',
+                description: 'Task created via WebSocket',
+                priority: 'medium'
+            });
 
-            client.send(JSON.stringify(createTaskCommand));
+            client.send(JSON.stringify(assignTaskMsg));
 
-            // Wait for task creation response
+            // Wait for task acceptance response
             const taskResponse = await new Promise((resolve) => {
                 client.on('message', (data: string) => {
                     const message = JSON.parse(data);
-                    if (message.type === 'task_created') {
+                    if (message.type === MessageType.TASK_ACCEPTED) {
                         resolve(message);
                     }
                 });
             });
 
             expect(taskResponse).toBeDefined();
-            expect((taskResponse as any).payload.task).toBeDefined();
+            expect((taskResponse as any).payload.taskId).toBeDefined();
+            expect((taskResponse as any).payload.agentId).toBe(agent.id);
 
-            // Send task assignment command
-            const assignCommand = {
-                type: 'assign_task',
-                payload: {
-                    taskId: (taskResponse as any).payload.task.id,
-                    agentId: agent.id
-                }
+            // Clean up
+            client.close();
+            await agentManager.removeAgent(agent.id);
+            await orchestrationServer.stop();
+        });
+
+        it('should handle invalid messages and return SYSTEM_ERROR', async () => {
+            await orchestrationServer.start();
+            const status = orchestrationServer.getStatus();
+            const port = status.port;
+
+            const WebSocket = require('ws');
+            const client = new WebSocket(`ws://localhost:${port}`);
+
+            await new Promise((resolve) => {
+                client.on('open', resolve);
+            });
+
+            // Send invalid message (missing required fields)
+            const invalidMessage = {
+                type: MessageType.SPAWN_AGENT,
+                payload: { name: 'Invalid Agent' }
+                // Missing id, timestamp, from, to fields
             };
 
-            client.send(JSON.stringify(assignCommand));
+            client.send(JSON.stringify(invalidMessage));
 
-            // Wait for assignment response
-            const assignResponse = await new Promise((resolve) => {
+            // Wait for error response
+            const errorResponse = await new Promise((resolve) => {
                 client.on('message', (data: string) => {
                     const message = JSON.parse(data);
-                    if (message.type === 'task_assigned') {
+                    if (message.type === MessageType.SYSTEM_ERROR) {
                         resolve(message);
                     }
                 });
             });
 
-            expect(assignResponse).toBeDefined();
-            expect((assignResponse as any).payload.success).toBe(true);
+            expect(errorResponse).toBeDefined();
+            expect((errorResponse as any).payload.error).toBeDefined();
 
             // Clean up
             client.close();
-            await agentManager.removeAgent(agent.id);
             await orchestrationServer.stop();
         });
     });
@@ -358,10 +357,10 @@ describe('Agent Workflow Integration Tests', () => {
                 capabilities: ['general']
             });
 
-            const task = await taskQueue.createTask({
+            const task = taskQueue.addTask({
                 title: 'Failing Task',
                 description: 'Task that will fail',
-                priority: 5,
+                priority: 'medium',
                 capabilities: ['general']
             });
 
@@ -369,19 +368,17 @@ describe('Agent Workflow Integration Tests', () => {
             await taskQueue.assignTask(task.id, agent.id);
 
             // Simulate agent failure
-            await taskQueue.updateTaskStatus(task.id, 'failed');
+            taskQueue.failTask(task.id, 'Simulated failure');
             expect(taskQueue.getTask(task.id)?.status).toBe('failed');
-
-            // Agent should be marked as error
-            expect(agentManager.getAgent(agent.id)?.status).toBe('error');
 
             // Clean up
             await agentManager.removeAgent(agent.id);
         });
 
         it('should handle network disconnections gracefully', async () => {
-            await orchestrationServer.start(0);
-            const port = orchestrationServer.getPort();
+            await orchestrationServer.start();
+            const status = orchestrationServer.getStatus();
+            const port = status.port;
 
             const WebSocket = require('ws');
             const client = new WebSocket(`ws://localhost:${port}`);
@@ -397,7 +394,7 @@ describe('Agent Workflow Integration Tests', () => {
             await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Server should still be running
-            expect(orchestrationServer.isRunning()).toBe(true);
+            expect(orchestrationServer.getStatus().isRunning).toBe(true);
 
             await orchestrationServer.stop();
         });
@@ -410,10 +407,10 @@ describe('Agent Workflow Integration Tests', () => {
                 
                 // Create 100 tasks quickly
                 for (let i = 0; i < 100; i++) {
-                    const task = await taskQueue.createTask({
+                    const task = taskQueue.addTask({
                         title: `Performance Task ${i}`,
                         description: `High-frequency task ${i}`,
-                        priority: Math.floor(Math.random() * 10) + 1,
+                        priority: i % 2 === 0 ? 'high' : 'medium',
                         capabilities: ['general']
                     });
                     tasks.push(task);

@@ -26,7 +26,13 @@ export class LoggingService implements ILoggingService {
     }
 
     private updateLogLevel(): void {
-        const configLevel = this.configService.getLogLevel().toLowerCase() as LogLevel;
+        const raw = this.configService.getLogLevel?.();
+        if (!raw) {
+            this.currentLogLevel = 'info';
+            return;
+        }
+        
+        const configLevel = String(raw).toLowerCase() as LogLevel;
         if (['debug', 'info', 'warn', 'error'].includes(configLevel)) {
             this.currentLogLevel = configLevel;
         } else {
@@ -117,12 +123,21 @@ export class LoggingService implements ILoggingService {
             this.timers.delete(label);
         }
     }
+    
+    onDidChangeConfiguration(callback: () => void): vscode.Disposable {
+        return this.configService.onDidChange(callback);
+    }
 
     dispose(): void {
         this.disposables.forEach(d => d.dispose());
         this.disposables.length = 0;
         
-        this.channels.forEach(channel => channel.dispose());
+        // Only dispose channels created by this service, not the injected main channel
+        this.channels.forEach((channel, name) => {
+            if (name !== 'main') {
+                channel.dispose();
+            }
+        });
         this.channels.clear();
         
         this.timers.clear();

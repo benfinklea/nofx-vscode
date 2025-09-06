@@ -5,6 +5,8 @@ import {
     ICommandService,
     INotificationService,
     IConfigurationService,
+    ILoggingService,
+    IConductorViewModel,
     SERVICE_TOKENS
 } from '../services/interfaces';
 import { PickItem } from '../types/ui';
@@ -18,7 +20,6 @@ import { SuperSmartConductor } from '../conductor/SuperSmartConductor';
 import { AgentTemplateManager } from '../agents/AgentTemplateManager';
 import { AgentTreeProvider } from '../views/AgentTreeProvider';
 import { ConductorPanel } from '../panels/ConductorPanel';
-import { IConductorViewModel, ILoggingService } from '../services/interfaces';
 
 interface TeamPreset {
     value: string;
@@ -31,6 +32,7 @@ export class ConductorCommands implements ICommandHandler {
     private readonly commandService: ICommandService;
     private readonly notificationService: INotificationService;
     private readonly configService: IConfigurationService;
+    private readonly loggingService: ILoggingService;
     private readonly context: vscode.ExtensionContext;
     private readonly container: IContainer;
     
@@ -46,6 +48,7 @@ export class ConductorCommands implements ICommandHandler {
         this.commandService = container.resolve<ICommandService>(SERVICE_TOKENS.CommandService);
         this.notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
         this.configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
+        this.loggingService = container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
         this.context = container.resolve<vscode.ExtensionContext>(SERVICE_TOKENS.ExtensionContext);
         this.container = container;
     }
@@ -161,7 +164,7 @@ export class ConductorCommands implements ICommandHandler {
                         });
                         createdCount++;
                     } catch (error) {
-                        console.error(`Failed to create agent from template ${templateId}:`, error);
+                        this.loggingService?.error(`Failed to create agent from template ${templateId}:`, error);
                     }
                 }
             }
@@ -268,7 +271,7 @@ export class ConductorCommands implements ICommandHandler {
                     });
                     createdCount++;
                 } catch (error) {
-                    console.error(`Failed to create agent from template ${templateId}:`, error);
+                    this.loggingService?.error(`Failed to create agent from template ${templateId}:`, error);
                 }
             }
         }
@@ -284,10 +287,14 @@ export class ConductorCommands implements ICommandHandler {
 
     private async openConductorChat(): Promise<void> {
         if (!this.conductorWebview) {
+            const loggingService = this.container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
+            const notificationService = this.container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
             this.conductorWebview = new ConductorChatWebview(
                 this.context,
                 this.agentManager,
-                this.taskQueue
+                this.taskQueue,
+                loggingService,
+                notificationService
             );
         }
         await this.conductorWebview.show();
@@ -312,26 +319,33 @@ export class ConductorCommands implements ICommandHandler {
         } else if (agentCount >= 3) {
             // Medium team - use IntelligentConductor
             conductorType = 'intelligent';
+        } else {
+            // Small team - use ConductorTerminal
+            conductorType = 'basic';
         }
 
-        // Create appropriate conductor instance
-        switch (conductorType) {
-            case 'supersmart':
-                this.conductorTerminal = new SuperSmartConductor(this.agentManager, this.taskQueue);
-                break;
-            case 'intelligent':
-                this.conductorTerminal = new IntelligentConductor(this.agentManager, this.taskQueue);
-                break;
-            default:
-                this.conductorTerminal = new ConductorTerminal(this.agentManager, this.taskQueue);
-                break;
-        }
+        // Create appropriate conductor instance using factory method
+        this.conductorTerminal = this.createConductor(conductorType);
 
         await this.conductorTerminal?.start();
         
         await this.notificationService.showInformation(
             `${this.currentTeamName} conductor started (${conductorType} mode)`
         );
+    }
+
+    /**
+     * Factory method to create conductor instances - allows for clean testing
+     */
+    public createConductor(type: 'basic' | 'intelligent' | 'supersmart'): ConductorTerminal | IntelligentConductor | SuperSmartConductor {
+        switch (type) {
+            case 'supersmart':
+                return new SuperSmartConductor(this.agentManager, this.taskQueue);
+            case 'intelligent':
+                return new IntelligentConductor(this.agentManager, this.taskQueue);
+            default:
+                return new ConductorTerminal(this.agentManager, this.taskQueue);
+        }
     }
 
     private async openConductorPanel(): Promise<void> {

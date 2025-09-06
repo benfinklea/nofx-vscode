@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { IUIStateManager, IEventBus, ILoggingService, ITreeStateManager } from './interfaces';
-import { TreeViewState, AgentDTO, TaskDTO, normalizeTaskStatus, normalizeAgentStatus } from '../types/ui';
+import { TreeViewState } from '../types/ui';
 
 export class TreeStateManager implements ITreeStateManager {
     private uiStateManager: IUIStateManager;
@@ -56,6 +56,10 @@ export class TreeStateManager implements ITreeStateManager {
         this.publishTreeRefresh();
     }
 
+    getTeamName(): string {
+        return this.teamName;
+    }
+
     toggleSection(sectionId: string): void {
         this.loggingService.debug('TreeStateManager: Toggling section', { sectionId });
         if (this.expandedSections.has(sectionId)) {
@@ -64,6 +68,10 @@ export class TreeStateManager implements ITreeStateManager {
             this.expandedSections.add(sectionId);
         }
         this.publishTreeRefresh();
+    }
+
+    isSectionExpanded(id: string): boolean {
+        return this.expandedSections.has(id);
     }
 
     selectItem(itemId: string): void {
@@ -76,69 +84,30 @@ export class TreeStateManager implements ITreeStateManager {
 
     getAgentTreeItems(): any[] {
         const agents = this.uiStateManager.getAgents();
-        return agents.map(agent => this.createAgentTreeItem(agent));
+        return agents.map(agent => this.createTreeItem(agent));
     }
 
     getTaskTreeItems(): any[] {
         const tasks = this.uiStateManager.getTasks();
-        return tasks.map(task => this.createTaskTreeItem(task));
+        return tasks.map(task => this.createTreeItem(task));
     }
 
-    getSectionItems(): any[] {
-        const items: any[] = [];
-        
-        // Get data from UI state manager
+    getSectionItems(): any {
+        // Return pure data without presentation concerns
         const agents = this.uiStateManager.getAgents();
         const tasks = this.uiStateManager.getTasks();
         
-        // Add agents section
-        if (agents.length > 0) {
-            items.push({
-                type: 'teamSection',
-                label: this.teamName,
-                icon: 'organization',
-                agents: agents
-            });
-        }
-        
-        // Add tasks section
-        if (tasks.length > 0) {
-            items.push({
-                type: 'section',
-                label: 'Tasks',
-                icon: 'tasklist'
-            });
-            
-            // Show active tasks first, then pending tasks
-            const activeTasks = tasks.filter(t => normalizeTaskStatus(t.status) === 'in-progress' || normalizeTaskStatus(t.status) === 'assigned');
-            const pendingTasks = tasks.filter(t => normalizeTaskStatus(t.status) === 'queued');
-            
-            if (activeTasks.length > 0) {
-                items.push(...activeTasks.map(task => ({
-                    type: 'task',
-                    task: task,
-                    isActive: true
-                })));
-            }
-            
-            if (pendingTasks.length > 0) {
-                items.push(...pendingTasks.map(task => ({
-                    type: 'task',
-                    task: task,
-                    isActive: false
-                })));
-            }
-        }
-        
-        // Show message if no data
-        if (items.length === 0) {
-            items.push({
-                type: 'message',
-                message: 'No agents or tasks available'
-            });
-        }
-        
-        return items;
+        return {
+            teamName: this.teamName,
+            agents: agents,
+            tasks: tasks,
+            hasData: agents.length > 0 || tasks.length > 0
+        };
+    }
+
+    private createTreeItem(item: any): any {
+        // Simple passthrough for now - can be extended later
+        return item;
     }
 
     subscribe(callback: () => void): vscode.Disposable {
@@ -154,77 +123,8 @@ export class TreeStateManager implements ITreeStateManager {
         };
     }
 
-    private createAgentTreeItem(agent: AgentDTO): any {
-        const statusIcon = this.getAgentStatusIcon(agent.status);
-        const taskInfo = agent.currentTask ? ` (${agent.currentTask.title})` : '';
-        
-        return {
-            id: `agent-${agent.id}`,
-            label: `${statusIcon} ${agent.name}${taskInfo}`,
-            description: `${agent.type} • ${agent.tasksCompleted} tasks`,
-            tooltip: `Agent: ${agent.name}\nType: ${agent.type}\nStatus: ${agent.status}\nTasks Completed: ${agent.tasksCompleted}`,
-            iconPath: new vscode.ThemeIcon('robot'),
-            contextValue: 'agent',
-            collapsibleState: vscode.TreeItemCollapsibleState.None,
-            command: {
-                command: 'nofx.selectAgent',
-                title: 'Select Agent',
-                arguments: [agent.id]
-            }
-        };
-    }
-
-    private createTaskTreeItem(task: TaskDTO): any {
-        const priorityIcon = this.getTaskPriorityIcon(task.priority);
-        const statusIcon = this.getTaskStatusIcon(task.status);
-        
-        return {
-            id: `task-${task.id}`,
-            label: `${priorityIcon} ${statusIcon} ${task.title}`,
-            description: task.assignedTo ? `Assigned to: ${task.assignedTo}` : 'Unassigned',
-            tooltip: `Task: ${task.title}\nDescription: ${task.description}\nPriority: ${task.priority}\nStatus: ${task.status}`,
-            iconPath: new vscode.ThemeIcon('checklist'),
-            contextValue: 'task',
-            collapsibleState: vscode.TreeItemCollapsibleState.None,
-            command: {
-                command: 'nofx.selectTask',
-                title: 'Select Task',
-                arguments: [task.id]
-            }
-        };
-    }
-
-    private getAgentStatusIcon(status: string): string {
-        const normalizedStatus = normalizeAgentStatus(status);
-        switch (normalizedStatus) {
-            case 'idle': return '🟢';
-            case 'working': return '🟡';
-            case 'error': return '🔴';
-            case 'offline': return '⚫';
-            default: return '⚪';
-        }
-    }
-
-    private getTaskStatusIcon(status: string): string {
-        const normalizedStatus = normalizeTaskStatus(status);
-        switch (normalizedStatus) {
-            case 'queued': return '⏳';
-            case 'assigned': return '📋';
-            case 'in-progress': return '🔄';
-            case 'completed': return '✅';
-            case 'failed': return '❌';
-            default: return '❓';
-        }
-    }
-
-    private getTaskPriorityIcon(priority: string): string {
-        switch (priority) {
-            case 'high': return '🔴';
-            case 'medium': return '🟡';
-            case 'low': return '🟢';
-            default: return '⚪';
-        }
-    }
+    // Presentation logic moved to AgentTreeProvider to decouple UI state from presentation
+    // This keeps TreeStateManager focused on pure data management
 
     private publishTreeRefresh(): void {
         this.eventBus.publish('tree.refresh');

@@ -1,5 +1,4 @@
-// Mock VS Code
-jest.mock('vscode', () => ({}), { virtual: true });
+// Mock VS Code - removed to rely on mapper mock
 
 import { OrchestrationServer } from '../../orchestration/OrchestrationServer';
 import { 
@@ -91,6 +90,8 @@ describe('Orchestration Workflow Integration Tests', () => {
             unsubscribe: jest.fn(),
             once: jest.fn() as any,
             filter: jest.fn(),
+            subscribePattern: jest.fn() as any,
+            setLoggingService: jest.fn(),
             dispose: jest.fn()
         };
 

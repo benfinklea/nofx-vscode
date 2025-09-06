@@ -13,6 +13,7 @@ describe('MetricsService', () => {
     let mockEventBus: jest.Mocked<IEventBus>;
 
     beforeEach(() => {
+        jest.useFakeTimers();
         // Reset mocks
         jest.clearAllMocks();
 
@@ -22,10 +23,12 @@ describe('MetricsService', () => {
             getAll: jest.fn(),
             update: jest.fn(),
             onDidChange: jest.fn(),
+            validateAll: jest.fn(() => ({ isValid: true, errors: [] })),
             getMaxAgents: jest.fn(),
             getClaudePath: jest.fn(),
             isAutoAssignTasks: jest.fn(),
             isUseWorktrees: jest.fn(),
+            isShowAgentTerminalOnSpawn: jest.fn(),
             getTemplatesPath: jest.fn(),
             isPersistAgents: jest.fn(),
             getLogLevel: jest.fn(),
@@ -56,6 +59,8 @@ describe('MetricsService', () => {
             unsubscribe: jest.fn(),
             once: jest.fn(),
             filter: jest.fn(),
+            subscribePattern: jest.fn(),
+            setLoggingService: jest.fn(),
             dispose: jest.fn()
         };
 
@@ -74,6 +79,7 @@ describe('MetricsService', () => {
 
     afterEach(() => {
         metricsService.dispose();
+        jest.useRealTimers();
     });
 
     describe('Counter Operations', () => {

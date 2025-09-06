@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# Pre-commit hook for NofX VS Code Extension
+# Validates build before allowing commits
+
+echo "🔍 Running pre-commit validation..."
+
+# Run TypeScript compilation
+echo "📦 Compiling TypeScript..."
+npm run compile || {
+    echo "❌ TypeScript compilation failed. Please fix errors before committing."
+    exit 1
+}
+
+# Validate build output
+echo "✅ Validating build..."
+./scripts/validate-build.sh --quiet || {
+    echo "❌ Build validation failed. Please fix errors before committing."
+    exit 1
+}
+
+# Run quick tests for command registration (if available)
+echo "🧪 Running command registration tests..."
+if [ -f "src/test/unit/commands/CommandRegistration.test.ts" ]; then
+    npm run test:commands 2>/dev/null || {
+        echo "⚠️  Command registration tests failed. Continuing anyway..."
+    }
+else
+    echo "⚠️  Command registration tests not yet available. Skipping..."
+fi
+
+# Check for console.log statements (portable for macOS and Linux)
+echo "🔍 Checking for console.log statements..."
+if find src/ -name "*.ts" -not -path "*/test/*" -type f | xargs grep -l "console\.log" > /dev/null 2>&1; then
+    echo "⚠️  Warning: console.log statements found in source code"
+    echo "   Consider using the LoggingService instead"
+fi
+
+echo "✅ Pre-commit validation passed!"

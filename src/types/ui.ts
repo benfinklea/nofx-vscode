@@ -144,7 +144,29 @@ export interface TreeViewState {
     selectedItems: Set<string>;
 }
 
-// Webview Command union type
+// Webview Command constants for centralized command mapping
+export const enum WEBVIEW_COMMANDS {
+    // Conductor commands
+    SPAWN_AGENT_GROUP = 'spawnAgentGroup',
+    CREATE_TASK = 'createTask',
+    REMOVE_AGENT = 'removeAgent',
+    TOGGLE_THEME = 'toggleTheme',
+    SPAWN_CUSTOM_AGENT = 'spawnCustomAgent',
+    SHOW_AGENT_PROMPT = 'showAgentPrompt',
+    
+    // State management commands
+    SET_STATE = 'setState',
+    UPDATE_STATE = 'updateState',
+    
+    // Dashboard commands
+    APPLY_FILTER = 'applyFilter',
+    CLEAR_MESSAGES = 'clearMessages',
+    EXPORT_MESSAGES = 'exportMessages',
+    PAUSE_UPDATES = 'pauseUpdates',
+    RESUME_UPDATES = 'resumeUpdates'
+}
+
+// Webview Command union type (for backward compatibility)
 export type WebviewCommand = 
     | 'spawnAgentGroup'
     | 'createTask'

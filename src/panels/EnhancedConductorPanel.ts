@@ -46,7 +46,7 @@ export class EnhancedConductorPanel {
         webviewHostFactory: WebviewHostFactory = createWebviewHost
     ): EnhancedConductorPanel {
         const panel = vscode.window.createWebviewPanel(
-            'nofxConductor',
+            'nofxConductorEnhanced',
             'NofX Conductor - Agent Orchestration Dashboard',
             vscode.ViewColumn.One,
             {

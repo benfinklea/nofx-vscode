@@ -41,8 +41,17 @@ describe('TaskQueue', () => {
             info: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
-            isLevelEnabled: jest.fn(() => true),
-            getChannel: jest.fn(() => ({ appendLine: jest.fn(), show: jest.fn(), hide: jest.fn(), dispose: jest.fn() })),
+            isLevelEnabled: jest.fn((level: any) => true),
+            getChannel: jest.fn((name: string) => ({ 
+                name,
+                append: jest.fn(),
+                appendLine: jest.fn(), 
+                replace: jest.fn(),
+                clear: jest.fn(),
+                show: jest.fn(), 
+                hide: jest.fn(), 
+                dispose: jest.fn() 
+            })),
             time: jest.fn(),
             timeEnd: jest.fn(),
             dispose: jest.fn()
@@ -50,10 +59,12 @@ describe('TaskQueue', () => {
 
         mockEventBus = {
             publish: jest.fn(),
-            subscribe: jest.fn(() => ({ dispose: jest.fn() })),
+            subscribe: jest.fn((event: string, handler: any) => ({ dispose: jest.fn() })),
             unsubscribe: jest.fn(),
-            once: jest.fn(() => ({ dispose: jest.fn() })),
+            once: jest.fn((event: string, handler: any) => ({ dispose: jest.fn() })),
             filter: jest.fn(),
+            subscribePattern: jest.fn((pattern: string, handler: any) => ({ dispose: jest.fn() })),
+            setLoggingService: jest.fn(),
             dispose: jest.fn()
         };
 
@@ -80,11 +91,13 @@ describe('TaskQueue', () => {
             get: jest.fn(),
             getAll: jest.fn(),
             update: jest.fn(),
-            onDidChange: jest.fn(() => ({ dispose: jest.fn() })),
+            onDidChange: jest.fn((callback: any) => ({ dispose: jest.fn() })),
+            validateAll: jest.fn(() => ({ isValid: true, errors: [] })),
             getMaxAgents: jest.fn(() => 3),
             getClaudePath: jest.fn(() => 'claude'),
             isAutoAssignTasks: jest.fn(() => true),
             isUseWorktrees: jest.fn(() => true),
+            isShowAgentTerminalOnSpawn: jest.fn(() => true),
             getTemplatesPath: jest.fn(() => '.nofx/templates'),
             isPersistAgents: jest.fn(() => true),
             getLogLevel: jest.fn(() => 'info'),
@@ -92,14 +105,13 @@ describe('TaskQueue', () => {
             getOrchestrationHeartbeatTimeout: jest.fn(() => 30000),
             getOrchestrationHistoryLimit: jest.fn(() => 1000),
             getOrchestrationPersistencePath: jest.fn(() => '.nofx/orchestration'),
-            getOrchestrationMaxFileSize: jest.fn(() => 10485760),
-            dispose: jest.fn()
+            getOrchestrationMaxFileSize: jest.fn(() => 10485760)
         };
 
         mockTaskStateMachine = {
-            validateTransition: jest.fn(() => true),
-            transition: jest.fn(() => []),
-            getValidTransitions: jest.fn(() => ['ready', 'assigned', 'in-progress']),
+            validateTransition: jest.fn((currentState: any, nextState: any) => true),
+            transition: jest.fn((task: any, nextState: any) => []),
+            getValidTransitions: jest.fn((currentState: any) => ['ready', 'assigned', 'in-progress']),
             isTerminalState: jest.fn((state) => ['completed', 'failed'].includes(state)),
             setTaskReader: jest.fn(),
             dispose: jest.fn()
@@ -114,8 +126,8 @@ describe('TaskQueue', () => {
             contains: jest.fn(),
             reorder: jest.fn(),
             recomputePriority: jest.fn(),
-            calculateSoftDependencyAdjustmentWithTasks: jest.fn(() => 0),
-            computeEffectivePriority: jest.fn((task) => task.numericPriority || 5),
+            calculateSoftDependencyAdjustmentWithTasks: jest.fn((task: any, allTasks: any) => 0),
+            computeEffectivePriority: jest.fn((task: any, allTasks: any) => task.numericPriority || 5),
             moveToReady: jest.fn(),
             updatePriority: jest.fn(),
             enqueueMany: jest.fn(),
@@ -127,23 +139,23 @@ describe('TaskQueue', () => {
         };
 
         mockCapabilityMatcher = {
-            scoreAgent: jest.fn(() => 0.8),
+            scoreAgent: jest.fn((agent: any, task: any) => 0.8),
             findBestAgent: jest.fn(),
-            rankAgents: jest.fn(() => []),
-            calculateCapabilityMatch: jest.fn(() => 0.8),
-            getMatchExplanation: jest.fn(() => 'Good match'),
+            rankAgents: jest.fn((agents: any[], task: any) => []),
+            calculateCapabilityMatch: jest.fn((agentCapabilities: any[], requiredCapabilities: any[]) => 0.8),
+            getMatchExplanation: jest.fn((agent: any, task: any) => 'Good match'),
             dispose: jest.fn()
         };
 
         mockDependencyManager = {
-            addDependency: jest.fn(() => true),
+            addDependency: jest.fn((taskId: string, dependsOnTaskId: string) => true),
             removeDependency: jest.fn(),
-            addSoftDependency: jest.fn(() => true),
+            addSoftDependency: jest.fn((taskId: string, prefersTaskId: string) => true),
             removeSoftDependency: jest.fn(),
-            validateDependencies: jest.fn(() => []),
-            getReadyTasks: jest.fn(() => []),
-            detectCycles: jest.fn(() => []),
-            checkConflicts: jest.fn(() => []),
+            validateDependencies: jest.fn((task: any, allTasks?: any) => []),
+            getReadyTasks: jest.fn((allTasks: any[]) => []),
+            detectCycles: jest.fn((tasks: any[]) => []),
+            checkConflicts: jest.fn((task: any, activeTasks: any[]) => []),
             resolveConflict: jest.fn() as any,
             getDependentTasks: jest.fn() as any,
             getSoftDependents: jest.fn() as any,

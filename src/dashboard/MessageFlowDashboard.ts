@@ -73,7 +73,7 @@ export class MessageFlowDashboard {
                     state
                 }).then(success => {
                     if (!success) {
-                        console.error('Failed to post message to webview');
+                        this.loggingService.error('Failed to post message to webview');
                     }
                 });
             })
@@ -87,10 +87,8 @@ export class MessageFlowDashboard {
         );
 
         // Set initial HTML content
-        this.webviewHost.setHtml(this.template.generateDashboardHTML(
-            this.viewModel.getDashboardState(),
-            this.webviewHost
-        ));
+        const state = await this.viewModel.getDashboardState();
+        this.webviewHost.setHtml(this.template.generateDashboardHTML(state, this.webviewHost));
         
         // Handle panel disposal
         this.disposables.push(

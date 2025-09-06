@@ -9,6 +9,7 @@ export interface Agent {
     currentTask: Task | null;
     startTime: Date;
     tasksCompleted: number;
+    capabilities?: string[];
     template?: any; // Agent template with system prompt and capabilities
 }
 

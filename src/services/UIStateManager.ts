@@ -42,7 +42,10 @@ export class UIStateManager implements IUIStateManager {
     private taskHashCache: Map<string, string> = new Map();
     private dependencyGraphCache: {taskId: string, dependencies: string[], softDependencies: string[]}[] | null = null;
     private blockedAndReadyCache: {blockedTasks: TaskDTO[], readyTasks: TaskDTO[]} | null = null;
-    private lastTaskHash: string = '';
+    
+    // Separate cache keys to avoid unnecessary invalidation
+    private lastDependencyGraphHash: string = '';
+    private lastBlockedReadyHash: string = '';
     
     // Event subscriptions
     private subscriptions: vscode.Disposable[] = [];
@@ -257,8 +260,8 @@ export class UIStateManager implements IUIStateManager {
      * Computes dependency graph for UI visualization
      */
     private computeDependencyGraph(): void {
-        const currentHash = this.computeTaskHash();
-        if (this.dependencyGraphCache && currentHash === this.lastTaskHash) {
+        const currentHash = this.computeDependencyGraphHash();
+        if (this.dependencyGraphCache && currentHash === this.lastDependencyGraphHash) {
             this.dependencyGraph = this.dependencyGraphCache;
             return;
         }
@@ -273,7 +276,7 @@ export class UIStateManager implements IUIStateManager {
             }));
         
         this.dependencyGraphCache = this.dependencyGraph;
-        this.lastTaskHash = currentHash;
+        this.lastDependencyGraphHash = currentHash;
     }
 
     /**
@@ -294,8 +297,8 @@ export class UIStateManager implements IUIStateManager {
      * Computes blocked and ready tasks for UI display
      */
     private computeBlockedAndReadyTasks(): void {
-        const currentHash = this.computeTaskHash();
-        if (this.blockedAndReadyCache && currentHash === this.lastTaskHash) {
+        const currentHash = this.computeBlockedAndReadyHash();
+        if (this.blockedAndReadyCache && currentHash === this.lastBlockedReadyHash) {
             this.blockedTasks = this.blockedAndReadyCache.blockedTasks;
             this.readyTasks = this.blockedAndReadyCache.readyTasks;
             return;
@@ -314,7 +317,7 @@ export class UIStateManager implements IUIStateManager {
             blockedTasks: this.blockedTasks,
             readyTasks: this.readyTasks
         };
-        this.lastTaskHash = currentHash;
+        this.lastBlockedReadyHash = currentHash;
     }
 
     /**
@@ -369,6 +372,44 @@ export class UIStateManager implements IUIStateManager {
         const allTasks = this.taskReader.getTasks();
         const hashData = allTasks.map(task => 
             `${task.id}:${task.status}:${(task.dependsOn || []).join(',')}:${(task.prefers || []).join(',')}:${(task.conflictsWith || []).join(',')}`
+        ).join('|');
+        
+        // Simple hash function
+        let hash = 0;
+        for (let i = 0; i < hashData.length; i++) {
+            const char = hashData.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash |= 0; // Convert to 32-bit integer
+        }
+        return hash.toString();
+    }
+
+    /**
+     * Computes a hash specifically for dependency graph caching
+     */
+    private computeDependencyGraphHash(): string {
+        const allTasks = this.taskReader.getTasks();
+        const hashData = allTasks.map(task => 
+            `${task.id}:${(task.dependsOn || []).join(',')}:${(task.prefers || []).join(',')}`
+        ).join('|');
+        
+        // Simple hash function
+        let hash = 0;
+        for (let i = 0; i < hashData.length; i++) {
+            const char = hashData.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash |= 0; // Convert to 32-bit integer
+        }
+        return hash.toString();
+    }
+
+    /**
+     * Computes a hash specifically for blocked and ready tasks caching
+     */
+    private computeBlockedAndReadyHash(): string {
+        const allTasks = this.taskReader.getTasks();
+        const hashData = allTasks.map(task => 
+            `${task.id}:${task.status}:${(task.blockedBy || []).join(',')}:${(task.conflictsWith || []).join(',')}`
         ).join('|');
         
         // Simple hash function

@@ -1,5 +1,4 @@
-// Mock VS Code
-jest.mock('vscode', () => ({}), { virtual: true });
+// VS Code is mocked via jest.config.js moduleNameMapper
 
 import { OrchestrationServer } from '../../../orchestration/OrchestrationServer';
 import { 
@@ -57,9 +56,12 @@ class MockWebSocketServer {
     }
 }
 
-// Mock the ws module
+// Factory pattern for WebSocketServer mock
+let currentWebSocketServerImpl = MockWebSocketServer;
+
+// Mock the ws module with factory pattern
 jest.mock('ws', () => ({
-    WebSocketServer: MockWebSocketServer,
+    WebSocketServer: class { constructor(...args: any[]) { return new currentWebSocketServerImpl(...(args as [any])); } },
     WebSocket: MockWebSocket
 }));
 
@@ -97,6 +99,8 @@ describe('OrchestrationServer', () => {
             unsubscribe: jest.fn(),
             once: jest.fn() as any,
             filter: jest.fn(),
+            subscribePattern: jest.fn() as any,
+            setLoggingService: jest.fn(),
             dispose: jest.fn()
         };
 
@@ -191,8 +195,7 @@ describe('OrchestrationServer', () => {
             expect(mockEventBus.publish).toHaveBeenCalledWith(ORCH_EVENTS.SERVER_STARTED, {
                 port: 7777
             });
-            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('connections_established', {
-                event: 'server_started',
+            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('server_started', {
                 port: '7777'
             });
         });
@@ -209,12 +212,13 @@ describe('OrchestrationServer', () => {
         it('should try alternative ports if primary port is unavailable', async () => {
             // Mock port conflict by making the first attempt fail
             let attemptCount = 0;
-            const originalMockWebSocketServer = MockWebSocketServer;
-            (MockWebSocketServer as any) = jest.fn().mockImplementation((options) => {
+            const originalImpl = currentWebSocketServerImpl;
+            
+            currentWebSocketServerImpl = jest.fn().mockImplementation((options) => {
                 attemptCount++;
                 if (attemptCount === 1) {
                     // First attempt fails
-                    const server = new originalMockWebSocketServer(options);
+                    const server = new MockWebSocketServer(options);
                     setTimeout(() => {
                         const errorHandler = server.on.mock.calls.find(([event]) => event === 'error')?.[1];
                         if (errorHandler) {
@@ -224,7 +228,7 @@ describe('OrchestrationServer', () => {
                     return server;
                 }
                 // Second attempt succeeds
-                return new originalMockWebSocketServer(options);
+                return new MockWebSocketServer(options);
             });
 
             await orchestrationServer.start();
@@ -234,8 +238,8 @@ describe('OrchestrationServer', () => {
                 'Port 7777 unavailable, trying 7778'
             );
 
-            // Restore original mock
-            (MockWebSocketServer as any) = originalMockWebSocketServer;
+            // Restore original implementation
+            currentWebSocketServerImpl = originalImpl;
         });
 
         it('should stop server successfully', async () => {
@@ -246,6 +250,9 @@ describe('OrchestrationServer', () => {
             expect(mockConnectionPool.dispose).toHaveBeenCalled();
             expect(mockLoggingService.info).toHaveBeenCalledWith('Orchestration server stopped');
             expect(mockEventBus.publish).toHaveBeenCalledWith(ORCH_EVENTS.SERVER_STOPPED, {});
+            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('server_stopped', {
+                port: '7777'
+            });
         });
 
         it('should handle stop when not running', async () => {
@@ -255,9 +262,10 @@ describe('OrchestrationServer', () => {
         });
 
         it('should handle start errors', async () => {
-            const originalMockWebSocketServer = MockWebSocketServer;
-            (MockWebSocketServer as any) = jest.fn().mockImplementation(() => {
-                const server = new originalMockWebSocketServer({ port: 7777 });
+            const originalImpl = currentWebSocketServerImpl;
+            
+            currentWebSocketServerImpl = jest.fn().mockImplementation(() => {
+                const server = new MockWebSocketServer({ port: 7777 });
                 setTimeout(() => {
                     const errorHandler = server.on.mock.calls.find(([event]) => event === 'error')?.[1];
                     if (errorHandler) {
@@ -270,8 +278,8 @@ describe('OrchestrationServer', () => {
             await expect(orchestrationServer.start()).rejects.toThrow('Startup failed');
             expect(mockErrorHandler.handleError).toHaveBeenCalled();
 
-            // Restore original mock
-            (MockWebSocketServer as any) = originalMockWebSocketServer;
+            // Restore original implementation
+            currentWebSocketServerImpl = originalImpl;
         });
     });
 
@@ -532,6 +540,64 @@ describe('OrchestrationServer', () => {
                 }
             );
         });
+
+        it('should track bytes in metrics', async () => {
+            const message: OrchestratorMessage = {
+                id: 'msg-1',
+                type: MessageType.AGENT_QUERY,
+                from: 'client-1',
+                to: 'server',
+                payload: { action: 'test' },
+                timestamp: new Date().toISOString()
+            };
+
+            const validationResult: ValidationResult = {
+                isValid: true,
+                errors: [],
+                warnings: [],
+                result: message
+            };
+
+            mockMessageValidator.validate.mockReturnValue(validationResult);
+            mockMessageRouter.route.mockResolvedValue(undefined);
+
+            const handleMessage = (orchestrationServer as any).handleMessage.bind(orchestrationServer);
+            await handleMessage('client-1', JSON.stringify(message));
+
+            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('bytes_in_total', {
+                clientId: 'client-1',
+                bytes: expect.any(String)
+            });
+        });
+
+        it('should track message timestamps for throughput calculation', async () => {
+            const message: OrchestratorMessage = {
+                id: 'msg-1',
+                type: MessageType.AGENT_QUERY,
+                from: 'client-1',
+                to: 'server',
+                payload: { action: 'test' },
+                timestamp: new Date().toISOString()
+            };
+
+            const validationResult: ValidationResult = {
+                isValid: true,
+                errors: [],
+                warnings: [],
+                result: message
+            };
+
+            mockMessageValidator.validate.mockReturnValue(validationResult);
+            mockMessageRouter.route.mockResolvedValue(undefined);
+
+            const handleMessage = (orchestrationServer as any).handleMessage.bind(orchestrationServer);
+            await handleMessage('client-1', JSON.stringify(message));
+
+            // Check that msgTimestamps array has been updated
+            const msgTimestamps = (orchestrationServer as any).msgTimestamps;
+            expect(msgTimestamps).toHaveLength(1);
+            expect(msgTimestamps[0]).toBeCloseTo(Date.now(), -2); // Within 100ms
+        });
     });
 
     describe('Dashboard Integration', () => {
@@ -557,7 +623,7 @@ describe('OrchestrationServer', () => {
                 ['client-2', new MockWebSocket('ws://localhost:7777')]
             ]);
 
-            mockConnectionPool.getAllConnections.mockReturnValue(new Map() as any);
+            mockConnectionPool.getAllConnections.mockReturnValue(mockConnections as any);
 
             const connections = orchestrationServer.getConnections();
 
@@ -639,6 +705,44 @@ describe('OrchestrationServer', () => {
 
             expect(mockConnectionPool.broadcast).toHaveBeenCalledWith(message, ['client-1']);
         });
+
+        it('should track outbound bytes when sending to client', () => {
+            const message: OrchestratorMessage = {
+                id: 'msg-1',
+                type: MessageType.AGENT_QUERY,
+                from: 'server',
+                to: 'client-1',
+                payload: { action: 'test' },
+                timestamp: new Date().toISOString()
+            };
+
+            mockConnectionPool.sendToClient.mockReturnValue(true);
+
+            orchestrationServer.sendToClient('client-1', message);
+
+            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('bytes_out_total', {
+                messageType: 'request',
+                bytes: expect.any(String)
+            });
+        });
+
+        it('should track outbound bytes when broadcasting', () => {
+            const message: OrchestratorMessage = {
+                id: 'msg-1',
+                type: MessageType.BROADCAST,
+                from: 'server',
+                to: 'all',
+                payload: { action: 'announcement' },
+                timestamp: new Date().toISOString()
+            };
+
+            orchestrationServer.broadcast(message);
+
+            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('bytes_out_total', {
+                messageType: 'broadcast',
+                bytes: expect.any(String)
+            });
+        });
     });
 
     describe('Server Status', () => {
@@ -684,6 +788,65 @@ describe('OrchestrationServer', () => {
                 expect.any(Error),
                 'Failed to replay messages to logical-client-1'
             );
+        });
+    });
+
+    describe('Periodic Metrics Collection', () => {
+        beforeEach(() => {
+            // Mock the server as running
+            (orchestrationServer as any).isRunning = true;
+            (orchestrationServer as any).actualPort = 7777;
+        });
+
+        it('should collect periodic metrics and calculate messages per second', () => {
+            // Add some message timestamps to simulate recent activity
+            const now = Date.now();
+            const msgTimestamps = (orchestrationServer as any).msgTimestamps;
+            msgTimestamps.push(now - 10000); // 10 seconds ago
+            msgTimestamps.push(now - 5000);  // 5 seconds ago
+            msgTimestamps.push(now - 2000);  // 2 seconds ago
+
+            // Mock connection pool
+            mockConnectionPool.getAllConnections.mockReturnValue(new Map([
+                ['client-1', {} as any],
+                ['client-2', {} as any]
+            ]));
+
+            // Call collectPeriodicMetrics directly
+            const collectPeriodicMetrics = (orchestrationServer as any).collectPeriodicMetrics.bind(orchestrationServer);
+            collectPeriodicMetrics();
+
+            expect(mockMetricsService.setGauge).toHaveBeenCalledWith('concurrent_connections', 2);
+            expect(mockMetricsService.setGauge).toHaveBeenCalledWith('concurrent_connections_peak', 2);
+            expect(mockMetricsService.setGauge).toHaveBeenCalledWith('messages_per_second', expect.any(Number));
+            expect(mockMetricsService.setGauge).toHaveBeenCalledWith('bytes_in_total', expect.any(Number));
+            expect(mockMetricsService.setGauge).toHaveBeenCalledWith('bytes_out_total', expect.any(Number));
+            expect(mockMetricsService.setGauge).toHaveBeenCalledWith('bytes_in_rate', expect.any(Number));
+        });
+
+        it('should update peak concurrent connections', () => {
+            // Set initial peak
+            (orchestrationServer as any).concurrentConnectionsPeak = 1;
+
+            mockConnectionPool.getAllConnections.mockReturnValue(new Map([
+                ['client-1', {} as any],
+                ['client-2', {} as any],
+                ['client-3', {} as any]
+            ]));
+
+            const collectPeriodicMetrics = (orchestrationServer as any).collectPeriodicMetrics.bind(orchestrationServer);
+            collectPeriodicMetrics();
+
+            expect(mockMetricsService.setGauge).toHaveBeenCalledWith('concurrent_connections_peak', 3);
+        });
+
+        it('should handle empty message timestamps', () => {
+            mockConnectionPool.getAllConnections.mockReturnValue(new Map());
+
+            const collectPeriodicMetrics = (orchestrationServer as any).collectPeriodicMetrics.bind(orchestrationServer);
+            collectPeriodicMetrics();
+
+            expect(mockMetricsService.setGauge).toHaveBeenCalledWith('messages_per_second', 0);
         });
     });
 

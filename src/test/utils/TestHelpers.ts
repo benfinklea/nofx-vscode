@@ -1,6 +1,10 @@
 import { IContainer, SERVICE_TOKENS, IMetricsService, IConfigurationService, ILoggingService, IEventBus, IConfigurationValidator, INotificationService } from '../../services/interfaces';
 import { Agent, Task, TaskConfig } from '../../agents/types';
 import { createMockAgent, createMockTask, createMockConfiguration, createTestContainer, waitForEvent, measureTime } from '../setup';
+import * as vscode from 'vscode';
+
+// Re-export commonly used test utilities
+export { createMockAgent, createMockTask, waitForEvent, measureTime };
 
 /**
  * Enhanced test utilities and helpers for comprehensive testing
@@ -12,12 +16,10 @@ export const createMockAgentWithOverrides = (overrides: Partial<Agent> = {}): Ag
     name: 'Test Agent',
     type: 'General Purpose',
     status: 'idle',
-    terminal: null,
-    worktree: null,
-    capabilities: ['general'],
-    createdAt: new Date(),
-    lastActivity: new Date(),
-    assignedTask: null,
+    terminal: {} as any, // Mock terminal for testing
+    currentTask: null,
+    startTime: new Date(),
+    tasksCompleted: 0,
     template: {
         name: 'Test Template',
         description: 'A test agent template',
@@ -34,18 +36,19 @@ export const createMockTaskWithOverrides = (overrides: Partial<Task> = {}): Task
     description: 'A test task',
     priority: 'medium',
     numericPriority: 5,
-    status: 'pending',
-    assignedAgent: null,
-    assignedTo: null,
-    dependencies: [],
-    dependsOn: [],
-    blockedBy: [],
-    conflictsWith: [],
-    capabilities: ['general'],
-    requiredCapabilities: [],
-    tags: [],
+    status: 'ready',
+    assignedTo: undefined,
+    files: [],
     createdAt: new Date(),
-    completedAt: null,
+    completedAt: undefined,
+    dependsOn: [],
+    prefers: [],
+    blockedBy: [],
+    tags: [],
+    estimatedDuration: undefined,
+    requiredCapabilities: [],
+    conflictsWith: [],
+    agentMatchScore: undefined,
     ...overrides
 });
 
@@ -76,10 +79,12 @@ export const createTestContainerWithMocks = (): IContainer => {
         getAll: jest.fn(() => createMockConfigurationWithOverrides()),
         update: jest.fn().mockResolvedValue(undefined),
         onDidChange: jest.fn(() => ({ dispose: jest.fn() })),
+        validateAll: jest.fn(() => ({ isValid: true, errors: [] })),
         getMaxAgents: jest.fn(() => 3),
         getClaudePath: jest.fn(() => 'claude'),
         isAutoAssignTasks: jest.fn(() => true),
         isUseWorktrees: jest.fn(() => true),
+        isShowAgentTerminalOnSpawn: jest.fn(() => true),
         getTemplatesPath: jest.fn(() => '.nofx/templates'),
         isPersistAgents: jest.fn(() => true),
         getLogLevel: jest.fn(() => 'info'),
@@ -109,6 +114,8 @@ export const createTestContainerWithMocks = (): IContainer => {
         unsubscribe: jest.fn(),
         once: jest.fn(() => ({ dispose: jest.fn() })),
         filter: jest.fn(),
+        subscribePattern: jest.fn(() => ({ dispose: jest.fn() })),
+        setLoggingService: jest.fn(),
         dispose: jest.fn()
     });
 
@@ -147,10 +154,314 @@ export const createTestContainerWithMocks = (): IContainer => {
 };
 
 export const createIntegrationContainer = (): IContainer => {
-    // This would create a container with real services but mocked external dependencies
-    // For now, return the test container
-    return createTestContainerWithMocks();
+    const container = createTestContainer();
+    
+    // Register real service implementations (not mocks) for integration testing
+    // Only stub external I/O (file system, terminals) but keep core services real
+    
+    // Mock external dependencies first
+    const mockVsCodeConfigForIntegration = {
+        get: jest.fn((key: string, defaultValue?: any) => {
+            const config = createMockConfigurationWithOverrides();
+            return config[key] ?? defaultValue;
+        }),
+        update: jest.fn().mockResolvedValue(undefined),
+        has: jest.fn(() => true),
+        inspect: jest.fn()
+    };
+    
+    // Register real ConfigurationService
+    const { ConfigurationService } = require('../../services/ConfigurationService');
+    const { ConfigurationValidator } = require('../../services/ConfigurationValidator');
+    const { LoggingService } = require('../../services/LoggingService');
+    const { EventBus } = require('../../services/EventBus');
+    const { NotificationService } = require('../../services/NotificationService');
+    const { MetricsService } = require('../../services/MetricsService');
+    const { TaskStateMachine } = require('../../tasks/TaskStateMachine');
+    const { PriorityTaskQueue } = require('../../tasks/PriorityTaskQueue');
+    const { CapabilityMatcher } = require('../../tasks/CapabilityMatcher');
+    const { TaskDependencyManager } = require('../../tasks/TaskDependencyManager');
+    const { AgentManager } = require('../../agents/AgentManager');
+    const { TaskQueue } = require('../../tasks/TaskQueue');
+    const { OrchestrationServer } = require('../../orchestration/OrchestrationServer');
+    const { ConnectionPoolService } = require('../../services/ConnectionPoolService');
+    const { MessageRouter } = require('../../services/MessageRouter');
+    const { MessageValidator } = require('../../services/MessageValidator');
+    const { InMemoryMessagePersistenceService } = require('../../services/InMemoryMessagePersistenceService');
+    
+    // Create mock VS Code workspace for ConfigurationService
+    const mockVsCodeConfig = {
+        get: jest.fn((key: string, defaultValue?: any) => {
+            const config = createMockConfigurationWithOverrides();
+            return config[key] ?? defaultValue;
+        }),
+        update: jest.fn().mockResolvedValue(undefined),
+        has: jest.fn(() => true),
+        inspect: jest.fn()
+    };
+    (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue(mockVsCodeConfigForIntegration);
+    
+    // Register real services
+    const eventBus = new EventBus();
+    container.registerInstance(SERVICE_TOKENS.EventBus, eventBus);
+    
+    const notificationService = new NotificationService();
+    container.registerInstance(SERVICE_TOKENS.NotificationService, notificationService);
+    
+    // Create mock output channel for LoggingService
+    const mockOutputChannel = {
+        appendLine: jest.fn(),
+        show: jest.fn(),
+        hide: jest.fn(),
+        dispose: jest.fn()
+    };
+    container.registerInstance(SERVICE_TOKENS.OutputChannel, mockOutputChannel);
+    
+    const configValidator = new ConfigurationValidator(
+        createMockLoggingService(), 
+        notificationService
+    );
+    container.registerInstance(SERVICE_TOKENS.ConfigurationValidator, configValidator);
+    
+    const configService = new ConfigurationService(configValidator, eventBus);
+    container.registerInstance(SERVICE_TOKENS.ConfigurationService, configService);
+    
+    const loggingService = new LoggingService(configService, mockOutputChannel);
+    container.registerInstance(SERVICE_TOKENS.LoggingService, loggingService);
+    
+    const metricsService = new MetricsService(configService, loggingService, eventBus);
+    container.registerInstance(SERVICE_TOKENS.MetricsService, metricsService);
+    
+    const taskStateMachine = new TaskStateMachine(loggingService, eventBus);
+    container.registerInstance(SERVICE_TOKENS.TaskStateMachine, taskStateMachine);
+    
+    const taskDependencyManager = new TaskDependencyManager(loggingService, eventBus, notificationService);
+    container.registerInstance(SERVICE_TOKENS.TaskDependencyManager, taskDependencyManager);
+    
+    const priorityTaskQueue = new PriorityTaskQueue(loggingService, taskDependencyManager);
+    container.registerInstance(SERVICE_TOKENS.PriorityTaskQueue, priorityTaskQueue);
+    
+    const capabilityMatcher = new CapabilityMatcher(loggingService, configService);
+    container.registerInstance(SERVICE_TOKENS.CapabilityMatcher, capabilityMatcher);
+    
+    // Create mock extension context for AgentManager
+    const mockContext = {
+        subscriptions: [],
+        workspaceState: {
+            get: jest.fn(),
+            update: jest.fn().mockResolvedValue(undefined),
+            keys: jest.fn(() => [])
+        },
+        globalState: {
+            get: jest.fn(),
+            update: jest.fn().mockResolvedValue(undefined),
+            keys: jest.fn(() => [])
+        },
+        extensionPath: '/mock/extension/path',
+        extensionUri: { fsPath: '/mock/extension/path' } as any,
+        storageUri: { fsPath: '/mock/storage/path' } as any,
+        globalStorageUri: { fsPath: '/mock/global/storage/path' } as any,
+        logUri: { fsPath: '/mock/log/path' } as any
+    };
+    
+    const agentManager = new AgentManager(mockContext);
+    
+    // Create mock dependencies for AgentManager
+    const mockAgentLifecycleManager = {
+        initialize: jest.fn().mockResolvedValue(undefined),
+        spawnAgent: jest.fn().mockImplementation(async (config: any, restoredId?: string) => {
+            const agent = createMockAgentWithOverrides({
+                id: restoredId || `test-agent-${Date.now()}`,
+                name: config.name,
+                type: config.type,
+                template: config.template
+            });
+            return agent;
+        }),
+        removeAgent: jest.fn().mockResolvedValue(true),
+        dispose: jest.fn()
+    };
+    
+    const mockTerminalManager = {
+        getTerminal: jest.fn().mockReturnValue({
+            show: jest.fn(),
+            sendText: jest.fn(),
+            dispose: jest.fn()
+        }),
+        onTerminalClosed: jest.fn().mockReturnValue({ dispose: jest.fn() }),
+        dispose: jest.fn()
+    };
+    
+    const mockWorktreeService = {
+        createWorktree: jest.fn().mockResolvedValue({ path: '/mock/worktree' }),
+        removeWorktree: jest.fn().mockResolvedValue(undefined),
+        listWorktrees: jest.fn().mockResolvedValue([]),
+        dispose: jest.fn()
+    };
+    
+    // Set dependencies for AgentManager
+    agentManager.setDependencies(
+        mockAgentLifecycleManager,
+        mockTerminalManager,
+        mockWorktreeService,
+        configService,
+        notificationService,
+        loggingService,
+        eventBus,
+        createMockErrorHandler(),
+        metricsService
+    );
+    
+    container.registerInstance(SERVICE_TOKENS.AgentManager, agentManager);
+    
+    const taskQueue = new TaskQueue(
+        agentManager,
+        loggingService,
+        eventBus,
+        createMockErrorHandler(),
+        notificationService,
+        configService,
+        taskStateMachine,
+        priorityTaskQueue,
+        capabilityMatcher,
+        taskDependencyManager,
+        metricsService
+    );
+    container.registerInstance(SERVICE_TOKENS.TaskQueue, taskQueue);
+    
+    // Set task reader for state machine
+    taskStateMachine.setTaskReader(taskQueue);
+    
+    // Register real orchestration services instead of mocks
+    const errorHandler = createMockErrorHandler();
+    
+    const connectionPoolService = new ConnectionPoolService(
+        loggingService,
+        eventBus,
+        errorHandler,
+        configService
+    );
+    container.registerInstance(SERVICE_TOKENS.ConnectionPoolService, connectionPoolService);
+    
+    const messageValidator = new MessageValidator(
+        loggingService,
+        eventBus
+    );
+    container.registerInstance(SERVICE_TOKENS.MessageValidator, messageValidator);
+    
+    const messagePersistenceService = new InMemoryMessagePersistenceService(
+        loggingService,
+        configService,
+        eventBus
+    );
+    container.registerInstance(SERVICE_TOKENS.MessagePersistenceService, messagePersistenceService);
+    
+    const messageRouter = new MessageRouter(
+        connectionPoolService,
+        messagePersistenceService,
+        loggingService,
+        eventBus,
+        errorHandler,
+        agentManager,
+        taskQueue
+    );
+    container.registerInstance(SERVICE_TOKENS.MessageRouter, messageRouter);
+    
+    const orchestrationServer = new OrchestrationServer(
+        0, // Use random port
+        loggingService,
+        eventBus,
+        errorHandler,
+        connectionPoolService,
+        messageRouter,
+        messageValidator,
+        messagePersistenceService,
+        metricsService
+    );
+    container.registerInstance(SERVICE_TOKENS.OrchestrationServer, orchestrationServer);
+    
+    return container;
 };
+
+// Helper functions for creating mock services that are still external dependencies
+function createMockLoggingService() {
+    return {
+        debug: jest.fn(),
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+        isLevelEnabled: jest.fn(() => true),
+        getChannel: jest.fn(() => ({
+            appendLine: jest.fn(),
+            show: jest.fn(),
+            hide: jest.fn(),
+            dispose: jest.fn()
+        })),
+        time: jest.fn(),
+        timeEnd: jest.fn(),
+        dispose: jest.fn()
+    };
+}
+
+function createMockErrorHandler() {
+    return {
+        handleError: jest.fn(),
+        handleAsync: jest.fn().mockImplementation(async (op) => await op()),
+        wrapSync: jest.fn().mockImplementation((op) => op()),
+        withRetry: jest.fn().mockImplementation(async (op) => await op()),
+        dispose: jest.fn()
+    };
+}
+
+function createMockConnectionPoolService() {
+    return {
+        addConnection: jest.fn(),
+        removeConnection: jest.fn(),
+        getConnection: jest.fn(),
+        getAllConnections: jest.fn(() => new Map()),
+        broadcast: jest.fn(),
+        sendToClient: jest.fn(),
+        sendToLogical: jest.fn(),
+        registerLogicalId: jest.fn(),
+        resolveLogicalId: jest.fn(),
+        unregisterLogicalId: jest.fn(),
+        getConnectionSummaries: jest.fn(() => []),
+        startHeartbeat: jest.fn(),
+        stopHeartbeat: jest.fn(),
+        dispose: jest.fn()
+    };
+}
+
+function createMockMessageRouter() {
+    return {
+        route: jest.fn(),
+        validateDestination: jest.fn(() => true),
+        handleAcknowledgment: jest.fn(),
+        replayToClient: jest.fn(),
+        setDashboardCallback: jest.fn(),
+        dispose: jest.fn()
+    };
+}
+
+function createMockMessageValidator() {
+    return {
+        validate: jest.fn(() => ({ isValid: true, errors: [], warnings: [], result: {} })),
+        validatePayload: jest.fn(() => ({ isValid: true, errors: [], warnings: [] })),
+        createErrorResponse: jest.fn(() => ({})),
+        dispose: jest.fn()
+    };
+}
+
+function createMockMessagePersistenceService() {
+    return {
+        save: jest.fn(),
+        load: jest.fn(() => Promise.resolve([])),
+        getHistory: jest.fn(() => Promise.resolve([])),
+        clear: jest.fn(),
+        getStats: jest.fn(() => Promise.resolve({ totalMessages: 0, oldestMessage: new Date() })),
+        dispose: jest.fn()
+    };
+}
 
 // VS Code API mocking utilities
 export const mockVSCodeWorkspace = {
@@ -232,8 +543,8 @@ export const simulateWebSocketMessage = (client: any, message: any) => {
         type: 'message'
     };
     client.on.mock.calls
-        .filter(([event]) => event === 'message')
-        .forEach(([, handler]) => handler(messageEvent));
+        .filter(([event]: [string, any]) => event === 'message')
+        .forEach(([, handler]: [string, any]) => handler(messageEvent));
 };
 
 // Temporary workspace utilities
@@ -265,24 +576,24 @@ export const createTempFile = async (content: string, extension: string = '.txt'
 // Assertion helpers
 export const expectAgentState = (agent: Agent, expectedState: Partial<Agent>) => {
     expect(agent.status).toBe(expectedState.status);
-    if (expectedState.assignedTask !== undefined) {
-        expect(agent.assignedTask).toBe(expectedState.assignedTask);
+    if (expectedState.name !== undefined) {
+        expect(agent.name).toBe(expectedState.name);
     }
-    if (expectedState.capabilities) {
-        expect(agent.capabilities).toEqual(expect.arrayContaining(expectedState.capabilities));
+    if (expectedState.type !== undefined) {
+        expect(agent.type).toBe(expectedState.type);
     }
 };
 
 export const expectTaskState = (task: Task, expectedState: Partial<Task>) => {
     expect(task.status).toBe(expectedState.status);
-    if (expectedState.assignedAgent !== undefined) {
-        expect(task.assignedAgent).toBe(expectedState.assignedAgent);
+    if (expectedState.assignedTo !== undefined) {
+        expect(task.assignedTo).toBe(expectedState.assignedTo);
     }
     if (expectedState.priority) {
         expect(task.priority).toBe(expectedState.priority);
     }
-    if (expectedState.dependencies) {
-        expect(task.dependencies).toEqual(expect.arrayContaining(expectedState.dependencies));
+    if (expectedState.dependsOn) {
+        expect(task.dependsOn).toEqual(expect.arrayContaining(expectedState.dependsOn));
     }
 };
 
@@ -418,8 +729,7 @@ export const generateTestAgents = (count: number): Agent[] => {
     return Array.from({ length: count }, (_, i) => createMockAgentWithOverrides({
         id: `agent-${i}`,
         name: `Test Agent ${i}`,
-        type: i % 2 === 0 ? 'Frontend Specialist' : 'Backend Specialist',
-        capabilities: i % 2 === 0 ? ['frontend', 'react'] : ['backend', 'api']
+        type: i % 2 === 0 ? 'Frontend Specialist' : 'Backend Specialist'
     }));
 };
 

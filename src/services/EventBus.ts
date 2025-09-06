@@ -7,13 +7,33 @@ export class EventBus implements IEventBus {
     private readonly patternSubscriptions: Array<{ pattern: string, handler: (event: string, data?: any) => void, disposables: vscode.Disposable[] }> = [];
     private readonly listenerCounts: Map<string, number> = new Map();
     private readonly disposables: vscode.Disposable[] = [];
-    private readonly debugLogging: boolean = false;
+    private debugLogging = false;
 
     constructor(private loggingService?: ILoggingService) {
         // Enable debug logging if logging service is available and debug level is enabled
         if (this.loggingService?.isLevelEnabled('debug')) {
             this.debugLogging = true;
         }
+    }
+
+    setLoggingService(logger: ILoggingService): void {
+        this.loggingService = logger;
+        // Enable debug logging if debug level is enabled
+        this.updateDebugLogging();
+        
+        // Subscribe to configuration changes to update debug logging
+        if (this.loggingService) {
+            const disposable = this.loggingService.onDidChangeConfiguration?.(() => {
+                this.updateDebugLogging();
+            });
+            if (disposable) {
+                this.disposables.push(disposable);
+            }
+        }
+    }
+    
+    private updateDebugLogging(): void {
+        this.debugLogging = this.loggingService?.isLevelEnabled('debug') || false;
     }
 
     private getOrCreateEmitter(event: string): vscode.EventEmitter<any> {
@@ -125,7 +145,7 @@ export class EventBus implements IEventBus {
         return disposable;
     }
 
-    filter(event: string, predicate: (data?: any) => boolean): vscode.Event<any> {
+    filter(event: string, predicate: (data?: any) => boolean): { event: vscode.Event<any>, dispose: () => void } {
         this.logEvent(event, 'subscribe', { filter: true });
         
         const emitter = this.getOrCreateEmitter(event);
@@ -139,8 +159,19 @@ export class EventBus implements IEventBus {
         
         this.disposables.push(disposable);
         
-        // Return the filtered event stream
-        return filteredEmitter.event;
+        // Return the filtered event stream with disposal
+        return {
+            event: filteredEmitter.event,
+            dispose: () => {
+                disposable.dispose();
+                filteredEmitter.dispose();
+                // Remove from main disposables array
+                const index = this.disposables.indexOf(disposable);
+                if (index > -1) {
+                    this.disposables.splice(index, 1);
+                }
+            }
+        };
     }
 
     // Helper method for wildcard event patterns
@@ -177,8 +208,9 @@ export class EventBus implements IEventBus {
     }
 
     private matchesPattern(event: string, pattern: string): boolean {
-        // Simple wildcard matching - supports * for any characters
-        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+        // Escape regex meta-characters before expanding *
+        const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp('^' + escaped.replace(/\\\*/g, '.*') + '$');
         return regex.test(event);
     }
 

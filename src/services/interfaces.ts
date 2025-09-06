@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ConductorViewState, DashboardViewState, AgentDTO, TaskDTO } from '../types/ui';
-import { Task, TaskStatus, TaskValidationError, Agent } from '../agents/types';
+import { Task, TaskStatus, TaskValidationError, Agent, TaskConfig } from '../agents/types';
 
 // Service tokens for type-safe dependency resolution
 export const SERVICE_TOKENS = {
@@ -46,11 +46,15 @@ export interface IConfigurationService {
     update(key: string, value: any, target?: vscode.ConfigurationTarget): Promise<void>;
     onDidChange(callback: (e: vscode.ConfigurationChangeEvent) => void): vscode.Disposable;
     
+    // Validation
+    validateAll(): { isValid: boolean; errors: ValidationError[] };
+    
     // NofX specific configuration methods
     getMaxAgents(): number;
     getClaudePath(): string;
     isAutoAssignTasks(): boolean;
     isUseWorktrees(): boolean;
+    isShowAgentTerminalOnSpawn(): boolean;
     getTemplatesPath(): string;
     isPersistAgents(): boolean;
     getLogLevel(): string;
@@ -98,6 +102,9 @@ export interface ILoggingService {
     time(label: string): void;
     timeEnd(label: string): void;
     
+    // Configuration change notification
+    onDidChangeConfiguration?(callback: () => void): vscode.Disposable;
+    
     dispose(): void;
 }
 
@@ -109,7 +116,11 @@ export interface IEventBus {
     
     // Utility methods
     once(event: string, handler: (data?: any) => void): vscode.Disposable;
-    filter(event: string, predicate: (data?: any) => boolean): vscode.Event<any>;
+    filter(event: string, predicate: (data?: any) => boolean): { event: vscode.Event<any>, dispose: () => void };
+    subscribePattern(pattern: string, handler: (event: string, data?: any) => void): vscode.Disposable;
+    
+    // Configuration methods
+    setLoggingService(logger: ILoggingService): void;
     
     dispose(): void;
 }
@@ -146,6 +157,7 @@ export interface ITerminalManager {
     getTerminal(agentId: string): vscode.Terminal | undefined;
     disposeTerminal(agentId: string): void;
     initializeAgentTerminal(agent: any, workingDirectory?: string): Promise<void>;
+    createEphemeralTerminal(name: string): vscode.Terminal;
     onTerminalClosed: vscode.Event<vscode.Terminal>;
     dispose(): void;
 }
@@ -170,7 +182,7 @@ export interface IAgentLifecycleManager {
 }
 
 // Service lifetime options
-export type ServiceLifetime = 'singleton' | 'transient' | 'scoped';
+export type ServiceLifetime = 'singleton' | 'transient';
 
 // Service registration metadata
 export interface ServiceRegistration<T = any> {
@@ -187,14 +199,24 @@ export interface IContainer {
     resolve<T>(token: symbol): T;
     resolveOptional<T>(token: symbol): T | undefined;
     has(token: symbol): boolean;
-    createScope(): IContainer;
     setLoggingService(loggingService: ILoggingService): void;
-    dispose(): void;
+    createScope(): IContainer;
+    dispose(): Promise<void>;
 }
 
 // Disposable pattern for services
+// NOTE: Service dispose() methods MUST be synchronous to ensure proper cleanup order
+// and avoid race conditions during container disposal. If async cleanup is needed,
+// implement IAsyncDisposable instead.
 export interface IDisposable {
     dispose(): void;
+}
+
+// Async disposable pattern for services that need async cleanup
+// Services implementing this interface will be disposed after sync disposables
+// to ensure proper cleanup order and avoid race conditions.
+export interface IAsyncDisposable {
+    disposeAsync(): Promise<void>;
 }
 
 // Base interface for command handlers
@@ -234,7 +256,9 @@ export const CONFIG_KEYS = {
     CLAUDE_PATH: 'claudePath',         // Path to Claude Code CLI
     AUTO_ASSIGN_TASKS: 'autoAssignTasks', // Auto-assign tasks to agents
     AUTO_START: 'autoStart',           // Auto-start NofX on VS Code open
+    AUTO_OPEN_DASHBOARD: 'autoOpenDashboard', // Auto-open MessageFlowDashboard on activation
     USE_WORKTREES: 'useWorktrees',     // Use Git worktrees for agents
+    SHOW_AGENT_TERMINAL_ON_SPAWN: 'showAgentTerminalOnSpawn', // Show agent terminal when spawned
     // Future/internal use (not in package.json yet)
     TEMPLATES_PATH: 'templatesPath',   // (future) Custom templates path
     PERSIST_AGENTS: 'persistAgents',   // (future) Persist agent state
@@ -243,6 +267,7 @@ export const CONFIG_KEYS = {
     // Metrics configuration
     ENABLE_METRICS: 'enableMetrics',   // Enable metrics collection
     METRICS_OUTPUT_LEVEL: 'metricsOutputLevel', // Metrics output detail level
+    METRICS_RETENTION_HOURS: 'metricsRetentionHours', // Metrics retention hours
     TEST_MODE: 'testMode',             // Test mode flag
     CLAUDE_COMMAND_STYLE: 'claudeCommandStyle', // Claude command style
     // Orchestration service configuration
@@ -270,6 +295,7 @@ export interface IUIStateManager {
     getTaskStats(): { queued: number; validated: number; ready: number; assigned: number; inProgress: number; completed: number; failed: number; blocked: number; conflicted: number };
     getAgents(): AgentDTO[];
     getTasks(): TaskDTO[];
+    getTasksByStatus(status: string): TaskDTO[];
     dispose(): void;
 }
 
@@ -319,7 +345,7 @@ export interface IConductorViewModel {
 
 // Dashboard View Model interface
 export interface IDashboardViewModel {
-    getDashboardState(): DashboardViewState;
+    getDashboardState(): Promise<DashboardViewState>;
     handleCommand(command: string, data?: any): Promise<void>;
     applyFilter(filter: { messageType?: string; timeRange?: string; source?: string }): void;
     clearMessages(): void;
@@ -345,7 +371,9 @@ export interface ITaskReader {
 // Tree State Manager interface
 export interface ITreeStateManager {
     setTeamName(name: string): void;
+    getTeamName(): string;
     toggleSection(sectionId: string): void;
+    isSectionExpanded(id: string): boolean;
     selectItem(itemId: string): void;
     getAgentTreeItems(): any[];
     getTaskTreeItems(): any[];
@@ -396,6 +424,60 @@ export interface ICapabilityMatcher {
     dispose(): void;
 }
 
+// Task Queue interface for task management operations
+export interface ITaskQueue {
+    // Core task operations
+    addTask(config: TaskConfig): Task;
+    getTask(taskId: string): Task | undefined;
+    getTasks(): Task[];
+    getAllTasks(): Task[];
+    getPendingTasks(): Task[];
+    getActiveTasks(): Task[];
+    getActiveOrAssignedTasks(): Task[];
+    getQueuedTasks(): Task[];
+    getTasksForAgent(agentId: string): Task[];
+    getBlockedTasks(): Task[];
+    getDependentTasks(taskId: string): Task[];
+    
+    // Task lifecycle operations
+    assignNextTask(): boolean;
+    assignTask(taskId: string, agentId: string): Promise<boolean>;
+    completeTask(taskId: string): boolean;
+    failTask(taskId: string, reason?: string): void;
+    
+    // Task management operations
+    clearCompleted(): void;
+    clearAllTasks(): void;
+    
+    // Dependency operations
+    addTaskDependency(taskId: string, dependsOnTaskId: string): boolean;
+    removeTaskDependency(taskId: string, dependsOnTaskId: string): boolean;
+    
+    // Conflict resolution
+    resolveConflict(taskId: string, resolution: 'block' | 'allow' | 'merge'): boolean;
+    
+    // Validation
+    validateTask(config: TaskConfig): TaskValidationError[];
+    
+    // Statistics
+    getTaskStats(): { 
+        total: number; 
+        queued: number; 
+        ready: number; 
+        assigned: number; 
+        inProgress: number; 
+        completed: number; 
+        failed: number; 
+        blocked: number;
+        validated: number;
+    };
+    
+    // Event handling
+    readonly onTaskUpdate: vscode.Event<void>;
+    
+    dispose(): void;
+}
+
 // Task Dependency Manager interface for dependency and conflict management
 export interface ITaskDependencyManager {
     addDependency(taskId: string, dependsOnTaskId: string): boolean;
@@ -406,7 +488,7 @@ export interface ITaskDependencyManager {
     getReadyTasks(allTasks: Task[]): Task[];
     detectCycles(tasks: Task[]): string[][];
     checkConflicts(task: Task, activeTasks: Task[]): string[];
-    resolveConflict(taskId: string, resolution: 'block' | 'allow' | 'merge'): boolean;
+    resolveConflict(taskId: string, resolution: 'block' | 'allow' | 'merge', task?: Task): boolean;
     getDependentTasks(taskId: string): string[];
     getSoftDependents(taskId: string): string[];
     getDependencyGraph(): Record<string, string[]>;
@@ -549,14 +631,15 @@ export interface IMetricsService {
 export interface IConfigurationValidator {
     validateConfiguration(config: Record<string, any>): { isValid: boolean; errors: ValidationError[] };
     validateConfigurationKey(key: string, value: any): { isValid: boolean; errors: ValidationError[] };
+    validateNofXConfiguration(config: Record<string, any>): { isValid: boolean; errors: ValidationError[] };
     getValidationSchema(): any;
     getValidationErrors(): ValidationError[];
     dispose(): void;
 }
 
-// Configuration keys for metrics
+// Configuration keys for metrics - map to CONFIG_KEYS to avoid duplication
 export const METRICS_CONFIG_KEYS = {
-    ENABLE_METRICS: 'enableMetrics',
-    METRICS_OUTPUT_LEVEL: 'metricsOutputLevel',
-    METRICS_RETENTION_HOURS: 'metricsRetentionHours'
+    ENABLE_METRICS: CONFIG_KEYS.ENABLE_METRICS,
+    METRICS_OUTPUT_LEVEL: CONFIG_KEYS.METRICS_OUTPUT_LEVEL,
+    METRICS_RETENTION_HOURS: CONFIG_KEYS.METRICS_RETENTION_HOURS
 } as const;

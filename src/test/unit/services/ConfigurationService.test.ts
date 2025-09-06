@@ -1,14 +1,7 @@
 import { ConfigurationService } from '../../../services/ConfigurationService';
 import { IConfigurationValidator, ValidationError, IEventBus } from '../../../services/interfaces';
 import { createMockConfiguration } from '../../setup';
-
-// Mock VS Code
-jest.mock('vscode', () => ({
-    workspace: {
-        getConfiguration: jest.fn(),
-        onDidChangeConfiguration: jest.fn()
-    }
-}), { virtual: true });
+import * as vscode from 'vscode';
 
 describe('ConfigurationService', () => {
     let configService: ConfigurationService;
@@ -28,8 +21,8 @@ describe('ConfigurationService', () => {
             inspect: jest.fn()
         };
 
-        mockVSCode.workspace.getConfiguration.mockReturnValue(mockConfig);
-        mockVSCode.workspace.onDidChangeConfiguration.mockReturnValue({
+        (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue(mockConfig);
+        (vscode.workspace.onDidChangeConfiguration as jest.Mock).mockReturnValue({
             dispose: jest.fn()
         });
 
@@ -37,6 +30,7 @@ describe('ConfigurationService', () => {
         mockValidator = {
             validateConfiguration: jest.fn(),
             validateConfigurationKey: jest.fn(),
+            validateNofXConfiguration: jest.fn(),
             getValidationSchema: jest.fn(),
             getValidationErrors: jest.fn(),
             dispose: jest.fn()
@@ -49,6 +43,8 @@ describe('ConfigurationService', () => {
             unsubscribe: jest.fn(),
             once: jest.fn(),
             filter: jest.fn(),
+            subscribePattern: jest.fn(),
+            setLoggingService: jest.fn(),
             dispose: jest.fn()
         };
 
@@ -327,11 +323,11 @@ describe('ConfigurationService', () => {
             const callback = jest.fn();
             const mockDisposable = { dispose: jest.fn() };
             
-            mockVSCode.workspace.onDidChangeConfiguration.mockReturnValue(mockDisposable);
+            (vscode.workspace.onDidChangeConfiguration as jest.Mock).mockReturnValue(mockDisposable);
             
             const disposable = configService.onDidChange(callback);
             
-            expect(mockVSCode.workspace.onDidChangeConfiguration).toHaveBeenCalled();
+            expect(vscode.workspace.onDidChangeConfiguration).toHaveBeenCalled();
             expect(disposable).toBe(mockDisposable);
         });
 
@@ -341,7 +337,7 @@ describe('ConfigurationService', () => {
             };
             
             // Simulate configuration change
-            const changeHandler = mockVSCode.workspace.onDidChangeConfiguration.mock.calls[0][0];
+            const changeHandler = (vscode.workspace.onDidChangeConfiguration as jest.Mock).mock.calls[0][0];
             changeHandler(mockEvent);
             
             expect(mockEvent.affectsConfiguration).toHaveBeenCalledWith('nofx');
@@ -417,7 +413,7 @@ describe('ConfigurationService', () => {
     describe('Disposal', () => {
         it('should dispose properly', () => {
             const mockDisposable = { dispose: jest.fn() };
-            mockVSCode.workspace.onDidChangeConfiguration.mockReturnValue(mockDisposable);
+            (vscode.workspace.onDidChangeConfiguration as jest.Mock).mockReturnValue(mockDisposable);
             
             configService.dispose();
             

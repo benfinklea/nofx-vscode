@@ -26,7 +26,11 @@
     "automation"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onView:nofx.dev",
+    "onView:nofx.agents",
+    "onCommand:nofx.startConductor",
+    "onCommand:nofx.addAgent"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -170,6 +174,56 @@
         "command": "nofx.toggleMetrics",
         "title": "NofX: Toggle Metrics Collection",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "nofx.addTaskDependency",
+        "title": "NofX: Add Task Dependency",
+        "icon": "$(link)"
+      },
+      {
+        "command": "nofx.removeTaskDependency",
+        "title": "NofX: Remove Task Dependency",
+        "icon": "$(unlink)"
+      },
+      {
+        "command": "nofx.resolveTaskConflict",
+        "title": "NofX: Resolve Task Conflict",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "nofx.viewTaskDependencies",
+        "title": "NofX: View Task Dependencies",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "nofx.retryBlockedTask",
+        "title": "NofX: Retry Blocked Task",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "nofx.createTaskBatch",
+        "title": "NofX: Create Task Batch",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "nofx.resolveAllConflicts",
+        "title": "NofX: Resolve All Conflicts",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "nofx.openConductorPanel",
+        "title": "NofX: Open Conductor Panel",
+        "icon": "$(panel)"
+      },
+      {
+        "command": "nofx.debug.verifyCommands",
+        "title": "NofX: Debug - Verify Registered Commands",
+        "icon": "$(debug)"
+      },
+      {
+        "command": "nofx.focusAgentTerminal",
+        "title": "NofX: Focus Agent Terminal",
+        "icon": "$(terminal)"
       }
     ],
     "menus": {
@@ -198,7 +252,7 @@
         {
           "id": "nofx-conductor",
           "title": "NofX Conductor",
-          "icon": "media/conductor-icon.svg"
+          "icon": "media/robot-icon.svg"
         }
       ]
     },
@@ -318,6 +372,24 @@
           "type": "boolean",
           "default": false,
           "description": "Enable test mode for integration testing"
+        },
+        "nofx.metricsRetentionHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "maximum": 168,
+          "description": "Hours to retain metrics in memory"
+        },
+        "nofx.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "description": "Logging level for NofX extension output"
         }
       }
     },
@@ -332,34 +404,69 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "compile": "tsc -p ./tsconfig.build.json",
+    "watch": "tsc -watch -p ./tsconfig.build.json",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "jest",
     "test:unit": "jest --testPathPattern=unit",
     "test:integration": "jest --testPathPattern=integration",
+    "test:functional": "tsc -p ./tsconfig.test.json && node ./out/test/functional/runFunctionalTests.js",
+    "test:smoke": "jest --testPathPattern=CommandSmokeTests",
+    "test:e2e": "tsc -p ./tsconfig.test.json && node ./out/test/runTests.js",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:functional",
+    "test:ci": "npm run compile && npm run lint && npm run test:all",
+    "test:manual": "echo 'Opening manual test checklist...' && code test-extension.md",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "build": "npm run compile && vsce package",
-    "build:clean": "rm -f nofx-*.vsix && npm run build",
-    "package": "vsce package"
+    "test:coverage": "jest --coverage --coverageDirectory=coverage --coverageReporters=text,lcov,html",
+    "test:build": "npm run compile && jest --testPathPattern=build/BuildValidation",
+    "test:commands": "jest --testPathPattern=commands/CommandRegistration",
+    "test:services": "jest --testPathPattern=services/ContainerValidation",
+    "validate:build": "./scripts/validate-build.sh",
+    "validate:commands": "npm run test:commands",
+    "validate:services": "npm run test:services",
+    "validate:all": "npm run validate:build && npm run validate:commands && npm run validate:services",
+    "dev:setup": "./scripts/install-hooks.sh",
+    "dev:validate": "npm run compile && npm run validate:build --quiet",
+    "dev:clean": "rimraf out coverage nofx-*.vsix",
+    "dev:reset": "rimraf out coverage node_modules nofx-*.vsix && npm install && npm run compile",
+    "build": "npm run compile && npx vsce package",
+    "build:clean": "rimraf out nofx-*.vsix && npm run build",
+    "build:validate": "npm run compile && npm run validate:all && npm run build",
+    "build:ci": "npm run test:ci && npm run build:validate",
+    "hooks:install": "./scripts/install-hooks.sh",
+    "hooks:uninstall": "./scripts/install-hooks.sh uninstall",
+    "hooks:test": "./scripts/install-hooks.sh test",
+    "hooks:verify": "./scripts/verify-hooks.sh",
+    "hooks:verify:fix": "./scripts/verify-hooks.sh --fix",
+    "qa:full": "npm run compile && npm run lint && npm run test:all && npm run validate:all",
+    "qa:quick": "npm run compile && npm run validate:build",
+    "qa:pre-commit": "npm run compile && npm run validate:build --quiet",
+    "prepackage": "npm run compile",
+    "package": "npx vsce package",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/jest": "^29.5.8",
+    "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.6.0",
-    "@vscode/test-electron": "^2.3.8",
-    "@vscode/test-cli": "^0.0.4",
-    "@types/jest": "^29.5.8",
     "eslint": "^8.56.0",
+    "get-port": "^7.1.0",
+    "husky": "^9.1.7",
     "jest": "^29.7.0",
-    "ts-jest": "^29.1.1",
+    "jest-junit": "^16.0.0",
+    "mocha": "^11.7.2",
+    "rimraf": "^6.0.1",
     "sinon": "^17.0.1",
     "supertest": "^6.3.3",
     "tmp": "^0.2.3",
+    "ts-jest": "^29.1.1",
     "typescript": "^5.3.3"
   },
   "dependencies": {

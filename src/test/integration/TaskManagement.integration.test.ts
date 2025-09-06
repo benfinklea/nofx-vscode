@@ -54,6 +54,8 @@ describe('Task Management Integration Tests', () => {
             unsubscribe: jest.fn(),
             once: jest.fn() as any,
             filter: jest.fn(),
+            subscribePattern: jest.fn() as any,
+            setLoggingService: jest.fn(),
             dispose: jest.fn()
         };
 
@@ -81,10 +83,12 @@ describe('Task Management Integration Tests', () => {
             getAll: jest.fn(),
             update: jest.fn(),
             onDidChange: jest.fn() as any,
+            validateAll: jest.fn(() => ({ isValid: true, errors: [] })),
             getMaxAgents: jest.fn(() => 3),
             getClaudePath: jest.fn(() => 'claude'),
             isAutoAssignTasks: jest.fn(() => true),
             isUseWorktrees: jest.fn(() => true),
+            isShowAgentTerminalOnSpawn: jest.fn(() => true),
             getTemplatesPath: jest.fn(() => '.nofx/templates'),
             isPersistAgents: jest.fn(() => true),
             getLogLevel: jest.fn(() => 'info'),

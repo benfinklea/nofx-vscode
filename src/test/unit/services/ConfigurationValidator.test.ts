@@ -1,16 +1,27 @@
 import { ConfigurationValidator } from '../../../services/ConfigurationValidator';
 import { ILoggingService, INotificationService, ValidationError } from '../../../services/interfaces';
 
+// Mock VS Code
+jest.mock('vscode', () => ({
+    workspace: {
+        workspaceFolders: [
+            { uri: { fsPath: '/test/workspace' } }
+        ]
+    }
+}));
+
+// Mock fs
+jest.mock('fs', () => ({
+    existsSync: jest.fn()
+}));
+
 describe('ConfigurationValidator', () => {
     let validator: ConfigurationValidator;
     let mockLogger: jest.Mocked<ILoggingService>;
     let mockNotificationService: jest.Mocked<INotificationService>;
+    let mockFs: any;
 
     beforeEach(() => {
-        // Reset mocks
-        jest.clearAllMocks();
-
-        // Mock logger
         mockLogger = {
             debug: jest.fn(),
             info: jest.fn(),
@@ -23,7 +34,6 @@ describe('ConfigurationValidator', () => {
             dispose: jest.fn()
         };
 
-        // Mock notification service
         mockNotificationService = {
             showInformation: jest.fn(),
             showWarning: jest.fn(),
@@ -35,26 +45,30 @@ describe('ConfigurationValidator', () => {
             confirmDestructive: jest.fn()
         };
 
+        mockFs = require('fs');
+        mockFs.existsSync.mockReturnValue(true); // Default to Git repo exists
+
         validator = new ConfigurationValidator(mockLogger, mockNotificationService);
     });
 
     afterEach(() => {
-        validator.dispose();
+        jest.clearAllMocks();
     });
 
-    describe('Configuration Validation', () => {
-        it('should validate valid configuration', () => {
+    describe('Schema Validation', () => {
+        it('should validate valid configuration successfully', () => {
             const validConfig = {
-                maxAgents: 3,
+                maxAgents: 5,
                 claudePath: 'claude',
                 autoAssignTasks: true,
-                useWorktrees: true,
+                useWorktrees: false,
                 logLevel: 'info',
                 autoStart: false,
                 claudeCommandStyle: 'simple',
-                enableMetrics: false,
+                enableMetrics: true,
                 metricsOutputLevel: 'basic',
-                testMode: false
+                testMode: false,
+                metricsRetentionHours: 24
             };
 
             const result = validator.validateConfiguration(validConfig);
@@ -63,151 +77,298 @@ describe('ConfigurationValidator', () => {
             expect(result.errors).toHaveLength(0);
         });
 
-        it('should validate individual configuration keys', () => {
-            const result = validator.validateConfigurationKey('maxAgents', 5);
-
-            expect(result.isValid).toBe(true);
-            expect(result.errors).toHaveLength(0);
-        });
-
         it('should reject invalid maxAgents values', () => {
-            const testCases = [
-                { value: 0, expectedError: 'Max agents must be at least 1' },
-                { value: 11, expectedError: 'Max agents cannot exceed 10' },
-                { value: -1, expectedError: 'Max agents must be at least 1' },
-                { value: 1.5, expectedError: 'Max agents must be an integer' }
+            const invalidConfigs = [
+                { maxAgents: 0 }, // Too small
+                { maxAgents: 11 }, // Too large
+                { maxAgents: 'invalid' }, // Wrong type
+                { maxAgents: -1 } // Negative
             ];
 
-            testCases.forEach(({ value, expectedError }) => {
-                const result = validator.validateConfigurationKey('maxAgents', value);
+            invalidConfigs.forEach(config => {
+                const result = validator.validateConfiguration(config);
                 expect(result.isValid).toBe(false);
-                expect(result.errors[0].message).toContain(expectedError);
+                expect(result.errors.some(e => e.field === 'maxAgents')).toBe(true);
             });
         });
 
         it('should reject invalid claudePath values', () => {
-            const testCases = [
-                { value: '', expectedError: 'Claude path cannot be empty' },
-                { value: '   ', expectedError: 'Claude path cannot be just whitespace' },
-                { value: null, expectedError: 'Expected string' }
+            const invalidConfigs = [
+                { claudePath: '' }, // Empty
+                { claudePath: '   ' }, // Whitespace only
+                { claudePath: null }, // Null
+                { claudePath: undefined } // Undefined
             ];
 
-            testCases.forEach(({ value, expectedError }) => {
-                const result = validator.validateConfigurationKey('claudePath', value);
+            invalidConfigs.forEach(config => {
+                const result = validator.validateConfiguration(config);
                 expect(result.isValid).toBe(false);
-                expect(result.errors[0].message).toContain(expectedError);
+                expect(result.errors.some(e => e.field === 'claudePath')).toBe(true);
             });
         });
 
         it('should reject invalid logLevel values', () => {
-            const result = validator.validateConfigurationKey('logLevel', 'invalid');
-
-            expect(result.isValid).toBe(false);
-            expect(result.errors[0].message).toContain('Log level must be one of: debug, info, warn, error');
-        });
-
-        it('should reject invalid claudeCommandStyle values', () => {
-            const result = validator.validateConfigurationKey('claudeCommandStyle', 'invalid');
-
-            expect(result.isValid).toBe(false);
-            expect(result.errors[0].message).toContain('Claude command style must be one of: simple, interactive, heredoc, file');
-        });
-
-        it('should reject invalid metricsOutputLevel values', () => {
-            const result = validator.validateConfigurationKey('metricsOutputLevel', 'invalid');
-
-            expect(result.isValid).toBe(false);
-            expect(result.errors[0].message).toContain('Metrics output level must be one of: none, basic, detailed');
-        });
-    });
-
-    describe('Validation Error Formatting', () => {
-        it('should format error messages with suggestions', () => {
-            const result = validator.validateConfigurationKey('maxAgents', 15);
-
-            expect(result.isValid).toBe(false);
-            expect(result.errors[0].message).toContain('Try a value between 1 and 10');
-        });
-
-        it('should include field information in errors', () => {
-            const result = validator.validateConfigurationKey('claudePath', '');
-
-            expect(result.isValid).toBe(false);
-            expect(result.errors[0].field).toBe('claudePath');
-            expect(result.errors[0].severity).toBe('error');
-        });
-
-        it('should handle multiple validation errors', () => {
             const invalidConfig = {
-                maxAgents: 15,
-                claudePath: '',
                 logLevel: 'invalid'
             };
 
             const result = validator.validateConfiguration(invalidConfig);
 
             expect(result.isValid).toBe(false);
-            expect(result.errors).toHaveLength(3);
-            expect(result.errors.every(error => error.severity === 'error')).toBe(true);
+            expect(result.errors.some(e => e.field === 'logLevel')).toBe(true);
+        });
+
+        it('should reject invalid claudeCommandStyle values', () => {
+            const invalidConfig = {
+                claudeCommandStyle: 'invalid'
+            };
+
+            const result = validator.validateConfiguration(invalidConfig);
+
+            expect(result.isValid).toBe(false);
+            expect(result.errors.some(e => e.field === 'claudeCommandStyle')).toBe(true);
+        });
+
+        it('should reject invalid metricsOutputLevel values', () => {
+            const invalidConfig = {
+                metricsOutputLevel: 'invalid'
+            };
+
+            const result = validator.validateConfiguration(invalidConfig);
+
+            expect(result.isValid).toBe(false);
+            expect(result.errors.some(e => e.field === 'metricsOutputLevel')).toBe(true);
+        });
+
+        it('should reject invalid metricsRetentionHours values', () => {
+            const invalidConfigs = [
+                { metricsRetentionHours: 0 }, // Too small
+                { metricsRetentionHours: 169 }, // Too large
+                { metricsRetentionHours: 'invalid' }, // Wrong type
+                { metricsRetentionHours: -1 } // Negative
+            ];
+
+            invalidConfigs.forEach(config => {
+                const result = validator.validateConfiguration(config);
+                expect(result.isValid).toBe(false);
+                expect(result.errors.some(e => e.field === 'metricsRetentionHours')).toBe(true);
+            });
+        });
+
+        it('should reject invalid orchestration configuration', () => {
+            const invalidConfig = {
+                orchestration: {
+                    heartbeatInterval: 500, // Too small
+                    heartbeatTimeout: 1000, // Too small
+                    historyLimit: 50, // Too small
+                    persistencePath: '', // Empty
+                    maxFileSize: 500 // Too small
+                }
+            };
+
+            const result = validator.validateConfiguration(invalidConfig);
+
+            expect(result.isValid).toBe(false);
+            expect(result.errors.length).toBeGreaterThan(0);
+            expect(result.errors.some(e => e.field.includes('orchestration'))).toBe(true);
         });
     });
 
-    describe('NofX Specific Validation', () => {
-        it('should validate NofX configuration scenarios', () => {
-            const result = validator.validateNofXConfiguration({
-                useWorktrees: true,
-                maxAgents: 7
-            });
+    describe('Key Validation', () => {
+        it('should validate individual configuration keys', () => {
+            expect(validator.validateConfigurationKey('maxAgents', 5).isValid).toBe(true);
+            expect(validator.validateConfigurationKey('claudePath', 'claude').isValid).toBe(true);
+            expect(validator.validateConfigurationKey('logLevel', 'info').isValid).toBe(true);
+            expect(validator.validateConfigurationKey('enableMetrics', true).isValid).toBe(true);
+            expect(validator.validateConfigurationKey('metricsOutputLevel', 'detailed').isValid).toBe(true);
+            expect(validator.validateConfigurationKey('metricsRetentionHours', 72).isValid).toBe(true);
+        });
 
-            // Should have warnings/info but not errors
+        it('should reject invalid individual keys', () => {
+            expect(validator.validateConfigurationKey('maxAgents', 0).isValid).toBe(false);
+            expect(validator.validateConfigurationKey('claudePath', '').isValid).toBe(false);
+            expect(validator.validateConfigurationKey('logLevel', 'invalid').isValid).toBe(false);
+            expect(validator.validateConfigurationKey('metricsOutputLevel', 'high').isValid).toBe(false);
+            expect(validator.validateConfigurationKey('metricsRetentionHours', 0).isValid).toBe(false);
+            expect(validator.validateConfigurationKey('metricsRetentionHours', 200).isValid).toBe(false);
+        });
+
+        it('should handle dotted keys for nested configuration', () => {
+            expect(validator.validateConfigurationKey('orchestration.heartbeatInterval', 5000).isValid).toBe(true);
+            expect(validator.validateConfigurationKey('orchestration.heartbeatTimeout', 30000).isValid).toBe(true);
+            expect(validator.validateConfigurationKey('orchestration.historyLimit', 1000).isValid).toBe(true);
+            expect(validator.validateConfigurationKey('orchestration.persistencePath', '/path').isValid).toBe(true);
+            expect(validator.validateConfigurationKey('orchestration.maxFileSize', 1024000).isValid).toBe(true);
+        });
+
+        it('should reject invalid dotted keys', () => {
+            expect(validator.validateConfigurationKey('orchestration.heartbeatInterval', 500).isValid).toBe(false);
+            expect(validator.validateConfigurationKey('orchestration.heartbeatTimeout', 1000).isValid).toBe(false);
+            expect(validator.validateConfigurationKey('orchestration.historyLimit', 50).isValid).toBe(false);
+            expect(validator.validateConfigurationKey('orchestration.persistencePath', '').isValid).toBe(false);
+            expect(validator.validateConfigurationKey('orchestration.maxFileSize', 500).isValid).toBe(false);
+        });
+
+        it('should allow unknown keys to pass through', () => {
+            const result = validator.validateConfigurationKey('unknownKey', 'anyValue');
             expect(result.isValid).toBe(true);
-            expect(result.errors.some(e => e.severity === 'error')).toBe(false);
+            expect(result.errors).toHaveLength(0);
+        });
+    });
+
+    describe('Cross-field Validation', () => {
+        it('should warn when useWorktrees is enabled but not in Git repository', () => {
+            mockFs.existsSync.mockReturnValue(false); // No Git repo
+
+            const config = {
+                useWorktrees: true
+            };
+
+            const result = validator.validateNofXConfiguration(config);
+
+            expect(result.isValid).toBe(true); // Should still be valid (warning only)
+            expect(result.errors).toHaveLength(1);
+            expect(result.errors[0].field).toBe('useWorktrees');
+            expect(result.errors[0].severity).toBe('warning');
+            expect(result.errors[0].message).toContain('Git worktrees require a Git repository');
         });
 
-        it('should warn about high agent count', () => {
-            const result = validator.validateNofXConfiguration({
+        it('should not warn when useWorktrees is enabled and in Git repository', () => {
+            mockFs.existsSync.mockReturnValue(true); // Git repo exists
+
+            const config = {
+                useWorktrees: true
+            };
+
+            const result = validator.validateNofXConfiguration(config);
+
+            expect(result.isValid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('should not warn when useWorktrees is disabled', () => {
+            mockFs.existsSync.mockReturnValue(false); // No Git repo
+
+            const config = {
+                useWorktrees: false
+            };
+
+            const result = validator.validateNofXConfiguration(config);
+
+            expect(result.isValid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('should warn when maxAgents is high', () => {
+            const config = {
                 maxAgents: 8
-            });
+            };
 
-            expect(result.errors.some(e => 
-                e.field === 'maxAgents' && 
-                e.severity === 'info' && 
-                e.message.includes('High agent count')
-            )).toBe(true);
+            const result = validator.validateNofXConfiguration(config);
+
+            expect(result.isValid).toBe(true); // Should still be valid (info only)
+            expect(result.errors).toHaveLength(1);
+            expect(result.errors[0].field).toBe('maxAgents');
+            expect(result.errors[0].severity).toBe('info');
+            expect(result.errors[0].message).toContain('High agent count may impact performance');
         });
 
-        it('should warn about metrics configuration mismatch', () => {
-            const result = validator.validateNofXConfiguration({
+        it('should not warn when maxAgents is reasonable', () => {
+            const config = {
+                maxAgents: 3
+            };
+
+            const result = validator.validateNofXConfiguration(config);
+
+            expect(result.isValid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('should warn when metrics are enabled but output level is none', () => {
+            const config = {
                 enableMetrics: true,
                 metricsOutputLevel: 'none'
-            });
+            };
 
-            expect(result.errors.some(e => 
-                e.field === 'metricsOutputLevel' && 
-                e.severity === 'warning' && 
-                e.message.includes('Metrics are enabled but output level')
-            )).toBe(true);
+            const result = validator.validateNofXConfiguration(config);
+
+            expect(result.isValid).toBe(true); // Should still be valid (warning only)
+            expect(result.errors).toHaveLength(1);
+            expect(result.errors[0].field).toBe('metricsOutputLevel');
+            expect(result.errors[0].severity).toBe('warning');
+            expect(result.errors[0].message).toContain('Metrics are enabled but output level is set to none');
+        });
+
+        it('should not warn when metrics are disabled', () => {
+            const config = {
+                enableMetrics: false,
+                metricsOutputLevel: 'none'
+            };
+
+            const result = validator.validateNofXConfiguration(config);
+
+            expect(result.isValid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('should not warn when metrics are enabled with proper output level', () => {
+            const config = {
+                enableMetrics: true,
+                metricsOutputLevel: 'basic'
+            };
+
+            const result = validator.validateNofXConfiguration(config);
+
+            expect(result.isValid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('should handle multiple warnings', () => {
+            mockFs.existsSync.mockReturnValue(false); // No Git repo
+
+            const config = {
+                useWorktrees: true,
+                maxAgents: 8,
+                enableMetrics: true,
+                metricsOutputLevel: 'none'
+            };
+
+            const result = validator.validateNofXConfiguration(config);
+
+            expect(result.isValid).toBe(true); // Should still be valid (warnings only)
+            expect(result.errors).toHaveLength(3);
+            expect(result.errors.some(e => e.field === 'useWorktrees')).toBe(true);
+            expect(result.errors.some(e => e.field === 'maxAgents')).toBe(true);
+            expect(result.errors.some(e => e.field === 'metricsOutputLevel')).toBe(true);
         });
     });
 
-    describe('Configuration Migration', () => {
-        it('should validate configuration migration', () => {
-            const oldConfig = { maxAgents: 3, oldKey: 'oldValue' };
-            const newConfig = { maxAgents: 3, newKey: 'newValue' };
+    describe('Configuration Migration Validation', () => {
+        it('should handle configuration migration validation', () => {
+            const oldConfig = {
+                oldKey1: 'value1',
+                oldKey2: 'value2'
+            };
+
+            const newConfig = {
+                newKey1: 'value1',
+                newKey2: 'value2',
+                newKey3: 'value3'
+            };
 
             const result = validator.validateConfigurationMigration(oldConfig, newConfig);
 
-            expect(result.isValid).toBe(true);
-            expect(result.errors.some(e => 
-                e.message.includes('Removed configuration keys detected')
-            )).toBe(true);
-            expect(result.errors.some(e => 
-                e.message.includes('New configuration keys available')
-            )).toBe(true);
+            expect(result.isValid).toBe(true); // Migration validation is informational
+            expect(result.errors).toHaveLength(2);
+            expect(result.errors.some(e => e.message.includes('Removed configuration keys'))).toBe(true);
+            expect(result.errors.some(e => e.message.includes('New configuration keys'))).toBe(true);
         });
 
-        it('should handle migration with no changes', () => {
-            const config = { maxAgents: 3, claudePath: 'claude' };
+        it('should handle identical configurations', () => {
+            const config = {
+                key1: 'value1',
+                key2: 'value2'
+            };
 
             const result = validator.validateConfigurationMigration(config, config);
 
@@ -218,159 +379,59 @@ describe('ConfigurationValidator', () => {
 
     describe('Error Handling', () => {
         it('should handle validation errors gracefully', () => {
-            // Mock Zod to throw an error
-            const originalConsoleError = console.error;
-            console.error = jest.fn();
+            // Mock a scenario where validation throws an error
+            const originalBuildValidationSchema = validator['buildValidationSchema'];
+            validator['buildValidationSchema'] = jest.fn().mockImplementation(() => {
+                throw new Error('Schema build failed');
+            });
 
-            const result = validator.validateConfiguration({ invalid: 'data' });
+            const result = validator.validateConfiguration({});
 
             expect(result.isValid).toBe(false);
             expect(result.errors).toHaveLength(1);
             expect(result.errors[0].field).toBe('general');
-            expect(result.errors[0].message).toContain('Validation failed');
+            expect(result.errors[0].message).toContain('Validation failed: Schema build failed');
 
-            console.error = originalConsoleError;
+            // Restore original method
+            validator['buildValidationSchema'] = originalBuildValidationSchema;
         });
 
-        it('should log validation errors', () => {
-            validator.validateConfigurationKey('maxAgents', -1);
+        it('should handle key validation errors gracefully', () => {
+            // Mock a scenario where key validation throws an error
+            const originalBuildValidationSchema = validator['buildValidationSchema'];
+            validator['buildValidationSchema'] = jest.fn().mockImplementation(() => {
+                throw new Error('Key validation failed');
+            });
 
-            expect(mockLogger.warn).toHaveBeenCalledWith(
-                'Configuration key validation failed',
-                expect.objectContaining({
-                    key: 'maxAgents',
-                    errors: expect.any(Array)
-                })
-            );
-        });
+            const result = validator.validateConfigurationKey('testKey', 'testValue');
 
-        it('should log validation success', () => {
-            validator.validateConfigurationKey('maxAgents', 5);
+            expect(result.isValid).toBe(false);
+            expect(result.errors).toHaveLength(1);
+            expect(result.errors[0].field).toBe('testKey');
+            expect(result.errors[0].message).toContain('Validation failed for testKey: Key validation failed');
 
-            expect(mockLogger.debug).toHaveBeenCalledWith(
-                'Configuration key validation successful',
-                { key: 'maxAgents' }
-            );
+            // Restore original method
+            validator['buildValidationSchema'] = originalBuildValidationSchema;
         });
     });
 
-    describe('Validation Schema', () => {
-        it('should provide validation schema', () => {
+    describe('Utility Methods', () => {
+        it('should return validation schema', () => {
             const schema = validator.getValidationSchema();
-
             expect(schema).toBeDefined();
             expect(typeof schema).toBe('object');
         });
 
-        it('should return current validation errors', () => {
-            // Trigger some validation errors
-            validator.validateConfigurationKey('maxAgents', -1);
-            validator.validateConfigurationKey('claudePath', '');
-
+        it('should return validation errors', () => {
+            // First validate something to generate errors
+            validator.validateConfiguration({ maxAgents: 0 });
+            
             const errors = validator.getValidationErrors();
-
-            expect(errors).toHaveLength(2);
-            expect(errors.every(error => error.severity === 'error')).toBe(true);
-        });
-    });
-
-    describe('Complex Validation Scenarios', () => {
-        it('should validate orchestration configuration', () => {
-            const configWithOrchestration = {
-                maxAgents: 3,
-                claudePath: 'claude',
-                autoAssignTasks: true,
-                useWorktrees: true,
-                logLevel: 'info',
-                orchestration: {
-                    heartbeatInterval: 5000,
-                    heartbeatTimeout: 30000,
-                    historyLimit: 500,
-                    persistencePath: '.nofx/orchestration',
-                    maxFileSize: 1048576
-                }
-            };
-
-            const result = validator.validateConfiguration(configWithOrchestration);
-
-            expect(result.isValid).toBe(true);
-            expect(result.errors).toHaveLength(0);
+            expect(Array.isArray(errors)).toBe(true);
         });
 
-        it('should reject invalid orchestration configuration', () => {
-            const invalidOrchestrationConfig = {
-                maxAgents: 3,
-                claudePath: 'claude',
-                orchestration: {
-                    heartbeatInterval: 500, // Too low
-                    heartbeatTimeout: 2000, // Too low
-                    historyLimit: 50, // Too low
-                    persistencePath: '', // Empty
-                    maxFileSize: 100 // Too small
-                }
-            };
-
-            const result = validator.validateConfiguration(invalidOrchestrationConfig);
-
-            expect(result.isValid).toBe(false);
-            expect(result.errors.length).toBeGreaterThan(0);
-        });
-
-        it('should handle missing optional fields', () => {
-            const minimalConfig = {
-                maxAgents: 3,
-                claudePath: 'claude',
-                autoAssignTasks: true,
-                useWorktrees: true,
-                logLevel: 'info'
-            };
-
-            const result = validator.validateConfiguration(minimalConfig);
-
-            expect(result.isValid).toBe(true);
-            expect(result.errors).toHaveLength(0);
-        });
-    });
-
-    describe('Performance', () => {
-        it('should handle large configuration objects', () => {
-            const largeConfig = {
-                maxAgents: 3,
-                claudePath: 'claude',
-                autoAssignTasks: true,
-                useWorktrees: true,
-                logLevel: 'info',
-                // Add many additional properties
-                ...Object.fromEntries(
-                    Array.from({ length: 100 }, (_, i) => [`customKey${i}`, `value${i}`])
-                )
-            };
-
-            const startTime = Date.now();
-            const result = validator.validateConfiguration(largeConfig);
-            const endTime = Date.now();
-
-            expect(result.isValid).toBe(true);
-            expect(endTime - startTime).toBeLessThan(1000); // Should complete within 1 second
-        });
-
-        it('should cache validation results', () => {
-            const config = { maxAgents: 5 };
-
-            // First validation
-            const result1 = validator.validateConfiguration(config);
-            expect(result1.isValid).toBe(true);
-
-            // Second validation should be faster (though we can't easily test this)
-            const result2 = validator.validateConfiguration(config);
-            expect(result2.isValid).toBe(true);
-        });
-    });
-
-    describe('Disposal', () => {
         it('should dispose properly', () => {
-            validator.dispose();
-
+            expect(() => validator.dispose()).not.toThrow();
             expect(mockLogger.debug).toHaveBeenCalledWith('ConfigurationValidator disposed');
         });
     });

@@ -61,6 +61,11 @@ export class TaskQueue implements ITaskReader {
         this.configService = configService;
         this.taskStateMachine = taskStateMachine;
         this.priorityQueue = priorityQueue;
+        
+        // If we have both priorityQueue and taskStateMachine, inject the state machine
+        if (this.priorityQueue && this.taskStateMachine && 'taskStateMachine' in this.priorityQueue) {
+            (this.priorityQueue as any).taskStateMachine = this.taskStateMachine;
+        }
         this.capabilityMatcher = capabilityMatcher;
         this.dependencyManager = dependencyManager;
         this.metricsService = metricsService;
@@ -360,6 +365,11 @@ export class TaskQueue implements ITaskReader {
             }
             this._onTaskUpdate.fire();
 
+            // Publish TASK_ASSIGNED event
+            if (this.eventBus) {
+                this.eventBus.publish(DOMAIN_EVENTS.TASK_ASSIGNED, { taskId: task.id, agentId: agent.id, task });
+            }
+
             this.loggingService?.info(`Executing task on agent: ${agent.name}`);
             
             // Execute task on agent
@@ -491,7 +501,7 @@ export class TaskQueue implements ITaskReader {
         this.metricsService?.incrementCounter('tasks_completed', { 
             priority: task.priority,
             duration: task.completedAt && task.createdAt ? 
-                (task.completedAt.getTime() - task.createdAt.getTime()) : 0
+                String(task.completedAt.getTime() - task.createdAt.getTime()) : '0'
         });
 
         this._onTaskUpdate.fire();
@@ -690,6 +700,11 @@ export class TaskQueue implements ITaskReader {
 
         this._onTaskUpdate.fire();
 
+        // Publish TASK_ASSIGNED event
+        if (this.eventBus) {
+            this.eventBus.publish(DOMAIN_EVENTS.TASK_ASSIGNED, { taskId: task.id, agentId: agentId, task });
+        }
+
         this.loggingService?.info(`Executing task ${taskId} on agent ${agentId}`);
         
         try {
@@ -736,8 +751,8 @@ export class TaskQueue implements ITaskReader {
             
             // Revert via state machine on failure
             if (this.taskStateMachine) {
-                this.taskStateMachine.transition(task, 'ready');
-                if (this.priorityQueue) {
+                const transitionErrors = this.taskStateMachine.transition(task, 'ready');
+                if (transitionErrors.length === 0 && this.priorityQueue) {
                     // Use moveToReady helper to cleanly migrate tasks
                     this.priorityQueue.moveToReady(task);
                 }
@@ -821,27 +836,21 @@ export class TaskQueue implements ITaskReader {
             return false;
         }
 
-        const success = this.dependencyManager.resolveConflict(taskId, resolution);
-        if (success) {
-            const task = this.tasks.get(taskId);
-            if (task && task.status === 'blocked') {
-                if (resolution === 'allow' || resolution === 'merge') {
-                    // Clear conflict fields and transition to ready
-                    task.conflictsWith = [];
-                    task.blockedBy = [];
-                    
-                    // Try to transition to ready if conflicts are resolved
-                    if (this.taskStateMachine) {
-                        const transitionErrors = this.taskStateMachine.transition(task, 'ready');
-                        if (transitionErrors.length === 0 && this.priorityQueue) {
-                            // Use moveToReady helper to cleanly migrate tasks
-                            this.priorityQueue.moveToReady(task);
-                            this.tryAssignTasks();
-                        }
+        const task = this.tasks.get(taskId);
+        const success = this.dependencyManager.resolveConflict(taskId, resolution, task);
+        if (success && task && task.status === 'blocked') {
+            if (resolution === 'allow' || resolution === 'merge') {
+                // Try to transition to ready if conflicts are resolved
+                if (this.taskStateMachine) {
+                    const transitionErrors = this.taskStateMachine.transition(task, 'ready');
+                    if (transitionErrors.length === 0 && this.priorityQueue) {
+                        // Use moveToReady helper to cleanly migrate tasks
+                        this.priorityQueue.moveToReady(task);
+                        this.tryAssignTasks();
                     }
                 }
-                // For 'block' resolution, leave task blocked and do not clear fields
             }
+            // For 'block' resolution, leave task blocked and do not clear fields
         }
 
         return success;
@@ -1001,6 +1010,25 @@ export class TaskQueue implements ITaskReader {
     }
 
     /**
+     * Helper method that performs both state transition to ready and enqueuing
+     * This ensures TASK_READY events are properly emitted and validation is applied
+     */
+    private makeReady(task: Task): boolean {
+        if (!this.taskStateMachine || !this.priorityQueue) {
+            return false;
+        }
+        
+        const transitionErrors = this.taskStateMachine.transition(task, 'ready');
+        if (transitionErrors.length === 0) {
+            this.priorityQueue.moveToReady(task);
+            return true;
+        }
+        
+        this.loggingService?.warn(`Failed to make task ${task.id} ready:`, transitionErrors);
+        return false;
+    }
+
+    /**
      * Recomputes task priority with soft dependency adjustments
      */
     private recomputeTaskPriorityWithSoftDeps(task: Task): void {
@@ -1019,6 +1047,13 @@ export class TaskQueue implements ITaskReader {
             // Update the task's priority in the queue
             this.priorityQueue.updatePriority(task.id, newPriority);
             this.loggingService?.debug(`Task ${task.id} priority adjusted by ${softDepAdjustment} due to soft dependencies, new priority: ${newPriority}`);
+            
+            // Publish priority updated event
+            this.eventBus?.publish(DOMAIN_EVENTS.TASK_PRIORITY_UPDATED, {
+                taskId: task.id,
+                oldPriority: basePriority,
+                newPriority: newPriority
+            });
             
             // Publish event when soft dependencies are satisfied (positive adjustment)
             if (softDepAdjustment > 0) {

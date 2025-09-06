@@ -299,7 +299,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
     /**
      * Resolves a conflict for a task
      */
-    resolveConflict(taskId: string, resolution: 'block' | 'allow' | 'merge'): boolean {
+    resolveConflict(taskId: string, resolution: 'block' | 'allow' | 'merge', task?: Task): boolean {
         const conflict = this.conflicts.get(taskId);
         if (!conflict) {
             return false;
@@ -312,15 +312,19 @@ export class TaskDependencyManager implements ITaskDependencyManager {
                 this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_DECISION, { taskId, resolution });
                 break;
             case 'allow':
+            case 'merge':
                 // Allow the task to proceed (remove from conflicts)
                 this.conflicts.delete(taskId);
-                this.logger.info(`Resolved conflict for task ${taskId} by allowing`);
-                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, { taskId, resolution });
-                break;
-            case 'merge':
-                // Merge with conflicting tasks (complex logic would go here)
-                this.conflicts.delete(taskId);
-                this.logger.info(`Resolved conflict for task ${taskId} by merging`);
+                
+                // Update task fields if task is provided
+                if (task) {
+                    // Clear conflict-related fields
+                    task.conflictsWith = [];
+                    // Remove conflict-related blockedBy entries
+                    task.blockedBy = (task.blockedBy || []).filter(id => !conflict.conflictingTasks.includes(id));
+                }
+                
+                this.logger.info(`Resolved conflict for task ${taskId} by ${resolution}`);
                 this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, { taskId, resolution });
                 break;
         }
@@ -446,25 +450,6 @@ export class TaskDependencyManager implements ITaskDependencyManager {
         return [];
     }
 
-    /**
-     * Builds the cycle path from the cycle start to the current task
-     */
-    private buildCyclePath(cycleStart: string, currentTask: string): string[] {
-        const path: string[] = [cycleStart];
-        let current = currentTask;
-
-        while (current !== cycleStart) {
-            path.push(current);
-            const dependencies = this.dependencyGraph[current] || [];
-            if (dependencies.length > 0) {
-                current = dependencies[0]; // Take first dependency (simplified)
-            } else {
-                break;
-            }
-        }
-
-        return path;
-    }
 
     /**
      * Builds precise cycle path from recursion stack

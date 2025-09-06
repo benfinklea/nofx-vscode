@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ConductorViewState } from '../types/ui';
+import { ConductorViewState, WEBVIEW_COMMANDS } from '../types/ui';
 import { IWebviewHost } from '../services/interfaces';
 
 export class ConductorTemplate {
@@ -14,7 +14,7 @@ export class ConductorTemplate {
             vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'chat.js')
         );
         const styleUri = webviewHost.asWebviewUri(
-            vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'chat.css')
+            vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'conductor.css')
         );
         const nonce = webviewHost.getNonce();
 
@@ -26,91 +26,6 @@ export class ConductorTemplate {
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https: data:; style-src 'unsafe-inline' ${webviewHost.webview.cspSource}; script-src 'nonce-${nonce}';">
     <title>NofX Conductor</title>
     <link href="${styleUri}" rel="stylesheet">
-    <style>
-        .conductor-container {
-            padding: 20px;
-            font-family: var(--vscode-font-family);
-            color: var(--vscode-foreground);
-            background: var(--vscode-editor-background);
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .stat-card {
-            background: var(--vscode-panel-background);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 6px;
-            padding: 15px;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: var(--vscode-textLink-foreground);
-        }
-        .stat-label {
-            font-size: 12px;
-            color: var(--vscode-descriptionForeground);
-            margin-top: 5px;
-        }
-        .control-section {
-            margin-bottom: 20px;
-        }
-        .control-section h3 {
-            margin-bottom: 10px;
-            color: var(--vscode-foreground);
-        }
-        .button-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .control-btn {
-            background: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .control-btn:hover {
-            background: var(--vscode-button-hoverBackground);
-        }
-        .agent-list, .task-list {
-            background: var(--vscode-panel-background);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-        .agent-item, .task-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--vscode-panel-border);
-        }
-        .agent-item:last-child, .task-item:last-child {
-            border-bottom: none;
-        }
-        .status-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-        .status-idle { background: #4CAF50; }
-        .status-working { background: #FF9800; }
-        .status-error { background: #F44336; }
-        .status-offline { background: #9E9E9E; }
-        .priority-high { color: #F44336; }
-        .priority-medium { color: #FF9800; }
-        .priority-low { color: #4CAF50; }
-    </style>
 </head>
 <body>
     <div class="conductor-container">
@@ -140,9 +55,9 @@ export class ConductorTemplate {
         <div class="control-section">
             <h3>🤖 Agent Management</h3>
             <div class="button-group">
-                <button class="control-btn" data-command="spawnAgentGroup">Spawn Agent Group</button>
-                <button class="control-btn" data-command="spawnCustomAgent">Spawn Custom Agent</button>
-                <button class="control-btn" data-command="showAgentPrompt">Agent Prompt</button>
+                <button class="control-btn" data-command="${WEBVIEW_COMMANDS.SPAWN_AGENT_GROUP}">Spawn Agent Group</button>
+                <button class="control-btn" data-command="${WEBVIEW_COMMANDS.SPAWN_CUSTOM_AGENT}">Spawn Custom Agent</button>
+                <button class="control-btn" data-command="${WEBVIEW_COMMANDS.SHOW_AGENT_PROMPT}">Agent Prompt</button>
             </div>
         </div>
         
@@ -150,7 +65,7 @@ export class ConductorTemplate {
         <div class="control-section">
             <h3>📋 Task Management</h3>
             <div class="button-group">
-                <button class="control-btn" data-command="createTask">Create Task</button>
+                <button class="control-btn" data-command="${WEBVIEW_COMMANDS.CREATE_TASK}">Create Task</button>
             </div>
         </div>
         
@@ -158,8 +73,8 @@ export class ConductorTemplate {
         <div class="control-section">
             <h3>🎨 Theme</h3>
             <div class="button-group">
-                <button class="control-btn" data-command="toggleTheme" data-theme="light">Light</button>
-                <button class="control-btn" data-command="toggleTheme" data-theme="dark">Dark</button>
+                <button class="control-btn" data-command="${WEBVIEW_COMMANDS.TOGGLE_THEME}" data-theme="light">Light</button>
+                <button class="control-btn" data-command="${WEBVIEW_COMMANDS.TOGGLE_THEME}" data-theme="dark">Dark</button>
             </div>
         </div>
         
@@ -176,7 +91,7 @@ export class ConductorTemplate {
         </div>
     </div>
     
-    <script src="${scriptUri}"></script>
+    <script nonce="${nonce}" src="${scriptUri}"></script>
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
         
@@ -189,22 +104,22 @@ export class ConductorTemplate {
                 const agentId = target.getAttribute('data-agent-id');
                 
                 switch (command) {
-                    case 'spawnAgentGroup':
+                    case '${WEBVIEW_COMMANDS.SPAWN_AGENT_GROUP}':
                         spawnAgentGroup();
                         break;
-                    case 'spawnCustomAgent':
+                    case '${WEBVIEW_COMMANDS.SPAWN_CUSTOM_AGENT}':
                         spawnCustomAgent();
                         break;
-                    case 'createTask':
+                    case '${WEBVIEW_COMMANDS.CREATE_TASK}':
                         createTask();
                         break;
-                    case 'showAgentPrompt':
+                    case '${WEBVIEW_COMMANDS.SHOW_AGENT_PROMPT}':
                         showAgentPrompt();
                         break;
-                    case 'toggleTheme':
+                    case '${WEBVIEW_COMMANDS.TOGGLE_THEME}':
                         toggleTheme(theme);
                         break;
-                    case 'removeAgent':
+                    case '${WEBVIEW_COMMANDS.REMOVE_AGENT}':
                         removeAgent(agentId);
                         break;
                 }
@@ -320,7 +235,7 @@ export class ConductorTemplate {
             vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'chat.js')
         );
         const styleUri = webviewHost.asWebviewUri(
-            vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'chat.css')
+            vscode.Uri.joinPath(this.context.extensionUri, 'webview', 'conductor.css')
         );
         const nonce = webviewHost.getNonce();
 
@@ -332,142 +247,6 @@ export class ConductorTemplate {
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https: data:; style-src 'unsafe-inline' ${webviewHost.webview.cspSource}; script-src 'nonce-${nonce}';">
     <title>NofX Enhanced Conductor</title>
     <link href="${styleUri}" rel="stylesheet">
-    <style>
-        .enhanced-conductor {
-            padding: 20px;
-            font-family: var(--vscode-font-family);
-            color: var(--vscode-foreground);
-            background: var(--vscode-editor-background);
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid var(--vscode-panel-border);
-        }
-        .header h1 {
-            margin: 0;
-            color: var(--vscode-textLink-foreground);
-        }
-        .theme-toggle {
-            display: flex;
-            gap: 10px;
-        }
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        .panel {
-            background: var(--vscode-panel-background);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 8px;
-            padding: 20px;
-        }
-        .panel h3 {
-            margin-top: 0;
-            color: var(--vscode-foreground);
-            border-bottom: 1px solid var(--vscode-panel-border);
-            padding-bottom: 10px;
-        }
-        .quick-actions {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .action-btn {
-            background: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            padding: 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            text-align: center;
-            transition: background 0.2s;
-        }
-        .action-btn:hover {
-            background: var(--vscode-button-hoverBackground);
-        }
-        .action-btn.primary {
-            background: var(--vscode-button-background);
-        }
-        .action-btn.secondary {
-            background: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
-        }
-        .stats-overview {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .stat-item {
-            text-align: center;
-            padding: 15px;
-            background: var(--vscode-editor-background);
-            border-radius: 6px;
-            border: 1px solid var(--vscode-panel-border);
-        }
-        .stat-number {
-            font-size: 28px;
-            font-weight: bold;
-            color: var(--vscode-textLink-foreground);
-        }
-        .stat-text {
-            font-size: 12px;
-            color: var(--vscode-descriptionForeground);
-            margin-top: 5px;
-        }
-        .agent-grid {
-            display: grid;
-            gap: 10px;
-        }
-        .agent-card {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            background: var(--vscode-editor-background);
-            border-radius: 6px;
-            border: 1px solid var(--vscode-panel-border);
-        }
-        .agent-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .agent-status {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
-        .status-idle { background: #4CAF50; }
-        .status-working { background: #FF9800; }
-        .status-error { background: #F44336; }
-        .status-offline { background: #9E9E9E; }
-        .task-item {
-            padding: 10px;
-            background: var(--vscode-editor-background);
-            border-radius: 6px;
-            border: 1px solid var(--vscode-panel-border);
-            margin-bottom: 8px;
-        }
-        .task-title {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .task-meta {
-            font-size: 12px;
-            color: var(--vscode-descriptionForeground);
-        }
-        .priority-high { color: #F44336; }
-        .priority-medium { color: #FF9800; }
-        .priority-low { color: #4CAF50; }
-    </style>
 </head>
 <body>
     <div class="enhanced-conductor">
@@ -526,7 +305,7 @@ export class ConductorTemplate {
         </div>
     </div>
     
-    <script src="${scriptUri}"></script>
+    <script nonce="${nonce}" src="${scriptUri}"></script>
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
         

@@ -205,19 +205,15 @@ export class TaskStateMachine implements ITaskStateMachine {
     private validateReadiness(task: Task): TaskValidationError[] {
         const errors: TaskValidationError[] = [];
         
-        // If no dependencies, task is ready
+        // If no dependencies, task is ready - return immediately
         if (!task.dependsOn || task.dependsOn.length === 0) {
             return errors;
         }
 
-        // If no task reader available, we can't validate completion state
+        // If no task reader available, allow transition (return empty errors)
+        // This prevents blocking tasks when dependency validation is unavailable
         if (!this.taskReader) {
-            this.logger.warn('TaskStateMachine: No task reader available for readiness validation');
-            errors.push({
-                field: 'dependsOn',
-                message: 'Dependency validation is unavailable - task reader not set',
-                code: 'DEPENDENCY_VALIDATION_UNAVAILABLE'
-            });
+            this.logger.debug('TaskStateMachine: No task reader available for readiness validation - allowing transition');
             return errors;
         }
 

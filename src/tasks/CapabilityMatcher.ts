@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { Task, Agent } from '../agents/types';
 import { ILoggingService, IConfigurationService, ICapabilityMatcher } from '../services/interfaces';
 
@@ -27,19 +28,9 @@ export class CapabilityMatcher implements ICapabilityMatcher {
     private weights: ScoringWeights;
     private configChangeDisposable?: vscode.Disposable;
 
-    // Capability synonyms and hierarchies (normalized to lowercase)
-    private readonly capabilitySynonyms: Map<string, string[]> = new Map([
-        ['react', ['frontend', 'javascript', 'typescript', 'ui/ux']],
-        ['typescript', ['javascript', 'frontend', 'react', 'node.js']],
-        ['javascript', ['frontend', 'backend', 'node.js', 'react']],
-        ['node.js', ['backend', 'javascript', 'apis', 'server']],
-        ['python', ['backend', 'ai', 'ml', 'data science']],
-        ['database', ['postgresql', 'mongodb', 'redis', 'sql']],
-        ['apis', ['rest', 'graphql', 'backend', 'node.js']],
-        ['testing', ['qa', 'e2e', 'unit testing', 'automation']],
-        ['devops', ['docker', 'kubernetes', 'ci/cd', 'cloud']],
-        ['mobile', ['react native', 'ios', 'android', 'mobile ui']]
-    ]);
+    // Bidirectional capability synonyms using sets for efficient matching
+    private readonly capabilitySynonyms: Map<string, Set<string>> = new Map();
+    private readonly capabilityNormalization: Map<string, string> = new Map();
 
     // Type compatibility matrix
     private readonly typeCompatibility: Map<string, string[]> = new Map([
@@ -66,11 +57,14 @@ export class CapabilityMatcher implements ICapabilityMatcher {
             performanceFactor: 0.05
         };
         
+        // Initialize bidirectional capability synonyms
+        this.initializeCapabilitySynonyms();
+        
         // Load weights from configuration
         this.loadWeightsFromConfig();
         
         // Listen to configuration changes using proper IConfigurationService API
-        this.configChangeDisposable = this.configService.onDidChange((e) => {
+        this.configChangeDisposable = this.configService.onDidChange((e: vscode.ConfigurationChangeEvent) => {
             if (e.affectsConfiguration('nofx.matcher.weights')) {
                 this.loadWeightsFromConfig();
             }
@@ -81,6 +75,14 @@ export class CapabilityMatcher implements ICapabilityMatcher {
      * Scores an agent for a specific task
      */
     scoreAgent(agent: Agent, task: Task): number {
+        const { score } = this.scoreAgentWithBreakdown(agent, task);
+        return score;
+    }
+
+    /**
+     * Scores an agent for a specific task and returns both score and breakdown
+     */
+    scoreAgentWithBreakdown(agent: Agent, task: Task): { score: number; breakdown: AgentScore['breakdown'] } {
         const breakdown = this.calculateScoreBreakdown(agent, task);
         const totalScore = 
             breakdown.capabilityMatch * this.weights.capabilityMatch +
@@ -93,7 +95,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         const clampedScore = Math.max(0, Math.min(1, totalScore));
 
         this.logger.debug(`Agent ${agent.id} scored ${clampedScore.toFixed(2)} for task ${task.id}`, breakdown);
-        return clampedScore;
+        return { score: clampedScore, breakdown };
     }
 
     /**
@@ -111,17 +113,24 @@ export class CapabilityMatcher implements ICapabilityMatcher {
             return null;
         }
 
-        // Score all idle agents
-        const scoredAgents = idleAgents.map(agent => ({
-            agent,
-            score: this.scoreAgent(agent, task),
-            breakdown: this.calculateScoreBreakdown(agent, task)
-        }));
+        // Score all idle agents using the efficient method
+        const scoredAgents = idleAgents.map(agent => {
+            const { score, breakdown } = this.scoreAgentWithBreakdown(agent, task);
+            return { agent, score, breakdown };
+        });
 
         // Sort by score (highest first)
         scoredAgents.sort((a, b) => b.score - a.score);
 
         const bestAgent = scoredAgents[0];
+        
+        // Check minimum score threshold (configurable, default 0)
+        const minScore = this.configService?.get<number>('nofx.matcher.minScore', 0) || 0;
+        if (bestAgent.score < minScore) {
+            this.logger.warn(`Best agent ${bestAgent.agent.id} score ${bestAgent.score.toFixed(2)} below minimum threshold ${minScore} for task ${task.id}`);
+            return null;
+        }
+        
         this.logger.info(`Best agent for task ${task.id}: ${bestAgent.agent.id} (score: ${bestAgent.score.toFixed(2)})`);
         
         return bestAgent.agent;
@@ -217,17 +226,56 @@ export class CapabilityMatcher implements ICapabilityMatcher {
     }
 
     /**
+     * Initializes bidirectional capability synonyms
+     */
+    private initializeCapabilitySynonyms(): void {
+        // Define capability groups for bidirectional matching
+        const capabilityGroups = [
+            ['react', 'frontend', 'javascript', 'typescript', 'ui/ux'],
+            ['typescript', 'javascript', 'frontend', 'react', 'node.js'],
+            ['javascript', 'frontend', 'backend', 'node.js', 'react'],
+            ['node.js', 'backend', 'javascript', 'apis', 'server'],
+            ['python', 'backend', 'ai', 'ml', 'data science'],
+            ['database', 'postgresql', 'mongodb', 'redis', 'sql'],
+            ['apis', 'rest', 'graphql', 'backend', 'node.js'],
+            ['testing', 'qa', 'e2e', 'unit testing', 'automation'],
+            ['devops', 'docker', 'kubernetes', 'ci/cd', 'cloud'],
+            ['mobile', 'react native', 'ios', 'android', 'mobile ui']
+        ];
+
+        // Build bidirectional synonym sets
+        for (const group of capabilityGroups) {
+            const normalizedGroup = group.map(cap => cap.toLowerCase());
+            const synonymSet = new Set(normalizedGroup);
+            
+            // Each capability in the group is synonymous with all others
+            for (const capability of normalizedGroup) {
+                this.capabilitySynonyms.set(capability, synonymSet);
+                this.capabilityNormalization.set(capability, capability);
+            }
+        }
+    }
+
+    /**
      * Checks if agent has a capability that matches the required capability
      */
     private hasCapabilityMatch(agentCapabilities: string[], requiredCapability: string): boolean {
+        const normalizedRequired = requiredCapability.toLowerCase();
+        
         // Direct match (both arrays are already normalized to lowercase)
-        if (agentCapabilities.includes(requiredCapability)) {
+        if (agentCapabilities.includes(normalizedRequired)) {
             return true;
         }
 
-        // Synonym match
-        const synonyms = this.capabilitySynonyms.get(requiredCapability) || [];
-        return synonyms.some(synonym => agentCapabilities.includes(synonym));
+        // Bidirectional synonym match using set intersection
+        const requiredSynonyms = this.capabilitySynonyms.get(normalizedRequired);
+        if (requiredSynonyms) {
+            const agentCapabilitySet = new Set(agentCapabilities);
+            const intersection = new Set([...agentCapabilitySet].filter(cap => requiredSynonyms.has(cap)));
+            return intersection.size > 0;
+        }
+
+        return false;
     }
 
     /**
@@ -266,16 +314,16 @@ export class CapabilityMatcher implements ICapabilityMatcher {
      * Calculates type compatibility score
      */
     private calculateTypeMatch(agentType: string | undefined, task: Task): number {
-        // Treat missing agent type as neutral (return 0.5)
+        // Treat missing agent type as neutral (return 0)
         if (!agentType || typeof agentType !== 'string') {
-            return 0.5;
+            return 0;
         }
 
         // Infer task type from description and tags
         const taskType = this.inferTaskType(task);
         
         if (!taskType) {
-            return 0.5; // Neutral score if can't determine task type
+            return 0; // Return 0 for unknown types to avoid bias
         }
 
         const compatibleTypes = this.typeCompatibility.get(agentType) || [];

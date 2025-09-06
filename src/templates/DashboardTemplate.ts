@@ -26,183 +26,6 @@ export class DashboardTemplate {
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https: data:; style-src 'unsafe-inline' ${webviewHost.webview.cspSource}; script-src 'nonce-${nonce}';">
     <title>NofX Message Flow Dashboard</title>
     <link href="${styleUri}" rel="stylesheet">
-    <style>
-        .dashboard-container {
-            padding: 20px;
-            font-family: var(--vscode-font-family);
-            color: var(--vscode-foreground);
-            background: var(--vscode-editor-background);
-            height: 100vh;
-            overflow-y: auto;
-        }
-        .dashboard-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid var(--vscode-panel-border);
-        }
-        .dashboard-header h1 {
-            margin: 0;
-            color: var(--vscode-textLink-foreground);
-        }
-        .header-controls {
-            display: flex;
-            gap: 10px;
-        }
-        .control-btn {
-            background: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .control-btn:hover {
-            background: var(--vscode-button-hoverBackground);
-        }
-        .control-btn.secondary {
-            background: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
-        }
-        .stats-panel {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .stat-card {
-            background: var(--vscode-panel-background);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 32px;
-            font-weight: bold;
-            color: var(--vscode-textLink-foreground);
-            margin-bottom: 5px;
-        }
-        .stat-label {
-            font-size: 14px;
-            color: var(--vscode-descriptionForeground);
-        }
-        .filter-bar {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: var(--vscode-panel-background);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 8px;
-            flex-wrap: wrap;
-        }
-        .filter-select {
-            background: var(--vscode-dropdown-background);
-            color: var(--vscode-dropdown-foreground);
-            border: 1px solid var(--vscode-dropdown-border);
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        .content-area {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        .panel {
-            background: var(--vscode-panel-background);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 8px;
-            padding: 20px;
-        }
-        .panel h3 {
-            margin-top: 0;
-            margin-bottom: 15px;
-            color: var(--vscode-foreground);
-            border-bottom: 1px solid var(--vscode-panel-border);
-            padding-bottom: 10px;
-        }
-        .agent-cards {
-            display: grid;
-            gap: 10px;
-        }
-        .agent-card {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            background: var(--vscode-editor-background);
-            border-radius: 6px;
-            border: 1px solid var(--vscode-panel-border);
-        }
-        .agent-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .connection-status {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
-        .status-connected { background: #4CAF50; }
-        .status-disconnected { background: #F44336; }
-        .flow-container {
-            height: 300px;
-            background: var(--vscode-editor-background);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 6px;
-            padding: 15px;
-            overflow-y: auto;
-        }
-        .message-item {
-            padding: 10px;
-            margin-bottom: 8px;
-            background: var(--vscode-editor-background);
-            border-radius: 6px;
-            border-left: 4px solid var(--vscode-panel-border);
-        }
-        .message-item.request { border-left-color: #2196F3; }
-        .message-item.response { border-left-color: #4CAF50; }
-        .message-item.error { border-left-color: #F44336; }
-        .message-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-        .message-type {
-            font-weight: bold;
-            font-size: 12px;
-            padding: 2px 6px;
-            border-radius: 3px;
-            background: var(--vscode-badge-background);
-            color: var(--vscode-badge-foreground);
-        }
-        .message-timestamp {
-            font-size: 12px;
-            color: var(--vscode-descriptionForeground);
-        }
-        .message-content {
-            font-size: 14px;
-            margin-bottom: 5px;
-        }
-        .message-meta {
-            font-size: 12px;
-            color: var(--vscode-descriptionForeground);
-        }
-        .messages-container {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        .full-width {
-            grid-column: 1 / -1;
-        }
-    </style>
 </head>
 <body>
     <div class="dashboard-container">
@@ -265,7 +88,7 @@ export class DashboardTemplate {
             <div class="panel">
                 <h3>🤖 Connected Agents</h3>
                 <div class="agent-cards" id="agent-cards">
-                    ${this.generateAgentCards(state.connections)}
+                    ${this.generateAgentGrid(state.connections)}
                 </div>
             </div>
             
@@ -289,7 +112,7 @@ export class DashboardTemplate {
         </div>
     </div>
     
-    <script src="${scriptUri}"></script>
+    <script nonce="${nonce}" src="${scriptUri}"></script>
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
         let isPaused = false;

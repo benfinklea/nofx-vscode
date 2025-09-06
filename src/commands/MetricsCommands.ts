@@ -1,40 +1,85 @@
 import * as vscode from 'vscode';
-import { IContainer, SERVICE_TOKENS, IMetricsService, INotificationService, IConfigurationService } from '../services/interfaces';
+import { IContainer, SERVICE_TOKENS, IMetricsService, INotificationService, IConfigurationService, ICommandService, IEventBus, CONFIG_KEYS } from '../services/interfaces';
 
 export class MetricsCommands {
     private container: IContainer;
     private metricsService: IMetricsService;
     private notificationService: INotificationService;
     private configService: IConfigurationService;
+    private commandService: ICommandService;
     private metricsPanel: vscode.WebviewPanel | undefined;
+    private disposables: vscode.Disposable[] = [];
+    private autoRefreshEnabled: boolean = true;
+    private currentFilters: any = {};
 
     constructor(container: IContainer) {
         this.container = container;
         this.metricsService = container.resolve(SERVICE_TOKENS.MetricsService);
         this.notificationService = container.resolve(SERVICE_TOKENS.NotificationService);
         this.configService = container.resolve(SERVICE_TOKENS.ConfigurationService);
+        this.commandService = container.resolve(SERVICE_TOKENS.CommandService);
+        
+        // Subscribe to metrics events for real-time updates
+        this.setupEventListeners();
+    }
+    
+    private setupEventListeners(): void {
+        const eventBus = this.container.resolve<IEventBus>(SERVICE_TOKENS.EventBus);
+        
+        // Listen for metrics events
+        this.disposables.push(
+            eventBus.subscribe('metrics.counter.incremented', () => {
+                if (this.metricsPanel && this.autoRefreshEnabled) {
+                    this.refreshMetricsDashboard(this.currentFilters);
+                }
+            })
+        );
+        
+        this.disposables.push(
+            eventBus.subscribe('metrics.duration.recorded', () => {
+                if (this.metricsPanel && this.autoRefreshEnabled) {
+                    this.refreshMetricsDashboard(this.currentFilters);
+                }
+            })
+        );
+        
+        this.disposables.push(
+            eventBus.subscribe('metrics.gauge.set', () => {
+                if (this.metricsPanel && this.autoRefreshEnabled) {
+                    this.refreshMetricsDashboard(this.currentFilters);
+                }
+            })
+        );
+        
+        this.disposables.push(
+            eventBus.subscribe('metrics.recorded', () => {
+                if (this.metricsPanel && this.autoRefreshEnabled) {
+                    this.refreshMetricsDashboard(this.currentFilters);
+                }
+            })
+        );
     }
 
     register(): void {
         // Show metrics dashboard
-        vscode.commands.registerCommand('nofx.showMetricsDashboard', () => {
-            this.showMetricsDashboard();
-        });
+        this.disposables.push(
+            this.commandService.register('nofx.showMetricsDashboard', this.showMetricsDashboard.bind(this))
+        );
 
         // Export metrics data
-        vscode.commands.registerCommand('nofx.exportMetrics', () => {
-            this.exportMetrics();
-        });
+        this.disposables.push(
+            this.commandService.register('nofx.exportMetrics', this.exportMetrics.bind(this))
+        );
 
         // Reset metrics data
-        vscode.commands.registerCommand('nofx.resetMetrics', () => {
-            this.resetMetrics();
-        });
+        this.disposables.push(
+            this.commandService.register('nofx.resetMetrics', this.resetMetrics.bind(this))
+        );
 
         // Toggle metrics collection
-        vscode.commands.registerCommand('nofx.toggleMetrics', () => {
-            this.toggleMetrics();
-        });
+        this.disposables.push(
+            this.commandService.register('nofx.toggleMetrics', this.toggleMetrics.bind(this))
+        );
     }
 
     private async showMetricsDashboard(): Promise<void> {
@@ -61,7 +106,7 @@ export class MetricsCommands {
                 async (message) => {
                     switch (message.command) {
                         case 'refresh':
-                            this.refreshMetricsDashboard();
+                            this.refreshMetricsDashboard(message.filters);
                             break;
                         case 'export':
                             await this.exportMetricsFromDashboard(message.format);
@@ -72,15 +117,18 @@ export class MetricsCommands {
                         case 'toggle':
                             await this.toggleMetricsFromDashboard();
                             break;
+                        case 'setAutoRefresh':
+                            this.setAutoRefresh(message.enabled);
+                            break;
                     }
                 }
             );
 
             // Update dashboard periodically
             const updateInterval = setInterval(() => {
-                if (this.metricsPanel) {
-                    this.refreshMetricsDashboard();
-                } else {
+                if (this.metricsPanel && this.autoRefreshEnabled) {
+                    this.refreshMetricsDashboard(this.currentFilters);
+                } else if (!this.metricsPanel) {
                     clearInterval(updateInterval);
                 }
             }, 5000); // Update every 5 seconds
@@ -95,14 +143,123 @@ export class MetricsCommands {
         }
     }
 
-    private refreshMetricsDashboard(): void {
+    private refreshMetricsDashboard(filters?: any): void {
         if (!this.metricsPanel) return;
 
+        // Store current filters
+        if (filters) {
+            this.currentFilters = filters;
+        }
+
         const dashboardData = this.metricsService.getDashboardData();
+        
+        // Apply filters to the data
+        const filteredData = this.applyFiltersToData(dashboardData, this.currentFilters);
+        
         this.metricsPanel.webview.postMessage({
             command: 'update',
-            data: dashboardData
+            data: filteredData
         });
+    }
+    
+    private applyFiltersToData(data: any, filters: any): any {
+        if (!filters || Object.keys(filters).length === 0) {
+            return data;
+        }
+        
+        const filtered = { ...data };
+        
+        // Start with the recent metrics array for filtering
+        let filteredRecent = data.recent || [];
+        
+        // Apply time range filter
+        if (filters.timeRange && filters.timeRange !== 'all') {
+            const now = new Date();
+            let cutoffTime: Date;
+            
+            switch (filters.timeRange) {
+                case '1h':
+                    cutoffTime = new Date(now.getTime() - 60 * 60 * 1000);
+                    break;
+                case '6h':
+                    cutoffTime = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+                    break;
+                case '24h':
+                    cutoffTime = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                    break;
+                case '7d':
+                    cutoffTime = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    break;
+                default:
+                    cutoffTime = new Date(0);
+            }
+            
+            // Filter recent metrics by time
+            filteredRecent = filteredRecent.filter((metric: any) => 
+                new Date(metric.timestamp) >= cutoffTime
+            );
+        }
+        
+        // Apply metric type filter
+        if (filters.metricType && filters.metricType !== 'all') {
+            filteredRecent = filteredRecent.filter((metric: any) => 
+                metric.type === filters.metricType
+            );
+        }
+        
+        // Apply search filter
+        if (filters.searchFilter && filters.searchFilter.trim()) {
+            const searchTerm = filters.searchFilter.toLowerCase();
+            filteredRecent = filteredRecent.filter((metric: any) => 
+                metric.name.toLowerCase().includes(searchTerm)
+            );
+        }
+        
+        // Update the filtered data with recomputed metrics from filtered recent array
+        filtered.recent = filteredRecent;
+        filtered.recentMetrics = filteredRecent.length;
+        filtered.topCounters = this.getTopCountersFromRecent(filteredRecent);
+        filtered.averageDurations = this.getAverageDurationsFromRecent(filteredRecent);
+        
+        return filtered;
+    }
+    
+    private getTopCountersFromRecent(recentMetrics: any[]): Array<{ name: string; count: number }> {
+        const counterMap = new Map<string, number>();
+        
+        recentMetrics
+            .filter(m => m.type === 'counter')
+            .forEach(m => {
+                const current = counterMap.get(m.name) || 0;
+                counterMap.set(m.name, current + m.value);
+            });
+        
+        return Array.from(counterMap.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 10);
+    }
+    
+    private getAverageDurationsFromRecent(recentMetrics: any[]): Array<{ name: string; average: number }> {
+        const durationMap = new Map<string, { total: number; count: number }>();
+        
+        recentMetrics
+            .filter(m => m.type === 'histogram')
+            .forEach(m => {
+                const current = durationMap.get(m.name) || { total: 0, count: 0 };
+                current.total += m.value;
+                current.count += 1;
+                durationMap.set(m.name, current);
+            });
+        
+        return Array.from(durationMap.entries())
+            .map(([name, data]) => ({ name, average: data.total / data.count }))
+            .sort((a, b) => b.average - a.average)
+            .slice(0, 10);
+    }
+    
+    private setAutoRefresh(enabled: boolean): void {
+        this.autoRefreshEnabled = enabled;
     }
 
     private getMetricsDashboardHtml(): string {
@@ -240,6 +397,61 @@ export class MetricsCommands {
             color: var(--vscode-descriptionForeground);
             font-style: italic;
         }
+        
+        .filters {
+            background-color: var(--vscode-panel-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .filter-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 150px;
+        }
+        
+        .filter-label {
+            font-size: 0.9em;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 5px;
+        }
+        
+        select, input {
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-size: 12px;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--vscode-focusBorder);
+        }
+        
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .auto-refresh input[type="checkbox"] {
+            margin: 0;
+        }
     </style>
 </head>
 <body>
@@ -257,6 +469,40 @@ export class MetricsCommands {
     <div id="loading" class="loading">Loading metrics...</div>
     
     <div id="dashboard" style="display: none;">
+        <div class="filters">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <div class="filter-label">Time Range</div>
+                    <select id="timeRange" onchange="applyFilters()">
+                        <option value="1h">Last Hour</option>
+                        <option value="6h">Last 6 Hours</option>
+                        <option value="24h" selected>Last 24 Hours</option>
+                        <option value="7d">Last 7 Days</option>
+                        <option value="all">All Time</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <div class="filter-label">Metric Type</div>
+                    <select id="metricType" onchange="applyFilters()">
+                        <option value="all">All Types</option>
+                        <option value="counter">Counters</option>
+                        <option value="histogram">Histograms</option>
+                        <option value="gauge">Gauges</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <div class="filter-label">Search</div>
+                    <input type="text" id="searchFilter" placeholder="Filter by name..." onkeyup="applyFilters()">
+                </div>
+                <div class="filter-group">
+                    <div class="auto-refresh">
+                        <input type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh()">
+                        <label for="autoRefresh">Auto Refresh</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div class="metrics-grid">
             <div class="metric-card">
                 <div class="metric-title">Collection Status</div>
@@ -345,6 +591,29 @@ export class MetricsCommands {
         
         function toggleMetrics() {
             vscode.postMessage({ command: 'toggle' });
+        }
+        
+        function applyFilters() {
+            const timeRange = document.getElementById('timeRange').value;
+            const metricType = document.getElementById('metricType').value;
+            const searchFilter = document.getElementById('searchFilter').value;
+            
+            vscode.postMessage({ 
+                command: 'refresh', 
+                filters: { 
+                    timeRange, 
+                    metricType, 
+                    searchFilter 
+                } 
+            });
+        }
+        
+        function toggleAutoRefresh() {
+            const autoRefresh = document.getElementById('autoRefresh').checked;
+            vscode.postMessage({ 
+                command: 'setAutoRefresh', 
+                enabled: autoRefresh 
+            });
         }
         
         function updateDashboard(data) {
@@ -487,13 +756,7 @@ export class MetricsCommands {
     }
 
     private async toggleMetrics(): Promise<void> {
-        const currentEnabled = this.configService.get('enableMetrics', false);
-        const newEnabled = !currentEnabled;
-        
-        await this.configService.update('enableMetrics', newEnabled);
-        
-        const status = newEnabled ? 'enabled' : 'disabled';
-        this.notificationService.showInformation(`Metrics collection ${status}`);
+        await this.toggleMetricsImpl();
         
         if (this.metricsPanel) {
             this.refreshMetricsDashboard();
@@ -501,19 +764,32 @@ export class MetricsCommands {
     }
 
     private async toggleMetricsFromDashboard(): Promise<void> {
-        const currentEnabled = this.configService.get('enableMetrics', false);
+        await this.toggleMetricsImpl();
+        this.refreshMetricsDashboard();
+    }
+    
+    private async toggleMetricsImpl(): Promise<void> {
+        const currentEnabled = this.configService.get(CONFIG_KEYS.ENABLE_METRICS, false);
         const newEnabled = !currentEnabled;
         
-        await this.configService.update('enableMetrics', newEnabled);
+        const target = vscode.workspace.workspaceFolders?.length 
+            ? vscode.ConfigurationTarget.Workspace 
+            : vscode.ConfigurationTarget.Global;
+        await this.configService.update(CONFIG_KEYS.ENABLE_METRICS, newEnabled, target);
         
         const status = newEnabled ? 'enabled' : 'disabled';
         this.notificationService.showInformation(`Metrics collection ${status}`);
-        this.refreshMetricsDashboard();
     }
 
     dispose(): void {
+        // Dispose the webview panel
         if (this.metricsPanel) {
             this.metricsPanel.dispose();
+            this.metricsPanel = undefined;
         }
+        
+        // Dispose all command registrations
+        this.disposables.forEach(disposable => disposable.dispose());
+        this.disposables = [];
     }
 }

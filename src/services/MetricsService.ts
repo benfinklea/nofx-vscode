@@ -10,6 +10,12 @@ export class MetricsService implements IMetricsService {
     private cleanupInterval?: NodeJS.Timeout;
     private isEnabled: boolean = false;
     private outputLevel: 'none' | 'basic' | 'detailed' = 'basic';
+    private configChangeDisposable?: { dispose: () => void };
+    
+    // Bounded storage configuration
+    private readonly maxMetricsPerType: number = 1000; // Maximum metrics per type
+    private readonly maxTotalMetrics: number = 10000; // Maximum total metrics
+    private metricsByType: Map<string, MetricData[]> = new Map();
 
     constructor(configService: IConfigurationService, logger: ILoggingService, eventBus?: IEventBus) {
         this.configService = configService;
@@ -17,7 +23,7 @@ export class MetricsService implements IMetricsService {
         this.eventBus = eventBus;
         
         this.initializeConfiguration();
-        this.startCleanupTimer();
+        this.updateCleanupTimer();
         
         // Collect initial system metrics
         this.collectSystemMetrics();
@@ -42,20 +48,25 @@ export class MetricsService implements IMetricsService {
         }
         
         // Listen for configuration changes
-        this.configService.onDidChange((e) => {
+        this.configChangeDisposable = this.configService.onDidChange((e) => {
             if (e.affectsConfiguration('nofx.enableMetrics')) {
                 this.isEnabled = this.configService.get<boolean>(METRICS_CONFIG_KEYS.ENABLE_METRICS, false);
                 this.logger.debug('Metrics collection toggled', { enabled: this.isEnabled });
+                this.updateCleanupTimer();
             }
             if (e.affectsConfiguration('nofx.metricsOutputLevel')) {
                 this.outputLevel = this.configService.get<'none' | 'basic' | 'detailed'>(METRICS_CONFIG_KEYS.METRICS_OUTPUT_LEVEL, 'basic');
                 this.logger.debug('Metrics output level changed', { level: this.outputLevel });
             }
+            if (e.affectsConfiguration('nofx.metricsRetentionHours')) {
+                this.retentionHours = this.configService.get<number>(METRICS_CONFIG_KEYS.METRICS_RETENTION_HOURS, 24);
+                this.logger.debug('Metrics retention changed', { retentionHours: this.retentionHours });
+            }
         });
     }
 
     incrementCounter(name: string, tags?: Record<string, string>): void {
-        if (!this.isEnabled) return;
+        if (!this.isEnabled || !this.shouldSampleMetric(name)) return;
         
         this.addMetric({
             name,
@@ -73,7 +84,7 @@ export class MetricsService implements IMetricsService {
     }
 
     recordDuration(name: string, duration: number, tags?: Record<string, string>): void {
-        if (!this.isEnabled) return;
+        if (!this.isEnabled || !this.shouldSampleMetric(name)) return;
         
         this.addMetric({
             name,
@@ -141,6 +152,7 @@ export class MetricsService implements IMetricsService {
 
     resetMetrics(): void {
         this.metrics = [];
+        this.metricsByType.clear();
         this.timers.clear();
         this.logger.info('Metrics reset');
         try {
@@ -163,7 +175,18 @@ export class MetricsService implements IMetricsService {
     }
 
     private addMetric(metric: MetricData): void {
+        // Add to main metrics array
         this.metrics.push(metric);
+        
+        // Add to type-specific storage for bounded management
+        const typeKey = `${metric.type}:${metric.name}`;
+        if (!this.metricsByType.has(typeKey)) {
+            this.metricsByType.set(typeKey, []);
+        }
+        this.metricsByType.get(typeKey)!.push(metric);
+        
+        // Apply bounded storage limits
+        this.enforceBoundedStorage();
         
         // Log metrics based on output level
         if (this.outputLevel === 'detailed') {
@@ -177,6 +200,56 @@ export class MetricsService implements IMetricsService {
             this.eventBus?.publish('metrics.recorded', metric);
         } catch (error) {
             this.logger.warn('Failed to publish metric event', { error: error instanceof Error ? error.message : String(error) });
+        }
+    }
+    
+    private enforceBoundedStorage(): void {
+        // Enforce per-type limits (ring buffer behavior)
+        for (const [typeKey, metrics] of this.metricsByType.entries()) {
+            if (metrics.length > this.maxMetricsPerType) {
+                // Remove oldest metrics (ring buffer behavior)
+                const removed = metrics.splice(0, metrics.length - this.maxMetricsPerType);
+                
+                // Also remove from main metrics array
+                for (const removedMetric of removed) {
+                    const index = this.metrics.indexOf(removedMetric);
+                    if (index > -1) {
+                        this.metrics.splice(index, 1);
+                    }
+                }
+                
+                this.logger.debug('Trimmed metrics for type', { 
+                    typeKey, 
+                    removed: removed.length, 
+                    remaining: metrics.length 
+                });
+            }
+        }
+        
+        // Enforce total metrics limit
+        if (this.metrics.length > this.maxTotalMetrics) {
+            const toRemove = this.metrics.length - this.maxTotalMetrics;
+            const removed = this.metrics.splice(0, toRemove);
+            
+            // Clean up type-specific storage
+            for (const [typeKey, metrics] of this.metricsByType.entries()) {
+                for (const removedMetric of removed) {
+                    const index = metrics.indexOf(removedMetric);
+                    if (index > -1) {
+                        metrics.splice(index, 1);
+                    }
+                }
+                
+                // Remove empty type arrays
+                if (metrics.length === 0) {
+                    this.metricsByType.delete(typeKey);
+                }
+            }
+            
+            this.logger.debug('Trimmed total metrics', { 
+                removed: toRemove, 
+                remaining: this.metrics.length 
+            });
         }
     }
 
@@ -230,6 +303,16 @@ export class MetricsService implements IMetricsService {
         return summary;
     }
 
+    private updateCleanupTimer(): void {
+        if (this.cleanupInterval) {
+            clearInterval(this.cleanupInterval);
+            this.cleanupInterval = undefined;
+        }
+        if (this.isEnabled) {
+            this.startCleanupTimer();
+        }
+    }
+
     private startCleanupTimer(): void {
         // Clean up old metrics every hour
         this.cleanupInterval = setInterval(() => {
@@ -279,7 +362,15 @@ export class MetricsService implements IMetricsService {
     // Performance monitoring for high-frequency events
     private shouldSampleMetric(name: string): boolean {
         // Sample high-frequency metrics to avoid performance impact
-        const highFrequencyMetrics = ['message.received', 'message.sent', 'heartbeat.sent'];
+        const highFrequencyMetrics = [
+            'messages_received', 
+            'messages_sent', 
+            'heartbeat_sent', 
+            'heartbeats_received',
+            'heartbeat_failures',
+            'bytes_in_total',
+            'bytes_out_total'
+        ];
         return !highFrequencyMetrics.includes(name) || Math.random() < 0.1; // 10% sampling
     }
 
@@ -298,7 +389,15 @@ export class MetricsService implements IMetricsService {
             metricsByType: this.getMetricsSummary().metricsByType,
             topCounters: this.getTopCounters(recentMetrics),
             averageDurations: this.getAverageDurations(recentMetrics),
-            systemMetrics: this.getSystemMetrics()
+            systemMetrics: this.getSystemMetrics(),
+            // Add recent metrics array for filtering
+            recent: recentMetrics.map(metric => ({
+                name: metric.name,
+                type: metric.type,
+                timestamp: metric.timestamp,
+                value: metric.value,
+                tags: metric.tags
+            }))
         };
     }
 
@@ -357,7 +456,13 @@ export class MetricsService implements IMetricsService {
             this.cleanupInterval = undefined;
         }
         
+        if (this.configChangeDisposable) {
+            this.configChangeDisposable.dispose();
+            this.configChangeDisposable = undefined;
+        }
+        
         this.metrics = [];
+        this.metricsByType.clear();
         this.timers.clear();
         
         this.logger.debug('MetricsService disposed');

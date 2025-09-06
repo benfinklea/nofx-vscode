@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import * as fs from 'fs';
 import {
     ICommandHandler,
@@ -169,7 +168,6 @@ export class TemplateCommands implements ICommandHandler {
         }
 
         // Use AgentTemplateManager's built-in edit functionality
-        const templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
         await templateManager.editTemplate(templateId);
     }
 
