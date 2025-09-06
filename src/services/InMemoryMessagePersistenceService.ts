@@ -1,7 +1,7 @@
-import { 
-    IMessagePersistenceService, 
-    ILoggingService, 
-    IConfigurationService, 
+import {
+    IMessagePersistenceService,
+    ILoggingService,
+    IConfigurationService,
     IEventBus,
     MessageFilter
 } from './interfaces';
@@ -121,14 +121,14 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
 
             // Apply client ID filter
             if (filter.clientId) {
-                filteredMessages = filteredMessages.filter(msg => 
+                filteredMessages = filteredMessages.filter(msg =>
                     msg.from === filter.clientId || msg.to === filter.clientId
                 );
             }
 
             // Apply message type filter
             if (filter.type) {
-                filteredMessages = filteredMessages.filter(msg => 
+                filteredMessages = filteredMessages.filter(msg =>
                     msg.type === filter.type
                 );
             }
@@ -137,7 +137,7 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
             if (filter.timeRange) {
                 const fromTime = filter.timeRange.from?.getTime();
                 const toTime = filter.timeRange.to?.getTime();
-                
+
                 filteredMessages = filteredMessages.filter(msg => {
                     const msgTime = new Date(msg.timestamp).getTime();
                     if (fromTime && msgTime < fromTime) return false;
@@ -149,7 +149,7 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
             // Apply pagination
             const offset = filter.offset ?? 0;
             const limit = filter.limit ?? this.maxMessages;
-            
+
             // Return in reverse chronological order (newest first)
             const startIndex = Math.max(0, filteredMessages.length - offset - limit);
             const endIndex = filteredMessages.length - offset;
@@ -210,7 +210,7 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
 
         try {
             const totalMessages = this.messages.length;
-            const oldestMessage = this.messages.length > 0 
+            const oldestMessage = this.messages.length > 0
                 ? new Date(Math.min(...this.messages.map(m => new Date(m.timestamp).getTime())))
                 : new Date();
 

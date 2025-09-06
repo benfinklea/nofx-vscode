@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { promises as fsPromises } from 'fs';
-import { 
-    IMessagePersistenceService, 
-    ILoggingService, 
-    IConfigurationService, 
+import {
+    IMessagePersistenceService,
+    ILoggingService,
+    IConfigurationService,
     IEventBus,
     MessageFilter
 } from './interfaces';
@@ -149,23 +149,23 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             // Determine pagination parameters
             const limit = filter.limit ?? this.historyLimit;
             const offset = filter.offset ?? 0;
-            
+
             // Read a larger batch to account for filtering, with a reasonable max scan window
             const maxScanWindow = Math.max(limit * 10, 1000); // Scan up to 10x the limit or 1000 messages
             const allMessages = await this.readMessagesFromFile(0, maxScanWindow);
-            
+
             let filteredMessages = allMessages;
 
             // Apply client ID filter
             if (filter.clientId) {
-                filteredMessages = filteredMessages.filter(msg => 
+                filteredMessages = filteredMessages.filter(msg =>
                     msg.from === filter.clientId || msg.to === filter.clientId
                 );
             }
 
             // Apply message type filter
             if (filter.type) {
-                filteredMessages = filteredMessages.filter(msg => 
+                filteredMessages = filteredMessages.filter(msg =>
                     msg.type === filter.type
                 );
             }
@@ -174,7 +174,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             if (filter.timeRange) {
                 const fromTime = filter.timeRange.from?.getTime();
                 const toTime = filter.timeRange.to?.getTime();
-                
+
                 filteredMessages = filteredMessages.filter(msg => {
                     const msgTime = new Date(msg.timestamp).getTime();
                     if (fromTime && msgTime < fromTime) return false;
@@ -220,7 +220,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             // Remove all message files
             const files = await fsPromises.readdir(this.persistenceDir);
             const messageFiles = files.filter(file => file.startsWith('messages'));
-            
+
             for (const file of messageFiles) {
                 const filePath = path.join(this.persistenceDir, file);
                 await fsPromises.unlink(filePath);
@@ -251,7 +251,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
         try {
             const messages = await this.readMessagesFromFile(0, this.historyLimit);
             const totalMessages = messages.length;
-            const oldestMessage = messages.length > 0 
+            const oldestMessage = messages.length > 0
                 ? new Date(Math.min(...messages.map(m => new Date(m.timestamp).getTime())))
                 : new Date();
 
@@ -307,7 +307,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
                     });
                     throw err;
                 }
-                
+
                 // Wait before retry
                 await new Promise(resolve => setTimeout(resolve, retryDelay));
             }
@@ -367,7 +367,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
     private async readMessagesFromFile(offset: number, limit: number): Promise<OrchestratorMessage[]> {
         const messages: OrchestratorMessage[] = [];
         let skipped = 0;
-        let collected: OrchestratorMessage[] = [];
+        const collected: OrchestratorMessage[] = [];
 
         try {
             // Build ordered list of files (newest first)
@@ -382,7 +382,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
                         skipped++;
                         return;
                     }
-                    
+
                     if (collected.length < limit) {
                         collected.push(message);
                     }
@@ -411,7 +411,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             // Use streaming approach with readline for forward reading
             const readline = require('readline');
             fd = await fsPromises.open(filePath, 'r');
-            
+
             const rl = readline.createInterface({
                 input: fd.createReadStream(),
                 crlfDelay: Infinity
@@ -480,14 +480,14 @@ export class MessagePersistenceService implements IMessagePersistenceService {
     private async checkAndRollFile(): Promise<void> {
         try {
             const stats = await fsPromises.stat(this.messagesFile);
-            
+
             if (stats.size > this.maxFileSize) {
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
                 const rolledFile = path.join(this.persistenceDir, `messages-${timestamp}.jsonl`);
-                
+
                 // Move current file to rolled file
                 await fsPromises.rename(this.messagesFile, rolledFile);
-                
+
                 // Create new empty file using write queue
                 this.writeQueue = this.writeQueue.then(async () => {
                     await this.acquireLock();
@@ -537,7 +537,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
 
             // Keep only the most recent 5 files
             const filesToDelete = messageFiles.slice(5);
-            
+
             for (const file of filesToDelete) {
                 await fsPromises.unlink(file.path);
                 this.loggingService.debug('Deleted old message file', { fileName: file.name });

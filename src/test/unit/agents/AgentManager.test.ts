@@ -15,15 +15,15 @@ jest.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import { AgentManager } from '../../../agents/AgentManager';
-import { 
-    IAgentLifecycleManager, 
-    ITerminalManager, 
-    IWorktreeService, 
-    IConfigurationService, 
-    INotificationService, 
-    ILoggingService, 
-    IEventBus, 
-    IErrorHandler, 
+import {
+    IAgentLifecycleManager,
+    ITerminalManager,
+    IWorktreeService,
+    IConfigurationService,
+    INotificationService,
+    ILoggingService,
+    IEventBus,
+    IErrorHandler,
     IMetricsService
 } from '../../../services/interfaces';
 import { Agent, AgentConfig } from '../../../agents/types';
@@ -217,7 +217,7 @@ describe('AgentManager', () => {
 
         it('should throw error if dependencies not set', async () => {
             const newAgentManager = new AgentManager(mockExtensionContext);
-            
+
             await expect(newAgentManager.initialize()).rejects.toThrow(
                 'AgentManager dependencies not set. Call setDependencies() first.'
             );
@@ -262,8 +262,8 @@ describe('AgentManager', () => {
                 placeHolder: 'e.g., claude, /usr/local/bin/claude'
             });
             expect(mockConfigService.update).toHaveBeenCalledWith(
-                'claudePath', 
-                '/new/path/claude', 
+                'claudePath',
+                '/new/path/claude',
                 vscode.ConfigurationTarget.Global
             );
         });
@@ -273,11 +273,11 @@ describe('AgentManager', () => {
         it('should spawn agent successfully', async () => {
             const agentConfig: AgentConfig = {
                 name: 'Test Agent',
-                type: 'General Purpose',
+                type: 'General Purpose'
             };
 
-            const mockAgent = createMockAgent({ 
-                id: 'agent-1', 
+            const mockAgent = createMockAgent({
+                id: 'agent-1',
                 name: 'Test Agent',
                 type: 'General Purpose'
             });
@@ -301,7 +301,7 @@ describe('AgentManager', () => {
         it('should spawn agent with restored ID', async () => {
             const agentConfig: AgentConfig = {
                 name: 'Restored Agent',
-                type: 'General Purpose',
+                type: 'General Purpose'
             };
 
             const mockAgent = createMockAgent({ id: 'restored-agent-1' });
@@ -316,7 +316,7 @@ describe('AgentManager', () => {
             const newAgentManager = new AgentManager(mockExtensionContext);
             const agentConfig: AgentConfig = {
                 name: 'Test Agent',
-                type: 'General Purpose',
+                type: 'General Purpose'
             };
 
             await expect(newAgentManager.spawnAgent(agentConfig)).rejects.toThrow(
@@ -435,8 +435,8 @@ describe('AgentManager', () => {
         let mockTask: any;
 
         beforeEach(() => {
-            mockAgent = createMockAgent({ 
-                id: 'agent-1', 
+            mockAgent = createMockAgent({
+                id: 'agent-1',
                 status: 'working',
                 currentTask: createMockTask({ id: 'task-1' }),
                 tasksCompleted: 0
@@ -567,13 +567,13 @@ describe('AgentManager', () => {
 
     describe('Terminal Close Handling', () => {
         it('should handle terminal close for working agent', () => {
-            const mockAgent = createMockAgent({ 
-                id: 'agent-1', 
+            const mockAgent = createMockAgent({
+                id: 'agent-1',
                 status: 'working',
                 currentTask: createMockTask({ id: 'task-1', title: 'Test Task' })
             });
             const mockTerminal = { name: 'agent-1-terminal' } as any;
-            
+
             (agentManager as any).agents.set('agent-1', mockAgent);
             (agentManager as any).findAgentByTerminal = jest.fn().mockReturnValue(mockAgent);
 
@@ -599,7 +599,7 @@ describe('AgentManager', () => {
         it('should handle terminal close for idle agent', () => {
             const mockAgent = createMockAgent({ id: 'agent-1', status: 'idle' });
             const mockTerminal = { name: 'agent-1-terminal' } as any;
-            
+
             (agentManager as any).agents.set('agent-1', mockAgent);
             (agentManager as any).findAgentByTerminal = jest.fn().mockReturnValue(mockAgent);
 
@@ -617,8 +617,8 @@ describe('AgentManager', () => {
             agentManager.setUseWorktrees(true);
 
             expect(mockConfigService.update).toHaveBeenCalledWith(
-                'useWorktrees', 
-                true, 
+                'useWorktrees',
+                true,
                 vscode.ConfigurationTarget.Workspace
             );
         });
@@ -628,7 +628,7 @@ describe('AgentManager', () => {
         it('should publish agent created event on spawn', async () => {
             const agentConfig: AgentConfig = {
                 name: 'Test Agent',
-                type: 'General Purpose',
+                type: 'General Purpose'
             };
 
             const mockAgent = createMockAgent({ id: 'agent-1' });
@@ -660,7 +660,7 @@ describe('AgentManager', () => {
         it('should record agent creation metrics', async () => {
             const agentConfig: AgentConfig = {
                 name: 'Test Agent',
-                type: 'General Purpose',
+                type: 'General Purpose'
             };
 
             const mockAgent = createMockAgent({ id: 'agent-1' });

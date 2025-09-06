@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { INotificationService } from './interfaces';
 
 export class NotificationService implements INotificationService {
-    
+
     async showInformation(message: string, ...items: string[]): Promise<string | undefined> {
         return await vscode.window.showInformationMessage(message, ...items);
     }

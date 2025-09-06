@@ -9,17 +9,17 @@ import * as vscode from 'vscode';
 export class ConductorChatSimple {
     private panel: vscode.WebviewPanel | undefined;
     private context: vscode.ExtensionContext;
-    
+
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
     }
-    
+
     public async show() {
         if (this.panel) {
             this.panel.reveal();
             return;
         }
-        
+
         this.panel = vscode.window.createWebviewPanel(
             'nofxConductorSimple',
             '🎸 NofX Conductor (Simple)',
@@ -29,9 +29,9 @@ export class ConductorChatSimple {
                 retainContextWhenHidden: true
             }
         );
-        
+
         this.panel.webview.html = this.getWebviewContent();
-        
+
         this.panel.webview.onDidReceiveMessage(
             async message => {
                 if (message.command === 'sendMessage') {
@@ -41,7 +41,7 @@ export class ConductorChatSimple {
             undefined,
             this.context.subscriptions
         );
-        
+
         // Send initial greeting
         setTimeout(() => {
             this.sendResponse(`🎸 **NofX Conductor Ready!**
@@ -57,7 +57,7 @@ I can help you:
 What would you like to work on?`);
         }, 500);
     }
-    
+
     private handleMessage(text: string) {
         // Add user message
         this.panel?.webview.postMessage({
@@ -68,28 +68,28 @@ What would you like to work on?`);
                 timestamp: new Date().toISOString()
             }
         });
-        
+
         // Generate response based on input
         setTimeout(() => {
             const response = this.generateResponse(text);
             this.sendResponse(response);
         }, 1000);
     }
-    
+
     private generateResponse(input: string): string {
         const lower = input.toLowerCase();
-        
+
         if (lower.includes('hello') || lower.includes('hi')) {
-            return `👋 Hello! How can I help you today?`;
+            return '👋 Hello! How can I help you today?';
         }
-        
+
         if (lower.includes('test')) {
             return `🧪 For testing, I recommend:
 - Unit tests for core components
 - Integration tests for the WebSocket system
 - E2E tests for the chat interface`;
         }
-        
+
         if (lower.includes('help')) {
             return `I can help you with:
 - Architecture planning
@@ -99,12 +99,12 @@ What would you like to work on?`);
 
 What specifically would you like help with?`;
         }
-        
+
         return `I understand you want to: "${input}"
 
 Let me help you break this down into actionable steps.`;
     }
-    
+
     private sendResponse(text: string) {
         this.panel?.webview.postMessage({
             command: 'addMessage',
@@ -115,7 +115,7 @@ Let me help you break this down into actionable steps.`;
             }
         });
     }
-    
+
     private getWebviewContent(): string {
         return `<!DOCTYPE html>
 <html>

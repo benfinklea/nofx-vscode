@@ -14,10 +14,10 @@ export class LoggingService implements ILoggingService {
     ) {
         this.mainChannel = mainChannel;
         this.channels.set('main', this.mainChannel);
-        
+
         // Initialize log level from configuration
         this.updateLogLevel();
-        
+
         // Listen for configuration changes
         const disposable = this.configService.onDidChange(() => {
             this.updateLogLevel();
@@ -31,7 +31,7 @@ export class LoggingService implements ILoggingService {
             this.currentLogLevel = 'info';
             return;
         }
-        
+
         const configLevel = String(raw).toLowerCase() as LogLevel;
         if (['debug', 'info', 'warn', 'error'].includes(configLevel)) {
             this.currentLogLevel = configLevel;
@@ -50,9 +50,9 @@ export class LoggingService implements ILoggingService {
     private formatMessage(level: LogLevel, message: string, data?: any): string {
         const timestamp = new Date().toISOString();
         const levelStr = level.toUpperCase().padEnd(5);
-        
+
         let formattedMessage = `[${timestamp}] ${levelStr} ${message}`;
-        
+
         if (data !== undefined) {
             if (typeof data === 'object') {
                 formattedMessage += `\n${JSON.stringify(data, null, 2)}`;
@@ -60,7 +60,7 @@ export class LoggingService implements ILoggingService {
                 formattedMessage += ` ${data}`;
             }
         }
-        
+
         return formattedMessage;
     }
 
@@ -70,15 +70,15 @@ export class LoggingService implements ILoggingService {
         }
 
         const formattedMessage = this.formatMessage(level, message, data);
-        
+
         // Write to main channel
         this.mainChannel.appendLine(formattedMessage);
-        
+
         // Console fallback for development
         if (this.currentLogLevel === 'debug') {
-            const consoleMethod = level === 'error' ? console.error : 
-                                 level === 'warn' ? console.warn : 
-                                 level === 'info' ? console.info : console.log;
+            const consoleMethod = level === 'error' ? console.error :
+                level === 'warn' ? console.warn :
+                    level === 'info' ? console.info : console.log;
             consoleMethod(formattedMessage);
         }
     }
@@ -123,7 +123,7 @@ export class LoggingService implements ILoggingService {
             this.timers.delete(label);
         }
     }
-    
+
     onDidChangeConfiguration(callback: () => void): vscode.Disposable {
         return this.configService.onDidChange(callback);
     }
@@ -131,7 +131,7 @@ export class LoggingService implements ILoggingService {
     dispose(): void {
         this.disposables.forEach(d => d.dispose());
         this.disposables.length = 0;
-        
+
         // Only dispose channels created by this service, not the injected main channel
         this.channels.forEach((channel, name) => {
             if (name !== 'main') {
@@ -139,7 +139,7 @@ export class LoggingService implements ILoggingService {
             }
         });
         this.channels.clear();
-        
+
         this.timers.clear();
     }
 }

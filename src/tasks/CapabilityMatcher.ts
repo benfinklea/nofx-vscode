@@ -47,7 +47,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
     constructor(loggingService: ILoggingService, configService: IConfigurationService) {
         this.logger = loggingService;
         this.configService = configService;
-        
+
         // Initialize with default weights
         this.weights = {
             capabilityMatch: 0.40,
@@ -56,13 +56,13 @@ export class CapabilityMatcher implements ICapabilityMatcher {
             workloadFactor: 0.10,
             performanceFactor: 0.05
         };
-        
+
         // Initialize bidirectional capability synonyms
         this.initializeCapabilitySynonyms();
-        
+
         // Load weights from configuration
         this.loadWeightsFromConfig();
-        
+
         // Listen to configuration changes using proper IConfigurationService API
         this.configChangeDisposable = this.configService.onDidChange((e: vscode.ConfigurationChangeEvent) => {
             if (e.affectsConfiguration('nofx.matcher.weights')) {
@@ -84,7 +84,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
      */
     scoreAgentWithBreakdown(agent: Agent, task: Task): { score: number; breakdown: AgentScore['breakdown'] } {
         const breakdown = this.calculateScoreBreakdown(agent, task);
-        const totalScore = 
+        const totalScore =
             breakdown.capabilityMatch * this.weights.capabilityMatch +
             breakdown.specializationMatch * this.weights.specializationMatch +
             breakdown.typeMatch * this.weights.typeMatch +
@@ -123,16 +123,16 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         scoredAgents.sort((a, b) => b.score - a.score);
 
         const bestAgent = scoredAgents[0];
-        
+
         // Check minimum score threshold (configurable, default 0)
         const minScore = this.configService?.get<number>('nofx.matcher.minScore', 0) || 0;
         if (bestAgent.score < minScore) {
             this.logger.warn(`Best agent ${bestAgent.agent.id} score ${bestAgent.score.toFixed(2)} below minimum threshold ${minScore} for task ${task.id}`);
             return null;
         }
-        
+
         this.logger.info(`Best agent for task ${task.id}: ${bestAgent.agent.id} (score: ${bestAgent.score.toFixed(2)})`);
-        
+
         return bestAgent.agent;
     }
 
@@ -170,12 +170,12 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         }
 
         const matchScore = matchCount / totalRequired;
-        
+
         // Apply negative penalty for poor capability matches
         if (matchScore === 0) {
             return -0.2;
         }
-        
+
         return matchScore;
     }
 
@@ -247,7 +247,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         for (const group of capabilityGroups) {
             const normalizedGroup = group.map(cap => cap.toLowerCase());
             const synonymSet = new Set(normalizedGroup);
-            
+
             // Each capability in the group is synonymous with all others
             for (const capability of normalizedGroup) {
                 this.capabilitySynonyms.set(capability, synonymSet);
@@ -261,7 +261,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
      */
     private hasCapabilityMatch(agentCapabilities: string[], requiredCapability: string): boolean {
         const normalizedRequired = requiredCapability.toLowerCase();
-        
+
         // Direct match (both arrays are already normalized to lowercase)
         if (agentCapabilities.includes(normalizedRequired)) {
             return true;
@@ -301,12 +301,12 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         }
 
         const matchScore = totalSpecializationWords > 0 ? matchCount / totalSpecializationWords : 0;
-        
+
         // Apply negative penalty for very poor specialization matches
         if (matchScore < 0.1) {
             return -0.1;
         }
-        
+
         return matchScore;
     }
 
@@ -321,7 +321,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
 
         // Infer task type from description and tags
         const taskType = this.inferTaskType(task);
-        
+
         if (!taskType) {
             return 0; // Return 0 for unknown types to avoid bias
         }
@@ -340,7 +340,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
      */
     private inferTaskType(task: Task): string | null {
         const text = `${task.description} ${(task.tags || []).join(' ')}`.toLowerCase();
-        
+
         if (text.includes('frontend') || text.includes('react') || text.includes('ui') || text.includes('css')) {
             return 'frontend';
         }
@@ -414,19 +414,19 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         }
 
         if (breakdown.specializationMatch > 0.5) {
-            explanations.push(`Good specialization match`);
+            explanations.push('Good specialization match');
         }
 
         if (breakdown.typeMatch >= 1.0) {
-            explanations.push(`Perfect type compatibility`);
+            explanations.push('Perfect type compatibility');
         } else if (breakdown.typeMatch <= 0) {
-            explanations.push(`Type mismatch`);
+            explanations.push('Type mismatch');
         }
 
         if (breakdown.workloadFactor === 1.0) {
-            explanations.push(`Agent is idle`);
+            explanations.push('Agent is idle');
         } else {
-            explanations.push(`Agent is busy`);
+            explanations.push('Agent is busy');
         }
 
         return explanations.join(', ');
@@ -467,14 +467,14 @@ export class CapabilityMatcher implements ICapabilityMatcher {
      */
     private loadWeightsFromConfig(): void {
         if (!this.configService) return;
-        
+
         // Use proper IConfigurationService API with get<T>(key, default?)
         this.weights.capabilityMatch = this.configService.get<number>('nofx.matcher.weights.capabilityMatch', this.weights.capabilityMatch);
         this.weights.specializationMatch = this.configService.get<number>('nofx.matcher.weights.specializationMatch', this.weights.specializationMatch);
         this.weights.typeMatch = this.configService.get<number>('nofx.matcher.weights.typeMatch', this.weights.typeMatch);
         this.weights.workloadFactor = this.configService.get<number>('nofx.matcher.weights.workloadFactor', this.weights.workloadFactor);
         this.weights.performanceFactor = this.configService.get<number>('nofx.matcher.weights.performanceFactor', this.weights.performanceFactor);
-        
+
         this.logger.info('CapabilityMatcher weights loaded from configuration', this.weights);
     }
 

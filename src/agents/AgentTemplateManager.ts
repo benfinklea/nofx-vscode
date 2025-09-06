@@ -43,7 +43,7 @@ export class AgentTemplateManager {
     constructor(workspaceRoot: string) {
         this.templatesDir = path.join(workspaceRoot, '.nofx', 'templates');
         this.customTemplatesDir = path.join(this.templatesDir, 'custom');
-        
+
         this.ensureDirectories();
         this.loadTemplates();
         this.watchTemplates();
@@ -139,11 +139,11 @@ export class AgentTemplateManager {
 
     private loadTemplates() {
         this.templates.clear();
-        
+
         // Load built-in templates
         const templateFiles = fs.readdirSync(this.templatesDir)
             .filter(file => file.endsWith('.json'));
-        
+
         for (const file of templateFiles) {
             try {
                 const content = fs.readFileSync(path.join(this.templatesDir, file), 'utf-8');
@@ -153,12 +153,12 @@ export class AgentTemplateManager {
                 console.error(`Failed to load template ${file}:`, error);
             }
         }
-        
+
         // Load custom templates
         if (fs.existsSync(this.customTemplatesDir)) {
             const customFiles = fs.readdirSync(this.customTemplatesDir)
                 .filter(file => file.endsWith('.json'));
-            
+
             for (const file of customFiles) {
                 try {
                     const content = fs.readFileSync(path.join(this.customTemplatesDir, file), 'utf-8');
@@ -170,24 +170,24 @@ export class AgentTemplateManager {
                 }
             }
         }
-        
+
         console.log(`[NofX] Loaded ${this.templates.size} agent templates`);
     }
 
     private watchTemplates() {
         const pattern = new vscode.RelativePattern(this.templatesDir, '**/*.json');
         this.fileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
-        
+
         this.fileWatcher.onDidCreate(() => {
             this.loadTemplates();
             this._onTemplateChange.fire();
         });
-        
+
         this.fileWatcher.onDidChange(() => {
             this.loadTemplates();
             this._onTemplateChange.fire();
         });
-        
+
         this.fileWatcher.onDidDelete(() => {
             this.loadTemplates();
             this._onTemplateChange.fire();
@@ -205,7 +205,7 @@ export class AgentTemplateManager {
     public async createTemplate(template: AgentTemplate, isCustom: boolean = true) {
         const dir = isCustom ? this.customTemplatesDir : this.templatesDir;
         const filePath = path.join(dir, `${template.id}.json`);
-        
+
         if (fs.existsSync(filePath)) {
             const overwrite = await vscode.window.showWarningMessage(
                 `Template ${template.name} already exists. Overwrite?`,
@@ -213,7 +213,7 @@ export class AgentTemplateManager {
             );
             if (overwrite !== 'Yes') return false;
         }
-        
+
         fs.writeFileSync(filePath, JSON.stringify(template, null, 2));
         this.loadTemplates();
         return true;
@@ -227,12 +227,12 @@ export class AgentTemplateManager {
     public async editTemplate(id: string) {
         const template = this.templates.get(id);
         if (!template) return;
-        
+
         const isCustom = id.startsWith('custom-');
         const dir = isCustom ? this.customTemplatesDir : this.templatesDir;
         const fileName = isCustom ? id.replace('custom-', '') : id;
         const filePath = path.join(dir, `${fileName}.json`);
-        
+
         if (fs.existsSync(filePath)) {
             const document = await vscode.workspace.openTextDocument(filePath);
             await vscode.window.showTextDocument(document);
@@ -242,11 +242,11 @@ export class AgentTemplateManager {
     public async duplicateTemplate(id: string, newName: string) {
         const template = this.templates.get(id);
         if (!template) return false;
-        
+
         const newTemplate = { ...template };
         newTemplate.id = newName.toLowerCase().replace(/\s+/g, '-');
         newTemplate.name = newName;
-        
+
         return this.createTemplate(newTemplate, true);
     }
 
@@ -254,12 +254,12 @@ export class AgentTemplateManager {
         try {
             const content = await vscode.workspace.fs.readFile(uri);
             const template = JSON.parse(Buffer.from(content).toString()) as AgentTemplate;
-            
+
             // Validate template
             if (!template.id || !template.name || !template.systemPrompt) {
                 throw new Error('Invalid template format');
             }
-            
+
             return this.createTemplate(template, true);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to import template: ${error}`);
@@ -270,14 +270,14 @@ export class AgentTemplateManager {
     public async exportTemplate(id: string) {
         const template = this.templates.get(id);
         if (!template) return;
-        
+
         const uri = await vscode.window.showSaveDialog({
             defaultUri: vscode.Uri.file(`${template.id}.json`),
             filters: {
                 'JSON files': ['json']
             }
         });
-        
+
         if (uri) {
             const content = Buffer.from(JSON.stringify(template, null, 2));
             await vscode.workspace.fs.writeFile(uri, content);
@@ -288,46 +288,46 @@ export class AgentTemplateManager {
     public findBestTemplate(task: any): AgentTemplate | undefined {
         let bestTemplate: AgentTemplate | undefined;
         let bestScore = 0;
-        
+
         const taskText = `${task.title} ${task.description}`.toLowerCase();
-        
+
         for (const template of this.templates.values()) {
             let score = 0;
-            
+
             // Check preferred tasks
             for (const preferred of template.taskPreferences.preferred) {
                 if (taskText.includes(preferred)) {
                     score += 10;
                 }
             }
-            
+
             // Check avoided tasks (negative score)
             for (const avoid of template.taskPreferences.avoid) {
                 if (taskText.includes(avoid)) {
                     score -= 5;
                 }
             }
-            
+
             // Check tags
             for (const tag of template.tags) {
                 if (taskText.includes(tag)) {
                     score += 3;
                 }
             }
-            
+
             // Check capabilities
             for (const lang of template.capabilities.languages) {
                 if (taskText.includes(lang)) {
                     score += 2;
                 }
             }
-            
+
             if (score > bestScore) {
                 bestScore = score;
                 bestTemplate = template;
             }
         }
-        
+
         return bestTemplate;
     }
 

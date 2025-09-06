@@ -143,7 +143,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
         // If allTasks is provided, build the dependency graph from tasks for cycle checks
         if (allTasks) {
             this.buildDependencyGraphFromTasks(allTasks);
-            
+
             // Verify each dependency exists in the task set
             const taskMap = new Map(allTasks.map(t => [t.id, t]));
             for (const depId of dependencies) {
@@ -187,7 +187,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
     getReadyTasks(allTasks: Task[]): Task[] {
         // Rebuild dependency graph from tasks before evaluation
         this.buildDependencyGraphFromTasks(allTasks);
-        
+
         const readyTasks: Task[] = [];
         const taskMap = new Map(allTasks.map(task => [task.id, task]));
 
@@ -195,7 +195,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
             const wasBlocked = task.status === 'blocked' || (task.blockedBy && task.blockedBy.length > 0);
             if (this.isTaskReady(task, taskMap)) {
                 readyTasks.push(task);
-                
+
                 // Emit dependency resolution event if task was previously blocked
                 if (wasBlocked) {
                     this.eventBus.publish(DOMAIN_EVENTS.TASK_DEPENDENCY_RESOLVED, {
@@ -240,7 +240,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
         const conflicts: string[] = [];
         const taskFiles = new Set(task.files || []);
         const hadConflicts = this.conflicts.has(task.id);
-        
+
         // Store previous conflicts before computing/clearing
         const prevConflicts = (task.conflictsWith || []).slice();
 
@@ -267,7 +267,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
 
             // Set conflictsWith on the task object
             task.conflictsWith = conflicts;
-            
+
             // Reset resolved state when new conflicts are detected
             this.lastConflictResolvedState.set(task.id, false);
 
@@ -281,13 +281,13 @@ export class TaskDependencyManager implements ITaskDependencyManager {
             this.conflicts.delete(task.id);
             task.conflictsWith = [];
             task.blockedBy = (task.blockedBy || []).filter(id => !prevConflicts.includes(id));
-            
+
             // Guard against duplicate publishes - only publish if state changed
             const wasResolved = this.lastConflictResolvedState.get(task.id) || false;
             if (!wasResolved) {
-                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, { 
-                    taskId: task.id, 
-                    resolution: 'auto' 
+                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, {
+                    taskId: task.id,
+                    resolution: 'auto'
                 });
                 this.lastConflictResolvedState.set(task.id, true);
             }
@@ -315,7 +315,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
             case 'merge':
                 // Allow the task to proceed (remove from conflicts)
                 this.conflicts.delete(taskId);
-                
+
                 // Update task fields if task is provided
                 if (task) {
                     // Clear conflict-related fields
@@ -323,7 +323,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
                     // Remove conflict-related blockedBy entries
                     task.blockedBy = (task.blockedBy || []).filter(id => !conflict.conflictingTasks.includes(id));
                 }
-                
+
                 this.logger.info(`Resolved conflict for task ${taskId} by ${resolution}`);
                 this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, { taskId, resolution });
                 break;
@@ -399,7 +399,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
      */
     private isTaskReady(task: Task, taskMap: Map<string, Task>): boolean {
         const dependencies = this.dependencyGraph[task.id] || [];
-        
+
         for (const depId of dependencies) {
             const depTask = taskMap.get(depId);
             if (!depTask || depTask.status !== 'completed') {
@@ -457,21 +457,21 @@ export class TaskDependencyManager implements ITaskDependencyManager {
     private buildPreciseCyclePath(cycleStart: string, recursionStack: Set<string>): string[] {
         const cyclePath: string[] = [];
         const stackArray = Array.from(recursionStack);
-        
+
         // Find the index of the cycle start in the recursion stack
         const startIndex = stackArray.indexOf(cycleStart);
         if (startIndex === -1) {
             return [cycleStart]; // Fallback
         }
-        
+
         // Extract the cycle from the recursion stack
         for (let i = startIndex; i < stackArray.length; i++) {
             cyclePath.push(stackArray[i]);
         }
-        
+
         // Add the cycle start at the end to complete the cycle
         cyclePath.push(cycleStart);
-        
+
         return cyclePath;
     }
 

@@ -11,7 +11,7 @@ export enum MessageType {
     TERMINATE_AGENT = 'terminate_agent',
     PAUSE_AGENT = 'pause_agent',
     RESUME_AGENT = 'resume_agent',
-    
+
     // Agent -> Conductor status
     AGENT_READY = 'agent_ready',
     TASK_ACCEPTED = 'task_accepted',
@@ -20,7 +20,7 @@ export enum MessageType {
     TASK_ERROR = 'task_error',
     AGENT_STATUS = 'agent_status',
     AGENT_QUERY = 'agent_query',
-    
+
     // System messages
     CONNECTION_ESTABLISHED = 'connection_established',
     CONNECTION_LOST = 'connection_lost',
@@ -175,14 +175,14 @@ export function formatMessageForClaude(message: OrchestratorMessage): string {
         case MessageType.ASSIGN_TASK:
             const task = message.payload as AssignTaskPayload;
             return `[TASK ASSIGNED] ${task.title}\nPriority: ${task.priority}\nDescription: ${task.description}`;
-        
+
         case MessageType.QUERY_STATUS:
             return '[STATUS REQUEST] Please report your current status';
-        
+
         case MessageType.AGENT_QUERY:
             const query = message.payload as AgentQueryPayload;
             return `[QUESTION FROM ${message.from}] ${query.question}`;
-        
+
         default:
             return `[${message.type}] ${JSON.stringify(message.payload)}`;
     }
@@ -191,9 +191,9 @@ export function formatMessageForClaude(message: OrchestratorMessage): string {
 export function extractJsonFromClaudeOutput(output: string): OrchestratorMessage | null {
     // Look for JSON blocks in Claude's output
     const jsonMatches = output.match(/\{[^{}]*\}/g);
-    
+
     if (!jsonMatches) return null;
-    
+
     for (const match of jsonMatches) {
         try {
             const parsed = JSON.parse(match);
@@ -206,7 +206,7 @@ export function extractJsonFromClaudeOutput(output: string): OrchestratorMessage
             // Not valid JSON, continue
         }
     }
-    
+
     return null;
 }
 
@@ -214,7 +214,7 @@ function convertClaudeCommandToMessage(command: any): OrchestratorMessage {
     // Map Claude's simplified commands to full messages
     let type: MessageType;
     let payload: any;
-    
+
     switch (command.type) {
         case 'spawn':
         case 'spawn_agent':
@@ -224,7 +224,7 @@ function convertClaudeCommandToMessage(command: any): OrchestratorMessage {
                 name: command.name || `${command.role}-agent`
             };
             break;
-        
+
         case 'assign':
         case 'assign_task':
             type = MessageType.ASSIGN_TASK;
@@ -236,23 +236,23 @@ function convertClaudeCommandToMessage(command: any): OrchestratorMessage {
                 priority: command.priority || 'medium'
             };
             break;
-        
+
         case 'status':
         case 'query':
             type = MessageType.QUERY_STATUS;
             payload = { agentId: command.agentId || 'all' };
             break;
-        
+
         case 'terminate':
         case 'stop':
             type = MessageType.TERMINATE_AGENT;
             payload = { agentId: command.agentId };
             break;
-        
+
         default:
             type = MessageType.BROADCAST;
             payload = command;
     }
-    
+
     return createMessage('conductor', command.agentId || 'broadcast', type, payload);
 }

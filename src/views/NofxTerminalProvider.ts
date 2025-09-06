@@ -20,7 +20,7 @@ export class NofxTerminalProvider implements vscode.WebviewViewProvider {
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
-        _token: vscode.CancellationToken,
+        _token: vscode.CancellationToken
     ) {
         this._view = webviewView;
 
@@ -60,7 +60,7 @@ export class NofxTerminalProvider implements vscode.WebviewViewProvider {
 
     private updateView() {
         if (this._view) {
-            this._view.webview.postMessage({ 
+            this._view.webview.postMessage({
                 command: 'updateAgents',
                 agents: this.getAgentData()
             });

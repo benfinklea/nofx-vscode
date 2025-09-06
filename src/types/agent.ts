@@ -1,7 +1,7 @@
 // Re-export agent types from the agents module
-export { 
-    Agent, 
-    AgentStatus, 
+export {
+    Agent,
+    AgentStatus,
     AgentConfig
 } from '../agents/types';
 
@@ -17,7 +17,7 @@ export interface AgentCapabilities {
     };
 }
 
-// Extended agent type with additional testing properties  
+// Extended agent type with additional testing properties
 import { Agent } from '../agents/types';
 import * as vscode from 'vscode';
 

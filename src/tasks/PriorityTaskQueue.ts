@@ -10,7 +10,7 @@ interface QueueItem {
 
 /**
  * PriorityTaskQueue manages tasks in separate priority heaps for optimal performance.
- * 
+ *
  * Queue Behavior:
  * - Uses two heaps: readyHeap for 'ready' tasks, validatedHeap for 'validated' tasks
  * - Higher priority tasks are dequeued first
@@ -61,7 +61,7 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
             this.bubbleUp(this.validatedHeap, index);
             this.logger.debug(`Task ${task.id} enqueued to validatedHeap with priority ${priority}`);
         }
-        
+
         // Track depth history
         this.updateDepthHistory();
     }
@@ -134,7 +134,7 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
         // Rebuild both heaps from scratch with recalculated priorities
         const readyItems = [...this.readyHeap];
         const validatedItems = [...this.validatedHeap];
-        
+
         this.readyHeap = [];
         this.validatedHeap = [];
         this.taskIndexReady.clear();
@@ -148,7 +148,7 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
                 priority: newPriority,
                 timestamp: item.timestamp
             };
-            
+
             this.readyHeap.push(updatedItem);
             const index = this.readyHeap.length - 1;
             this.taskIndexReady.set(updatedItem.task.id, index);
@@ -163,7 +163,7 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
                 priority: newPriority,
                 timestamp: item.timestamp
             };
-            
+
             this.validatedHeap.push(updatedItem);
             const index = this.validatedHeap.length - 1;
             this.taskIndexValidated.set(updatedItem.task.id, index);
@@ -299,7 +299,7 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
 
         const newPriority = this.calculatePriority(task);
         const success = this.updatePriority(task.id, newPriority);
-        
+
         if (success) {
             this.logger.debug(`Recomputed priority for task ${task.id}: ${newPriority}`);
         } else {
@@ -353,7 +353,7 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
 
         const taskMap = new Map(allTasks.map(t => [t.id, t]));
         let completedCount = 0;
-        let totalCount = task.prefers.length;
+        const totalCount = task.prefers.length;
 
         for (const prefId of task.prefers) {
             const prefTask = taskMap.get(prefId);
@@ -384,13 +384,13 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
             this.logger.warn(`Task ${task.id} is not in 'ready' state (current: ${task.status}), skipping enqueue`);
             return;
         }
-        
+
         // Remove from any heap first
         this.remove(task.id);
-        
+
         // Enqueue to ready heap
         this.enqueue(task);
-        
+
         this.logger.debug(`Task ${task.id} moved to ready heap`);
     }
 
@@ -407,7 +407,7 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
     private bubbleUp(heap: QueueItem[], index: number): void {
         while (index > 0) {
             const parentIndex = Math.floor((index - 1) / 2);
-            
+
             if (this.compare(heap[index], heap[parentIndex]) <= 0) {
                 break;
             }
@@ -426,12 +426,12 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
             const leftChild = 2 * index + 1;
             const rightChild = 2 * index + 2;
 
-            if (leftChild < heap.length && 
+            if (leftChild < heap.length &&
                 this.compare(heap[leftChild], heap[maxIndex]) > 0) {
                 maxIndex = leftChild;
             }
 
-            if (rightChild < heap.length && 
+            if (rightChild < heap.length &&
                 this.compare(heap[rightChild], heap[maxIndex]) > 0) {
                 maxIndex = rightChild;
             }
@@ -460,7 +460,7 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
      */
     private swap(heap: QueueItem[], i: number, j: number): void {
         [heap[i], heap[j]] = [heap[j], heap[i]];
-        
+
         // Update the appropriate index map based on which heap we're working with
         if (heap === this.readyHeap) {
             this.taskIndexReady.set(heap[i].task.id, i);
@@ -530,7 +530,7 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
     private updateDepthHistory(): void {
         const currentSize = this.size();
         this.depthHistory.push(currentSize);
-        
+
         // Keep only last 10 entries (ring buffer)
         if (this.depthHistory.length > 10) {
             this.depthHistory.shift();

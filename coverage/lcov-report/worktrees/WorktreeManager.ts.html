@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/119</span>
+                <span class='fraction'>0/120</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/117</span>
+                <span class='fraction'>0/118</span>
             </div>
         
             
@@ -380,18 +380,28 @@
 <a name='L315'></a><a href='#L315'>315</a>
 <a name='L316'></a><a href='#L316'>316</a>
 <a name='L317'></a><a href='#L317'>317</a>
-<a name='L318'></a><a href='#L318'>318</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -697,19 +707,24 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" >import * as vscode from 'vscode';</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import * as vscode from 'vscode';
 <span class="cstat-no" title="statement not covered" >import * as path from 'path';</span>
 <span class="cstat-no" title="statement not covered" >import * as fs from 'fs';</span>
 <span class="cstat-no" title="statement not covered" >import { execSync } from 'child_process';</span>
 import { Agent } from '../agents/types';
+import { ILoggingService, INotificationService } from '../services/interfaces';
 &nbsp;
 <span class="cstat-no" title="statement not covered" >export class W</span>orktreeManager {
     private <span class="cstat-no" title="statement not covered" >worktrees: Map&lt;string, string&gt; = new Map(); </span>// agentId -&gt; worktree path
     private baseDir: string;
     private workspacePath: string;
+    private loggingService?: ILoggingService;
+    private notificationService?: INotificationService;
     
-<span class="fstat-no" title="function not covered" >    constructor(w</span>orkspacePath: string) {
+<span class="fstat-no" title="function not covered" >    constructor(w</span>orkspacePath: string, loggingService?: ILoggingService, notificationService?: INotificationService) {
 <span class="cstat-no" title="statement not covered" >        this.workspacePath = workspacePath;</span>
+<span class="cstat-no" title="statement not covered" >        this.loggingService = loggingService;</span>
+<span class="cstat-no" title="statement not covered" >        this.notificationService = notificationService;</span>
         // Create worktrees in a .nofx-worktrees directory adjacent to the project
 <span class="cstat-no" title="statement not covered" >        this.baseDir = path.join(path.dirname(workspacePath), '.nofx-worktrees');</span>
         
@@ -742,7 +757,7 @@ import { Agent } from '../agents/types';
             // Create the worktree with a new branch
             const command = <span class="cstat-no" title="statement not covered" >`git worktree add -b ${branchName} "${worktreePath}" ${currentBranch || 'HEAD'}`;</span>
             
-<span class="cstat-no" title="statement not covered" >            console.log(`[WorktreeManager] Creating worktree for ${agent.name}: ${command}`);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.debug(`Creating worktree for ${agent.name}: ${command}`);</span>
             
 <span class="cstat-no" title="statement not covered" >            execSync(command, {</span>
                 cwd: this.workspacePath,
@@ -773,11 +788,11 @@ import { Agent } from '../agents/types';
 <span class="cstat-no" title="statement not covered" >                fs.writeFileSync(gitignorePath, '# NofX agent worktree marker\n.nofx-agent\n');</span>
             }
             
-<span class="cstat-no" title="statement not covered" >            console.log(`[WorktreeManager] Created worktree for ${agent.name} at ${worktreePath}`);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.info(`Created worktree for ${agent.name} at ${worktreePath}`);</span>
             
 <span class="cstat-no" title="statement not covered" >            return worktreePath;</span>
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >            console.error(`[WorktreeManager] Error creating worktree for ${agent.name}:`, error);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.error(`Error creating worktree for ${agent.name}:`, error);</span>
 <span class="cstat-no" title="statement not covered" >            throw error;</span>
         }
     }
@@ -789,14 +804,14 @@ import { Agent } from '../agents/types';
 <span class="cstat-no" title="statement not covered" >        try {</span>
             const worktreePath = <span class="cstat-no" title="statement not covered" >this.worktrees.get(agentId);</span>
 <span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (!worktreePath) {</span>
-<span class="cstat-no" title="statement not covered" >                console.log(`[WorktreeManager] No worktree found for agent ${agentId}`);</span>
+<span class="cstat-no" title="statement not covered" >                this.loggingService?.debug(`No worktree found for agent ${agentId}`);</span>
 <span class="cstat-no" title="statement not covered" >                return;</span>
             }
             
             // Remove the worktree
             const command = <span class="cstat-no" title="statement not covered" >`git worktree remove "${worktreePath}" --force`;</span>
             
-<span class="cstat-no" title="statement not covered" >            console.log(`[WorktreeManager] Removing worktree: ${command}`);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.debug(`Removing worktree: ${command}`);</span>
             
 <span class="cstat-no" title="statement not covered" >            execSync(command, {</span>
                 cwd: this.workspacePath,
@@ -806,9 +821,9 @@ import { Agent } from '../agents/types';
             // Remove from our map
 <span class="cstat-no" title="statement not covered" >            this.worktrees.delete(agentId);</span>
             
-<span class="cstat-no" title="statement not covered" >            console.log(`[WorktreeManager] Removed worktree for agent ${agentId}`);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.info(`Removed worktree for agent ${agentId}`);</span>
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >            console.error(`[WorktreeManager] Error removing worktree for ${agentId}:`, error);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.error(`Error removing worktree for ${agentId}:`, error);</span>
             // Try to clean up the directory manually if git command failed
             const worktreePath = <span class="cstat-no" title="statement not covered" >this.worktrees.get(agentId);</span>
 <span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (worktreePath &amp;&amp; fs.existsSync(worktreePath)) {</span>
@@ -816,7 +831,7 @@ import { Agent } from '../agents/types';
 <span class="cstat-no" title="statement not covered" >                    fs.rmSync(worktreePath, { recursive: true, force: true });</span>
 <span class="cstat-no" title="statement not covered" >                    this.worktrees.delete(agentId);</span>
                 } catch (cleanupError) {
-<span class="cstat-no" title="statement not covered" >                    console.error(`[WorktreeManager] Error cleaning up worktree directory:`, cleanupError);</span>
+<span class="cstat-no" title="statement not covered" >                    this.loggingService?.error(`Error cleaning up worktree directory:`, cleanupError);</span>
                 }
             }
         }
@@ -844,7 +859,7 @@ import { Agent } from '../agents/types';
             
 <span class="cstat-no" title="statement not covered" >            return worktrees;</span>
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >            console.error('[WorktreeManager] Error listing worktrees:', error);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.error('Error listing worktrees:', error);</span>
 <span class="cstat-no" title="statement not covered" >            return [];</span>
         }
     }
@@ -871,7 +886,7 @@ import { Agent } from '../agents/types';
                     
                     // If we don't have this agent in our map, it's orphaned
 <span class="cstat-no" title="statement not covered" >                    <span class="missing-if-branch" title="if path not taken" >I</span>if (!this.worktrees.has(markerData.agentId)) {</span>
-<span class="cstat-no" title="statement not covered" >                        console.log(`[WorktreeManager] Found orphaned worktree for agent ${markerData.agentName}, cleaning up...`);</span>
+<span class="cstat-no" title="statement not covered" >                        this.loggingService?.info(`Found orphaned worktree for agent ${markerData.agentName}, cleaning up...`);</span>
                         
 <span class="cstat-no" title="statement not covered" >                        try {</span>
 <span class="cstat-no" title="statement not covered" >                            execSync(`git worktree remove "${worktreePath}" --force`, {</span>
@@ -879,13 +894,13 @@ import { Agent } from '../agents/types';
                                 encoding: 'utf-8'
                             });
                         } catch (removeError) {
-<span class="cstat-no" title="statement not covered" >                            console.error(`[WorktreeManager] Error removing orphaned worktree:`, removeError);</span>
+<span class="cstat-no" title="statement not covered" >                            this.loggingService?.error(`Error removing orphaned worktree:`, removeError);</span>
                         }
                     }
                 }
             }
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >            console.error('[WorktreeManager] Error cleaning up orphaned worktrees:', error);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.error('Error cleaning up orphaned worktrees:', error);</span>
         }
     }
     
@@ -961,7 +976,7 @@ import { Agent } from '../agents/types';
 <span class="cstat-no" title="statement not covered" >                worktrees.push(currentWorktree);</span>
             }
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >            console.error('[NofX] Error listing worktrees:', error);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.error('Error listing worktrees:', error);</span>
         }
         
 <span class="cstat-no" title="statement not covered" >        return worktrees.filter(<span class="fstat-no" title="function not covered" >w </span>=&gt; <span class="cstat-no" title="statement not covered" >w.branch.startsWith('agent-'))</span>;</span>
@@ -989,7 +1004,7 @@ import { Agent } from '../agents/types';
                 });
             } catch (commitError) {
                 // No changes to commit, that's okay
-<span class="cstat-no" title="statement not covered" >                console.log('[WorktreeManager] No changes to commit in worktree');</span>
+<span class="cstat-no" title="statement not covered" >                this.loggingService?.debug('No changes to commit in worktree');</span>
             }
             
             // Switch to main branch in the main workspace
@@ -1004,13 +1019,13 @@ import { Agent } from '../agents/types';
                 encoding: 'utf-8'
             });
             
-<span class="cstat-no" title="statement not covered" >            console.log(`[WorktreeManager] Merged agent ${markerData.agentName} work from ${markerData.branchName}`);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.info(`Merged agent ${markerData.agentName} work from ${markerData.branchName}`);</span>
             
-<span class="cstat-no" title="statement not covered" >            vscode.window.showInformationMessage(</span>
+<span class="cstat-no" title="statement not covered" >            this.notificationService?.showInformation(</span>
                 `✅ Merged ${markerData.agentName}'s work from branch ${markerData.branchName}`
             );
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >            console.error(`[WorktreeManager] Error merging agent work:`, error);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.error(`Error merging agent work:`, error);</span>
 <span class="cstat-no" title="statement not covered" >            throw error;</span>
         }
     }
@@ -1021,7 +1036,7 @@ import { Agent } from '../agents/types';
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-05T02:14:21.814Z
+                at 2025-09-05T12:10:29.099Z
             </div>
         <script src="../prettify.js"></script>
         <script>

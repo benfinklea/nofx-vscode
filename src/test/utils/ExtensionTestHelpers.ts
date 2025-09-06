@@ -24,19 +24,19 @@ export class ExtensionTestHelpers {
     /**
      * VS Code Extension Test Utilities
      */
-    
+
     /**
      * Create temporary workspace with git initialization and basic project structure
      */
     static async createTestWorkspace(name: string = 'test-workspace'): Promise<string> {
         const tempDir = path.join(os.tmpdir(), `nofx-test-${name}-${Date.now()}`);
         fs.mkdirSync(tempDir, { recursive: true });
-        
+
         // Initialize git
         await execAsync('git init', { cwd: tempDir });
         await execAsync('git config user.email "test@example.com"', { cwd: tempDir });
         await execAsync('git config user.name "Test User"', { cwd: tempDir });
-        
+
         // Create basic project structure
         fs.mkdirSync(path.join(tempDir, 'src'), { recursive: true });
         fs.mkdirSync(path.join(tempDir, '.vscode'), { recursive: true });
@@ -49,15 +49,15 @@ export class ExtensionTestHelpers {
                 lint: 'echo "lint"'
             }
         }, null, 2));
-        
+
         fs.writeFileSync(path.join(tempDir, 'README.md'), '# Test Project');
         fs.writeFileSync(path.join(tempDir, 'src', 'index.ts'), 'console.log("Hello, World!");');
-        
+
         // Create VS Code settings
         fs.writeFileSync(path.join(tempDir, '.vscode', 'settings.json'), JSON.stringify({
             'nofx.testMode': true
         }, null, 2));
-        
+
         this.tempDirs.push(tempDir);
         return tempDir;
     }
@@ -68,7 +68,7 @@ export class ExtensionTestHelpers {
     static async installTestExtension(vsixPath: string, cliPath?: string): Promise<void> {
         // Use provided CLI path or environment variable, fallback to default
         const codeCliPath = cliPath || process.env.VSCODE_CLI || vscode.env.appRoot + '/bin/code';
-        
+
         if (!cliPath && !process.env.VSCODE_CLI) {
             throw new Error(
                 'VS Code CLI path not provided. Set VSCODE_CLI environment variable or provide cliPath parameter. ' +
@@ -118,7 +118,7 @@ export class ExtensionTestHelpers {
                 }
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
-            
+
             throw new Error('Extension activation timeout');
         }
     }
@@ -151,7 +151,7 @@ export class ExtensionTestHelpers {
             }
         }
         this.tempDirs = [];
-        
+
         // Reset extension state if container is provided
         if (container && typeof container.dispose === 'function') {
             try {
@@ -165,7 +165,7 @@ export class ExtensionTestHelpers {
     /**
      * Command Testing Utilities
      */
-    
+
     /**
      * Execute commands with error handling and timeout
      */
@@ -176,7 +176,7 @@ export class ExtensionTestHelpers {
     ): Promise<any> {
         return Promise.race([
             vscode.commands.executeCommand(commandId, args),
-            new Promise((_, reject) => 
+            new Promise((_, reject) =>
                 setTimeout(() => reject(new Error(`Command ${commandId} timed out`)), timeout)
             )
         ]);
@@ -215,7 +215,7 @@ export class ExtensionTestHelpers {
     /**
      * UI Testing Utilities
      */
-    
+
     /**
      * Extract data from tree providers for testing
      */
@@ -265,14 +265,14 @@ export class ExtensionTestHelpers {
     /**
      * State Verification Utilities
      */
-    
+
     /**
      * Get current extension state for verification
      */
     static getExtensionState(container: IContainer): { agents: Agent[], tasks: Task[], services: string[] } {
         const agentManager = container.resolveOptional(SERVICE_TOKENS.AgentManager);
         const taskQueue = container.resolveOptional(SERVICE_TOKENS.TaskQueue);
-        
+
         return {
             agents: agentManager?.getAgents() || [],
             tasks: taskQueue?.getTasks() || [],
@@ -286,14 +286,14 @@ export class ExtensionTestHelpers {
     static verifyAgentState(expectedAgents: Partial<Agent>[], container: IContainer): boolean {
         const agentManager = container.resolveOptional(SERVICE_TOKENS.AgentManager);
         if (!agentManager) return false;
-        
+
         const agents = agentManager.getAgents();
-        
+
         if (agents.length !== expectedAgents.length) return false;
-        
-        return expectedAgents.every(expected => 
-            agents.some(agent => 
-                Object.keys(expected).every(key => 
+
+        return expectedAgents.every(expected =>
+            agents.some(agent =>
+                Object.keys(expected).every(key =>
                     agent[key as keyof Agent] === expected[key as keyof Agent]
                 )
             )
@@ -306,14 +306,14 @@ export class ExtensionTestHelpers {
     static verifyTaskState(expectedTasks: Partial<Task>[], container: IContainer): boolean {
         const taskQueue = container.resolveOptional(SERVICE_TOKENS.TaskQueue);
         if (!taskQueue) return false;
-        
+
         const tasks = taskQueue.getTasks();
-        
+
         if (tasks.length !== expectedTasks.length) return false;
-        
-        return expectedTasks.every(expected => 
-            tasks.some(task => 
-                Object.keys(expected).every(key => 
+
+        return expectedTasks.every(expected =>
+            tasks.some(task =>
+                Object.keys(expected).every(key =>
                     task[key as keyof Task] === expected[key as keyof Task]
                 )
             )
@@ -338,9 +338,9 @@ export class ExtensionTestHelpers {
         if (!eventBus) {
             return { events: [], stopCapture: () => {} };
         }
-        
+
         const capturedEvents: any[] = [];
-        
+
         const listeners = eventTypes.map(type => {
             const listener = (data: any) => {
                 capturedEvents.push({ type, data, timestamp: Date.now() });
@@ -348,7 +348,7 @@ export class ExtensionTestHelpers {
             eventBus.subscribe(type, listener);
             return { type, listener };
         });
-        
+
         return {
             events: capturedEvents,
             stopCapture: () => {
@@ -362,7 +362,7 @@ export class ExtensionTestHelpers {
     /**
      * Mock and Stub Utilities
      */
-    
+
     /**
      * Create mock workspace folder for testing
      */
@@ -424,11 +424,11 @@ export class ExtensionTestHelpers {
         writeFileMock: jest.Mock,
         existsMock: jest.Mock,
         restore: () => void
-    } {
+        } {
         const readFileMock = jest.spyOn(fs, 'readFileSync').mockReturnValue('{}');
         const writeFileMock = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
         const existsMock = jest.spyOn(fs, 'existsSync').mockReturnValue(true);
-        
+
         return {
             readFileMock,
             writeFileMock,
@@ -444,7 +444,7 @@ export class ExtensionTestHelpers {
     /**
      * Integration Test Utilities
      */
-    
+
     /**
      * Set up full integration test environment
      */
@@ -456,10 +456,10 @@ export class ExtensionTestHelpers {
     }> {
         const workspace = await this.createTestWorkspace('integration');
         await this.configureTestMode();
-        
+
         const container = this.getActivatedContainer();
         const eventBus = container?.resolveOptional<EventBus>(SERVICE_TOKENS.EventBus);
-        
+
         return {
             workspace,
             container,
@@ -479,12 +479,12 @@ export class ExtensionTestHelpers {
      */
     static async createTestOrchestrationServer(container: IContainer, server?: any, port?: number): Promise<{ server: any, port: number }> {
         const actualPort = port || await getPort();
-        
+
         // If no server provided, try to resolve from container or return mock
         if (!server) {
             // Check if OrchestrationServer is registered
             server = container.resolveOptional(SERVICE_TOKENS.OrchestrationServer);
-            
+
             if (!server) {
                 // Return a mock server that tracks the port
                 return {
@@ -497,12 +497,12 @@ export class ExtensionTestHelpers {
                 };
             }
         }
-        
+
         await server.start(actualPort);
-        
+
         // Get actual bound port from server status if available
         const boundPort = server.getStatus?.()?.port || actualPort;
-        
+
         return { server, port: boundPort };
     }
 
@@ -530,9 +530,9 @@ export class ExtensionTestHelpers {
                     resolve(true);
                 }
             });
-            
+
             client.send(JSON.stringify(message));
-            
+
             setTimeout(() => resolve(false), 1000); // Timeout after 1 second
         });
     }
@@ -550,7 +550,7 @@ export class ExtensionTestHelpers {
     /**
      * Performance Testing Utilities
      */
-    
+
     /**
      * Measure extension activation time
      */
@@ -572,14 +572,14 @@ export class ExtensionTestHelpers {
     /**
      * Monitor memory usage during tests
      */
-    static monitorMemoryUsage(): { 
-        start: number, 
-        current: () => number, 
-        peak: () => number 
-    } {
+    static monitorMemoryUsage(): {
+        start: number,
+        current: () => number,
+        peak: () => number
+        } {
         const start = process.memoryUsage().heapUsed;
         let peak = start;
-        
+
         return {
             start,
             current: () => {
@@ -600,7 +600,7 @@ export class ExtensionTestHelpers {
     } {
         const agents: Agent[] = [];
         const tasks: Task[] = [];
-        
+
         for (let i = 0; i < count; i++) {
             agents.push({
                 id: `agent-${i}`,
@@ -611,7 +611,7 @@ export class ExtensionTestHelpers {
                 terminal: {} as any,
                 workingDirectory: '/test'
             });
-            
+
             tasks.push({
                 id: `task-${i}`,
                 description: `Test Task ${i}`,
@@ -620,7 +620,7 @@ export class ExtensionTestHelpers {
                 createdAt: Date.now()
             } as Task);
         }
-        
+
         return { agents, tasks };
     }
 
@@ -633,13 +633,13 @@ export class ExtensionTestHelpers {
         [key: string]: number
     }): { passed: boolean, failures: string[] } {
         const failures: string[] = [];
-        
+
         for (const [key, value] of Object.entries(metrics)) {
             if (thresholds[key] && value > thresholds[key]) {
                 failures.push(`${key}: ${value}ms exceeds threshold of ${thresholds[key]}ms`);
             }
         }
-        
+
         return {
             passed: failures.length === 0,
             failures
@@ -649,7 +649,7 @@ export class ExtensionTestHelpers {
     /**
      * Error Testing Utilities
      */
-    
+
     /**
      * Simulate various error conditions
      */
@@ -662,12 +662,12 @@ export class ExtensionTestHelpers {
             'validation': () => new Error(message || 'Validation failed'),
             'service': () => new Error(message || 'Service unavailable')
         };
-        
+
         const errorFactory = errors[type];
         if (!errorFactory) {
             throw new Error(`Unknown error type: ${type}`);
         }
-        
+
         return errorFactory();
     }
 
@@ -696,22 +696,22 @@ export class ExtensionTestHelpers {
         errors: string[],
         warnings: string[],
         restore: () => void
-    } {
+        } {
         const errors: string[] = [];
         const warnings: string[] = [];
-        
+
         const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage')
             .mockImplementation((message: string) => {
                 errors.push(message);
                 return Promise.resolve(undefined);
             });
-        
+
         const warningSpy = jest.spyOn(vscode.window, 'showWarningMessage')
             .mockImplementation((message: string) => {
                 warnings.push(message);
                 return Promise.resolve(undefined);
             });
-        
+
         return {
             errors,
             warnings,

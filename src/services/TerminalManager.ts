@@ -20,7 +20,7 @@ export class TerminalManager implements ITerminalManager {
         this.eventBus = eventBus;
         this.errorHandler = errorHandler;
         this._onTerminalClosed = new vscode.EventEmitter<vscode.Terminal>();
-        
+
         // Listen for terminal close events
         this.disposables.push(
             vscode.window.onDidCloseTerminal((terminal) => {
@@ -29,12 +29,12 @@ export class TerminalManager implements ITerminalManager {
                     if (agentTerminal === terminal) {
                         this.terminals.delete(agentId);
                         this._onTerminalClosed.fire(terminal);
-                        
+
                         // Publish event to EventBus
                         if (this.eventBus) {
                             this.eventBus.publish(DOMAIN_EVENTS.TERMINAL_CLOSED, { agentId, terminal });
                         }
-                        
+
                         this.loggingService?.debug(`Terminal closed for agent ${agentId}`);
                         break;
                     }
@@ -50,7 +50,7 @@ export class TerminalManager implements ITerminalManager {
     createTerminal(agentId: string, agentConfig: any): vscode.Terminal {
         // Use provided terminal icon or fallback to type-based icon
         const terminalIcon = agentConfig.terminalIcon ?? (agentConfig.type === 'conductor' ? 'terminal' : 'robot');
-        
+
         // Create a dedicated terminal for this agent
         const terminal = vscode.window.createTerminal({
             name: `${agentConfig.template?.icon || '🤖'} ${agentConfig.name}`,
@@ -63,12 +63,12 @@ export class TerminalManager implements ITerminalManager {
         });
 
         this.terminals.set(agentId, terminal);
-        
+
         // Publish event to EventBus
         if (this.eventBus) {
             this.eventBus.publish(DOMAIN_EVENTS.TERMINAL_CREATED, { agentId, terminal, agentConfig });
         }
-        
+
         this.loggingService?.debug(`Terminal created for agent ${agentId}`);
         return terminal;
     }
@@ -82,12 +82,12 @@ export class TerminalManager implements ITerminalManager {
         if (terminal) {
             terminal.dispose();
             this.terminals.delete(agentId);
-            
+
             // Publish event to EventBus
             if (this.eventBus) {
                 this.eventBus.publish(DOMAIN_EVENTS.TERMINAL_DISPOSED, { agentId, terminal });
             }
-            
+
             this.loggingService?.debug(`Terminal disposed for agent ${agentId}`);
         }
     }
@@ -104,12 +104,12 @@ export class TerminalManager implements ITerminalManager {
         // Show agent info
         terminal.sendText(`echo "🤖 Initializing ${agent.name} (${agent.type})"`);
         terminal.sendText(`echo "Agent ID: ${agent.id}"`);
-        terminal.sendText(`echo "Starting Claude with agent specialization..."`);
-        terminal.sendText(`echo ""`);
-        
+        terminal.sendText('echo "Starting Claude with agent specialization..."');
+        terminal.sendText('echo ""');
+
         // Start Claude with --append-system-prompt flag
         const claudePath = this.configService.getClaudePath();
-        
+
         if (agent.template && agent.template.systemPrompt) {
             this.loggingService?.debug(`Starting ${agent.name} with system prompt`);
             // Combine the template prompt with team instructions
@@ -138,12 +138,12 @@ export class TerminalManager implements ITerminalManager {
     private quotePromptForShell(prompt: string): string {
         const platform = process.platform;
         const shell = vscode.env.shell;
-        
+
         // Detect Windows shells
         const isWindows = platform === 'win32';
         const isPowerShell = shell?.includes('powershell') || shell?.includes('pwsh');
         const isCmd = shell?.includes('cmd.exe');
-        
+
         if (isWindows) {
             if (isPowerShell) {
                 // PowerShell: Use double quotes and escape internal double quotes

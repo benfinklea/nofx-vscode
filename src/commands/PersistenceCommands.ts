@@ -130,7 +130,7 @@ export class PersistenceCommands implements ICommandHandler {
         }, async (progress) => {
             try {
                 const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
-                
+
                 // Clear agent data
                 progress.report({ message: 'Clearing agent data...', increment: 33 });
                 await persistence.clearAll();
@@ -163,7 +163,7 @@ export class PersistenceCommands implements ICommandHandler {
 
     private async clearDirectory(dirPath: string): Promise<void> {
         const files = await fsPromises.readdir(dirPath);
-        
+
         for (const file of files) {
             // Skip templates directory
             if (file === 'templates') {
@@ -172,7 +172,7 @@ export class PersistenceCommands implements ICommandHandler {
 
             const filePath = path.join(dirPath, file);
             const stat = await fsPromises.stat(filePath);
-            
+
             if (stat.isDirectory()) {
                 // Recursively remove subdirectory
                 await this.removeDirectory(filePath);

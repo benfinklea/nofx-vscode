@@ -25,7 +25,7 @@ describe('Build Validation', () => {
         it('should have main extension.js file', () => {
             const mainFile = path.join(outDir, 'extension.js');
             expect(fs.existsSync(mainFile)).toBe(true);
-            
+
             const stats = fs.statSync(mainFile);
             expect(stats.size).toBeGreaterThan(1024); // At least 1KB
         });
@@ -33,7 +33,7 @@ describe('Build Validation', () => {
         it('should have matching directory structure between src and out', () => {
             const srcDirs = getAllDirectories(srcDir);
             const outDirs = getAllDirectories(outDir);
-            
+
             // Check that each src directory has a corresponding out directory
             srcDirs.forEach(dir => {
                 const relativePath = path.relative(srcDir, dir);
@@ -45,10 +45,10 @@ describe('Build Validation', () => {
         it('should compile all TypeScript files to JavaScript', () => {
             const tsFiles = getAllFiles(srcDir, '.ts');
             const jsFiles = getAllFiles(outDir, '.js');
-            
+
             // Exclude test files from comparison
             const sourceTsFiles = tsFiles.filter(f => !f.includes('/test/'));
-            
+
             expect(jsFiles.length).toBeGreaterThan(0);
             expect(jsFiles.length).toBeGreaterThanOrEqual(sourceTsFiles.length);
         });
@@ -65,7 +65,7 @@ describe('Build Validation', () => {
                 tsconfigPath = path.join(projectRoot, 'tsconfig.json');
             }
             const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf-8'));
-            
+
             if (tsconfig.compilerOptions?.sourceMap) {
                 const sourceMaps = getAllFiles(outDir, '.js.map');
                 expect(sourceMaps.length).toBeGreaterThan(0);
@@ -82,7 +82,7 @@ describe('Build Validation', () => {
 
         it('should have valid main entry point', () => {
             expect(packageData.main).toBeDefined();
-            
+
             const mainPath = path.join(projectRoot, packageData.main);
             expect(fs.existsSync(mainPath)).toBe(true);
         });
@@ -97,7 +97,7 @@ describe('Build Validation', () => {
 
         it('should have valid command structure', () => {
             const commands = packageData.contributes?.commands || [];
-            
+
             commands.forEach((cmd: any) => {
                 expect(cmd.command).toBeDefined();
                 expect(cmd.title).toBeDefined();
@@ -141,7 +141,7 @@ describe('Build Validation', () => {
         it('should have valid contribution points', () => {
             const contributes = packageData.contributes;
             expect(contributes).toBeDefined();
-            
+
             // Check various contribution points
             expect(contributes.commands).toBeDefined();
             expect(contributes.views).toBeDefined();
@@ -152,7 +152,7 @@ describe('Build Validation', () => {
             const viewContainers = packageData.contributes?.viewsContainers?.activitybar;
             expect(viewContainers).toBeDefined();
             expect(viewContainers.length).toBeGreaterThan(0);
-            
+
             viewContainers.forEach((container: any) => {
                 expect(container.id).toBeDefined();
                 expect(container.title).toBeDefined();
@@ -175,7 +175,7 @@ describe('Build Validation', () => {
                 const commandIds = new Set(
                     packageData.contributes.commands.map((c: any) => c.command)
                 );
-                
+
                 Object.values(menus).forEach((menuItems: any) => {
                     if (Array.isArray(menuItems)) {
                         menuItems.forEach((item: any) => {
@@ -210,7 +210,7 @@ describe('Build Validation', () => {
         it('should handle test mode activation', () => {
             process.env.NOFX_TEST_MODE = 'true';
             const extension = require(path.join(outDir, 'extension.js'));
-            
+
             // Mock VS Code context
             const mockContext = {
                 subscriptions: [],
@@ -224,7 +224,7 @@ describe('Build Validation', () => {
                     update: jest.fn()
                 }
             };
-            
+
             expect(() => extension.activate(mockContext)).not.toThrow();
             delete process.env.NOFX_TEST_MODE;
         });
@@ -248,7 +248,7 @@ describe('Build Validation', () => {
 
         it('should compile without errors', () => {
             try {
-                execSync('npm run compile', { 
+                execSync('npm run compile', {
                     cwd: projectRoot,
                     stdio: 'pipe'
                 });
@@ -272,7 +272,7 @@ describe('Build Validation', () => {
                 expect(true).toBe(true); // Pass on Windows
                 return;
             }
-            
+
             const stats = fs.statSync(validateScript);
             // Check if owner has execute permission
             expect(stats.mode & 0o100).toBeTruthy();
@@ -297,7 +297,7 @@ describe('Build Validation', () => {
         it('should not have console.log in production code', () => {
             const jsFiles = getAllFiles(outDir, '.js')
                 .filter(f => !f.includes('/test/'));
-            
+
             let consoleLogCount = 0;
             jsFiles.forEach(file => {
                 const content = fs.readFileSync(file, 'utf-8');
@@ -306,7 +306,7 @@ describe('Build Validation', () => {
                     consoleLogCount += matches.length;
                 }
             });
-            
+
             // Fail if console.log statements are found
             expect(consoleLogCount).toBe(0);
         });
@@ -318,7 +318,7 @@ describe('Build Validation', () => {
                 'services/Container.js',
                 'orchestration/OrchestrationServer.js'
             ];
-            
+
             criticalFiles.forEach(file => {
                 const filePath = path.join(outDir, file);
                 if (fs.existsSync(filePath)) {
@@ -333,15 +333,15 @@ describe('Build Validation', () => {
 // Helper functions
 function getAllFiles(dir: string, extension: string): string[] {
     const files: string[] = [];
-    
+
     function traverse(currentDir: string) {
         if (!fs.existsSync(currentDir)) return;
-        
+
         const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-        
+
         for (const entry of entries) {
             const fullPath = path.join(currentDir, entry.name);
-            
+
             if (entry.isDirectory()) {
                 traverse(fullPath);
             } else if (entry.isFile() && fullPath.endsWith(extension)) {
@@ -349,20 +349,20 @@ function getAllFiles(dir: string, extension: string): string[] {
             }
         }
     }
-    
+
     traverse(dir);
     return files;
 }
 
 function getAllDirectories(dir: string): string[] {
     const directories: string[] = [];
-    
+
     function traverse(currentDir: string) {
         if (!fs.existsSync(currentDir)) return;
-        
+
         directories.push(currentDir);
         const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-        
+
         for (const entry of entries) {
             if (entry.isDirectory()) {
                 const fullPath = path.join(currentDir, entry.name);
@@ -370,7 +370,7 @@ function getAllDirectories(dir: string): string[] {
             }
         }
     }
-    
+
     traverse(dir);
     return directories;
 }

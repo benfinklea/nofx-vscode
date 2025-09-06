@@ -44,14 +44,14 @@ describe('Task Management', () => {
         container.registerInstance(SERVICE_TOKENS.ExtensionContext, context);
 
         agentManager = new AgentManager(context);
-        
+
         // Create real instances for proper testing
         const errorHandler = {
             handleError: jest.fn(),
             handleWarning: jest.fn(),
             handleInfo: jest.fn()
         };
-        
+
         const notificationService = {
             showInformation: jest.fn(),
             showWarning: jest.fn(),
@@ -62,16 +62,16 @@ describe('Task Management', () => {
             showSaveDialog: jest.fn(),
             setStatusBarMessage: jest.fn()
         };
-        
+
         const taskStateMachine = new TaskStateMachine(loggingService, eventBus);
         const taskDependencyManager = new TaskDependencyManager(loggingService, eventBus, notificationService);
         const priorityTaskQueue = new PriorityTaskQueue(loggingService, taskDependencyManager, taskStateMachine);
-        
+
         const capabilityMatcher = {
             findBestAgent: jest.fn().mockReturnValue(null),
             matchCapabilities: jest.fn().mockReturnValue([])
         };
-        
+
         const metricsService = {
             incrementCounter: jest.fn(),
             recordGauge: jest.fn(),
@@ -81,7 +81,7 @@ describe('Task Management', () => {
             setEnabled: jest.fn(),
             isEnabled: jest.fn().mockReturnValue(true)
         };
-        
+
         taskQueue = new TaskQueue(
             agentManager,
             loggingService,
@@ -147,12 +147,12 @@ describe('Task Management', () => {
             // Create two tasks using TaskQueue API
             const task1 = taskQueue.createTask({ description: 'Task 1', priority: 'medium' });
             const task2 = taskQueue.createTask({ description: 'Task 2', priority: 'high' });
-            
+
             jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce(task1).mockResolvedValueOnce(task2);
 
-            await vscode.commands.executeCommand('nofx.addTaskDependency', { 
-                taskId: task1.id, 
-                dependencyId: task2.id 
+            await vscode.commands.executeCommand('nofx.addTaskDependency', {
+                taskId: task1.id,
+                dependencyId: task2.id
             });
 
             // Verify dependency was added using TaskDependencyManager
@@ -164,15 +164,15 @@ describe('Task Management', () => {
             // Create tasks using TaskQueue API
             const task1 = taskQueue.createTask({ description: 'Task 1', priority: 'medium' });
             const task2 = taskQueue.createTask({ description: 'Task 2', priority: 'high' });
-            
+
             // Add dependency first
             taskQueue.addDependency(task1.id, task2.id);
-            
+
             jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce(task1).mockResolvedValueOnce(task2);
 
-            await vscode.commands.executeCommand('nofx.removeTaskDependency', { 
-                taskId: task1.id, 
-                dependencyId: task2.id 
+            await vscode.commands.executeCommand('nofx.removeTaskDependency', {
+                taskId: task1.id,
+                dependencyId: task2.id
             });
 
             // Verify dependency was removed using TaskDependencyManager
@@ -183,7 +183,7 @@ describe('Task Management', () => {
         test('should view task dependencies', async () => {
             // Create task using TaskQueue API
             const task = taskQueue.createTask({ description: 'Task 1', priority: 'medium' });
-            
+
             jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue(task);
             const showInfoSpy = jest.spyOn(vscode.window, 'showInformationMessage');
 
@@ -198,7 +198,7 @@ describe('Task Management', () => {
             // Create tasks using TaskQueue API
             const task1 = taskQueue.createTask({ description: 'Task 1', priority: 'medium' });
             const task2 = taskQueue.createTask({ description: 'Task 2', priority: 'high' });
-            
+
             jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce(task1).mockResolvedValueOnce('Resolve by priority');
 
             await vscode.commands.executeCommand('nofx.resolveTaskConflict', { taskId: task1.id });
@@ -211,10 +211,10 @@ describe('Task Management', () => {
         test('should retry blocked task', async () => {
             // Create task using TaskQueue API
             const task = taskQueue.createTask({ description: 'Task 1', priority: 'medium' });
-            
+
             // Set task to blocked status using TaskQueue API
             taskQueue.updateTaskStatus(task.id, 'blocked');
-            
+
             jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue(task);
 
             await vscode.commands.executeCommand('nofx.retryBlockedTask', { taskId: task.id });
@@ -243,11 +243,11 @@ describe('Task Management', () => {
             // Create tasks using TaskQueue API
             const task1 = taskQueue.createTask({ description: 'Task 1', priority: 'medium' });
             const task2 = taskQueue.createTask({ description: 'Task 2', priority: 'high' });
-            
+
             // Add conflicts using TaskQueue API
             taskQueue.addConflict(task1.id, task2.id);
             taskQueue.addConflict(task2.id, task1.id);
-            
+
             jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue('Resolve by priority');
 
             await vscode.commands.executeCommand('nofx.resolveAllConflicts');
@@ -264,10 +264,10 @@ describe('Task Management', () => {
         test('should complete task', async () => {
             // Create task using TaskQueue API
             const task = taskQueue.createTask({ description: 'Task 1', priority: 'medium' });
-            
+
             // Set task to inProgress status using TaskQueue API
             taskQueue.updateTaskStatus(task.id, 'inProgress');
-            
+
             jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue(task);
 
             await vscode.commands.executeCommand('nofx.completeTask', { taskId: task.id });
@@ -280,10 +280,10 @@ describe('Task Management', () => {
         test('should handle task completion errors', async () => {
             // Create task using TaskQueue API
             const task = taskQueue.createTask({ description: 'Task 1', priority: 'medium' });
-            
+
             // Set task to blocked status using TaskQueue API
             taskQueue.updateTaskStatus(task.id, 'blocked');
-            
+
             jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue(task);
             const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
 

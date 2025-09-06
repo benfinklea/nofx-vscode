@@ -65,7 +65,7 @@ export class ConductorPanel {
             viewModel,
             loggingService
         );
-        
+
         return ConductorPanel.currentPanel;
     }
 
@@ -91,13 +91,13 @@ export class ConductorPanel {
         if (this.disposed) {
             return;
         }
-        
+
         this.disposed = true;
         ConductorPanel.currentPanel = undefined;
-        
+
         // Dispose panel binder (handles all subscriptions)
         this.panelBinder.dispose();
-        
+
         // Dispose webview host
         this.webviewHost.dispose();
     }

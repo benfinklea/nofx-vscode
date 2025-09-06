@@ -69,7 +69,7 @@ export const createMockConfigurationWithOverrides = (overrides: Record<string, a
 // DI Container test utilities
 export const createTestContainerWithMocks = (): IContainer => {
     const container = createTestContainer();
-    
+
     // Mock all services with realistic implementations
     container.registerInstance(SERVICE_TOKENS.ConfigurationService, {
         get: jest.fn((key: string, defaultValue?: any) => {
@@ -155,10 +155,10 @@ export const createTestContainerWithMocks = (): IContainer => {
 
 export const createIntegrationContainer = (): IContainer => {
     const container = createTestContainer();
-    
+
     // Register real service implementations (not mocks) for integration testing
     // Only stub external I/O (file system, terminals) but keep core services real
-    
+
     // Mock external dependencies first
     const mockVsCodeConfigForIntegration = {
         get: jest.fn((key: string, defaultValue?: any) => {
@@ -169,7 +169,7 @@ export const createIntegrationContainer = (): IContainer => {
         has: jest.fn(() => true),
         inspect: jest.fn()
     };
-    
+
     // Register real ConfigurationService
     const { ConfigurationService } = require('../../services/ConfigurationService');
     const { ConfigurationValidator } = require('../../services/ConfigurationValidator');
@@ -188,7 +188,7 @@ export const createIntegrationContainer = (): IContainer => {
     const { MessageRouter } = require('../../services/MessageRouter');
     const { MessageValidator } = require('../../services/MessageValidator');
     const { InMemoryMessagePersistenceService } = require('../../services/InMemoryMessagePersistenceService');
-    
+
     // Create mock VS Code workspace for ConfigurationService
     const mockVsCodeConfig = {
         get: jest.fn((key: string, defaultValue?: any) => {
@@ -200,14 +200,14 @@ export const createIntegrationContainer = (): IContainer => {
         inspect: jest.fn()
     };
     (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue(mockVsCodeConfigForIntegration);
-    
+
     // Register real services
     const eventBus = new EventBus();
     container.registerInstance(SERVICE_TOKENS.EventBus, eventBus);
-    
+
     const notificationService = new NotificationService();
     container.registerInstance(SERVICE_TOKENS.NotificationService, notificationService);
-    
+
     // Create mock output channel for LoggingService
     const mockOutputChannel = {
         appendLine: jest.fn(),
@@ -216,34 +216,34 @@ export const createIntegrationContainer = (): IContainer => {
         dispose: jest.fn()
     };
     container.registerInstance(SERVICE_TOKENS.OutputChannel, mockOutputChannel);
-    
+
     const configValidator = new ConfigurationValidator(
-        createMockLoggingService(), 
+        createMockLoggingService(),
         notificationService
     );
     container.registerInstance(SERVICE_TOKENS.ConfigurationValidator, configValidator);
-    
+
     const configService = new ConfigurationService(configValidator, eventBus);
     container.registerInstance(SERVICE_TOKENS.ConfigurationService, configService);
-    
+
     const loggingService = new LoggingService(configService, mockOutputChannel);
     container.registerInstance(SERVICE_TOKENS.LoggingService, loggingService);
-    
+
     const metricsService = new MetricsService(configService, loggingService, eventBus);
     container.registerInstance(SERVICE_TOKENS.MetricsService, metricsService);
-    
+
     const taskStateMachine = new TaskStateMachine(loggingService, eventBus);
     container.registerInstance(SERVICE_TOKENS.TaskStateMachine, taskStateMachine);
-    
+
     const taskDependencyManager = new TaskDependencyManager(loggingService, eventBus, notificationService);
     container.registerInstance(SERVICE_TOKENS.TaskDependencyManager, taskDependencyManager);
-    
+
     const priorityTaskQueue = new PriorityTaskQueue(loggingService, taskDependencyManager);
     container.registerInstance(SERVICE_TOKENS.PriorityTaskQueue, priorityTaskQueue);
-    
+
     const capabilityMatcher = new CapabilityMatcher(loggingService, configService);
     container.registerInstance(SERVICE_TOKENS.CapabilityMatcher, capabilityMatcher);
-    
+
     // Create mock extension context for AgentManager
     const mockContext = {
         subscriptions: [],
@@ -263,9 +263,9 @@ export const createIntegrationContainer = (): IContainer => {
         globalStorageUri: { fsPath: '/mock/global/storage/path' } as any,
         logUri: { fsPath: '/mock/log/path' } as any
     };
-    
+
     const agentManager = new AgentManager(mockContext);
-    
+
     // Create mock dependencies for AgentManager
     const mockAgentLifecycleManager = {
         initialize: jest.fn().mockResolvedValue(undefined),
@@ -281,7 +281,7 @@ export const createIntegrationContainer = (): IContainer => {
         removeAgent: jest.fn().mockResolvedValue(true),
         dispose: jest.fn()
     };
-    
+
     const mockTerminalManager = {
         getTerminal: jest.fn().mockReturnValue({
             show: jest.fn(),
@@ -291,14 +291,14 @@ export const createIntegrationContainer = (): IContainer => {
         onTerminalClosed: jest.fn().mockReturnValue({ dispose: jest.fn() }),
         dispose: jest.fn()
     };
-    
+
     const mockWorktreeService = {
         createWorktree: jest.fn().mockResolvedValue({ path: '/mock/worktree' }),
         removeWorktree: jest.fn().mockResolvedValue(undefined),
         listWorktrees: jest.fn().mockResolvedValue([]),
         dispose: jest.fn()
     };
-    
+
     // Set dependencies for AgentManager
     agentManager.setDependencies(
         mockAgentLifecycleManager,
@@ -311,9 +311,9 @@ export const createIntegrationContainer = (): IContainer => {
         createMockErrorHandler(),
         metricsService
     );
-    
+
     container.registerInstance(SERVICE_TOKENS.AgentManager, agentManager);
-    
+
     const taskQueue = new TaskQueue(
         agentManager,
         loggingService,
@@ -328,13 +328,13 @@ export const createIntegrationContainer = (): IContainer => {
         metricsService
     );
     container.registerInstance(SERVICE_TOKENS.TaskQueue, taskQueue);
-    
+
     // Set task reader for state machine
     taskStateMachine.setTaskReader(taskQueue);
-    
+
     // Register real orchestration services instead of mocks
     const errorHandler = createMockErrorHandler();
-    
+
     const connectionPoolService = new ConnectionPoolService(
         loggingService,
         eventBus,
@@ -342,20 +342,20 @@ export const createIntegrationContainer = (): IContainer => {
         configService
     );
     container.registerInstance(SERVICE_TOKENS.ConnectionPoolService, connectionPoolService);
-    
+
     const messageValidator = new MessageValidator(
         loggingService,
         eventBus
     );
     container.registerInstance(SERVICE_TOKENS.MessageValidator, messageValidator);
-    
+
     const messagePersistenceService = new InMemoryMessagePersistenceService(
         loggingService,
         configService,
         eventBus
     );
     container.registerInstance(SERVICE_TOKENS.MessagePersistenceService, messagePersistenceService);
-    
+
     const messageRouter = new MessageRouter(
         connectionPoolService,
         messagePersistenceService,
@@ -366,7 +366,7 @@ export const createIntegrationContainer = (): IContainer => {
         taskQueue
     );
     container.registerInstance(SERVICE_TOKENS.MessageRouter, messageRouter);
-    
+
     const orchestrationServer = new OrchestrationServer(
         0, // Use random port
         loggingService,
@@ -379,7 +379,7 @@ export const createIntegrationContainer = (): IContainer => {
         metricsService
     );
     container.registerInstance(SERVICE_TOKENS.OrchestrationServer, orchestrationServer);
-    
+
     return container;
 };
 
@@ -566,7 +566,7 @@ export const createTempFile = async (content: string, extension: string = '.txt'
                 reject(err);
                 return;
             }
-            
+
             require('fs').writeFileSync(path, content);
             resolve({ path, cleanup });
         });
@@ -599,11 +599,11 @@ export const expectTaskState = (task: Task, expectedState: Partial<Task>) => {
 
 export const expectMetricsRecorded = (metricsService: IMetricsService, expectedMetrics: Array<{ name: string; type?: string; value?: number }>) => {
     const metrics = metricsService.getMetrics();
-    
+
     expectedMetrics.forEach(expected => {
         const matchingMetrics = metrics.filter(m => m.name === expected.name);
         expect(matchingMetrics.length).toBeGreaterThan(0);
-        
+
         if (expected.type) {
             expect(matchingMetrics.some(m => m.type === expected.type)).toBe(true);
         }
@@ -620,7 +620,7 @@ export const expectConfigurationValid = (configService: IConfigurationService, k
 
 export const expectValidationErrors = (validator: IConfigurationValidator, expectedErrors: Array<{ field: string; message: string }>) => {
     const errors = validator.getValidationErrors();
-    
+
     expectedErrors.forEach(expected => {
         const matchingError = errors.find(e => e.field === expected.field);
         expect(matchingError).toBeDefined();
@@ -631,14 +631,14 @@ export const expectValidationErrors = (validator: IConfigurationValidator, expec
 // Async testing utilities
 export const waitForCondition = async (condition: () => boolean, timeout: number = 5000, interval: number = 100): Promise<void> => {
     const startTime = Date.now();
-    
+
     while (Date.now() - startTime < timeout) {
         if (condition()) {
             return;
         }
         await new Promise(resolve => setTimeout(resolve, interval));
     }
-    
+
     throw new Error(`Condition not met within ${timeout}ms`);
 };
 
@@ -655,7 +655,7 @@ export const retryOperation = async <T>(
     delay: number = 100
 ): Promise<T> => {
     let lastError: Error;
-    
+
     for (let i = 0; i < maxRetries; i++) {
         try {
             return await operation();
@@ -666,7 +666,7 @@ export const retryOperation = async <T>(
             }
         }
     }
-    
+
     throw lastError!;
 };
 
@@ -676,7 +676,7 @@ export const measureExecutionTime = async <T>(operation: () => Promise<T>): Prom
     const result = await operation();
     const end = process.hrtime.bigint();
     const duration = Number(end - start) / 1000000; // Convert to milliseconds
-    
+
     return { result, duration };
 };
 
@@ -692,7 +692,7 @@ export const measureMemoryUsage = (): { heapUsed: number; heapTotal: number; ext
 export const generateLoad = async (operation: () => Promise<void>, concurrency: number = 10, duration: number = 1000): Promise<void> => {
     const startTime = Date.now();
     const promises: Promise<void>[] = [];
-    
+
     while (Date.now() - startTime < duration) {
         if (promises.length < concurrency) {
             promises.push(operation());
@@ -701,7 +701,7 @@ export const generateLoad = async (operation: () => Promise<void>, concurrency: 
             promises.splice(promises.findIndex(p => p === Promise.race(promises)), 1);
         }
     }
-    
+
     await Promise.all(promises);
 };
 
@@ -751,7 +751,7 @@ export const generateTestConfiguration = (overrides: Record<string, any> = {}): 
 export const cleanupTestData = async (container: IContainer) => {
     // Dispose all services
     container.dispose();
-    
+
     // Clear any global state
     jest.clearAllMocks();
     jest.restoreAllMocks();
@@ -768,7 +768,7 @@ export const setupTestEnvironment = () => {
     // Set test environment variables
     process.env.NODE_ENV = 'test';
     process.env.CI = 'true';
-    
+
     // Mock console methods to reduce noise
     if (!process.env.ENABLE_TEST_LOGGING) {
         console.log = jest.fn();
@@ -780,7 +780,7 @@ export const setupTestEnvironment = () => {
 export const teardownTestEnvironment = () => {
     // Restore console methods
     jest.restoreAllMocks();
-    
+
     // Clear environment variables
     delete process.env.NODE_ENV;
     delete process.env.CI;

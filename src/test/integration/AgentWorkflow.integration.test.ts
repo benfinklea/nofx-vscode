@@ -11,7 +11,7 @@ describe('Agent Workflow Integration Tests', () => {
 
     beforeEach(async () => {
         container = createIntegrationContainer();
-        
+
         // Get real services from container
         agentManager = container.resolve(SERVICE_TOKENS.AgentManager);
         taskQueue = container.resolve(SERVICE_TOKENS.TaskQueue);
@@ -231,9 +231,9 @@ describe('Agent Workflow Integration Tests', () => {
             });
 
             // Send conductor command to spawn agent
-            const msg = createMessage('conductor', 'conductor', MessageType.SPAWN_AGENT, { 
-                role: 'General Purpose', 
-                name: 'Conductor Agent' 
+            const msg = createMessage('conductor', 'conductor', MessageType.SPAWN_AGENT, {
+                role: 'General Purpose',
+                name: 'Conductor Agent'
             });
 
             client.send(JSON.stringify(msg));
@@ -404,7 +404,7 @@ describe('Agent Workflow Integration Tests', () => {
         it('should handle high-frequency task creation', async () => {
             const { duration } = await measureTime(async () => {
                 const tasks = [];
-                
+
                 // Create 100 tasks quickly
                 for (let i = 0; i < 100; i++) {
                     const task = taskQueue.addTask({
@@ -425,7 +425,7 @@ describe('Agent Workflow Integration Tests', () => {
         it('should handle concurrent agent operations', async () => {
             const { duration } = await measureTime(async () => {
                 const agentPromises = [];
-                
+
                 // Spawn 10 agents concurrently
                 for (let i = 0; i < 10; i++) {
                     const promise = agentManager.spawnAgent({
@@ -440,7 +440,7 @@ describe('Agent Workflow Integration Tests', () => {
                 expect(agents).toHaveLength(10);
 
                 // Clean up all agents
-                const cleanupPromises = agents.map(agent => 
+                const cleanupPromises = agents.map(agent =>
                     agentManager.removeAgent(agent.id)
                 );
                 await Promise.all(cleanupPromises);

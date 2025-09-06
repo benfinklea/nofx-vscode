@@ -104,7 +104,7 @@ export class TaskCommands implements ICommandHandler {
         // Get dependencies
         const existingTasks = this.taskQueue.getTasks().filter(t => t.status !== 'completed');
         let dependsOn: string[] = [];
-        
+
         if (existingTasks.length > 0) {
             const dependencyChoice = await this.notificationService.showQuickPick([
                 { label: 'No dependencies', value: 'none' },
@@ -213,7 +213,7 @@ export class TaskCommands implements ICommandHandler {
 
     private async addTaskDependency(): Promise<void> {
         const tasks = this.taskQueue.getTasks().filter(t => t.status !== 'completed');
-        
+
         if (tasks.length < 2) {
             await this.notificationService.showInformation('Need at least 2 tasks to create dependencies');
             return;
@@ -257,7 +257,7 @@ export class TaskCommands implements ICommandHandler {
 
     private async removeTaskDependency(): Promise<void> {
         const tasks = this.taskQueue.getTasks().filter(t => t.dependsOn && t.dependsOn.length > 0);
-        
+
         if (tasks.length === 0) {
             await this.notificationService.showInformation('No tasks with dependencies found');
             return;
@@ -305,7 +305,7 @@ export class TaskCommands implements ICommandHandler {
 
     private async resolveTaskConflict(): Promise<void> {
         const blockedTasks = this.taskQueue.getBlockedTasks();
-        
+
         if (blockedTasks.length === 0) {
             await this.notificationService.showInformation('No blocked tasks found');
             return;
@@ -348,7 +348,7 @@ export class TaskCommands implements ICommandHandler {
     private async viewTaskDependencies(): Promise<void> {
         const tasks = this.taskQueue.getTasks();
         const tasksWithDeps = tasks.filter(t => t.dependsOn && t.dependsOn.length > 0);
-        
+
         if (tasksWithDeps.length === 0) {
             await this.notificationService.showInformation('No task dependencies found');
             return;
@@ -366,7 +366,7 @@ export class TaskCommands implements ICommandHandler {
 
     private async retryBlockedTask(): Promise<void> {
         const blockedTasks = this.taskQueue.getBlockedTasks();
-        
+
         if (blockedTasks.length === 0) {
             await this.notificationService.showInformation('No blocked tasks found');
             return;
@@ -410,7 +410,7 @@ export class TaskCommands implements ICommandHandler {
         }
 
         const tasks: TaskConfig[] = [];
-        
+
         for (let i = 0; i < count; i++) {
             const title = await this.notificationService.showInputBox({
                 prompt: `Enter title for task ${i + 1}`,
@@ -463,7 +463,7 @@ export class TaskCommands implements ICommandHandler {
 
     private async resolveAllConflicts(): Promise<void> {
         const blockedTasks = this.taskQueue.getBlockedTasks();
-        
+
         if (blockedTasks.length === 0) {
             await this.notificationService.showInformation('No blocked tasks found');
             return;

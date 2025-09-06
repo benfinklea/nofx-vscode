@@ -249,7 +249,7 @@ export class TemplateCommands implements ICommandHandler {
                     `Template: ${template.name}\n\nCapabilities: ${Array.isArray(template.capabilities) ? template.capabilities.join(', ') : 'None'}`,
                     'Edit Template', 'Create Agent'
                 );
-                
+
                 if (actions === 'Edit Template') {
                     await this.commandService.execute('nofx.editAgentTemplate');
                 } else if (actions === 'Create Agent') {

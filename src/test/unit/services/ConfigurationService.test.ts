@@ -58,20 +58,20 @@ describe('ConfigurationService', () => {
     describe('Basic Configuration Operations', () => {
         it('should get configuration value with default', () => {
             mockConfig.get.mockReturnValue(undefined);
-            
+
             const result = configService.get('testKey', 'defaultValue');
-            
+
             expect(result).toBe('defaultValue');
             expect(mockConfig.get).toHaveBeenCalledWith('testKey');
         });
 
         it('should get configuration value from cache', () => {
             mockConfig.get.mockReturnValue('cachedValue');
-            
+
             // First call should cache the value
             const result1 = configService.get('testKey', 'defaultValue');
             expect(result1).toBe('cachedValue');
-            
+
             // Second call should use cache
             const result2 = configService.get('testKey', 'defaultValue');
             expect(result2).toBe('cachedValue');
@@ -89,7 +89,7 @@ describe('ConfigurationService', () => {
             });
 
             const result = configService.getAll();
-            
+
             expect(result).toHaveProperty('maxAgents', 5);
             expect(result).toHaveProperty('claudePath', 'claude');
             expect(result).toHaveProperty('autoAssignTasks', true);
@@ -98,9 +98,9 @@ describe('ConfigurationService', () => {
         it('should update configuration value', async () => {
             mockConfig.update.mockResolvedValue(undefined);
             mockValidator.validateConfigurationKey.mockReturnValue({ isValid: true, errors: [] });
-            
+
             await configService.update('testKey', 'newValue');
-            
+
             expect(mockValidator.validateConfigurationKey).toHaveBeenCalledWith('testKey', 'newValue');
             expect(mockConfig.update).toHaveBeenCalledWith('testKey', 'newValue', 1); // Workspace target
             expect(mockEventBus.publish).toHaveBeenCalledWith('configuration.updated', {
@@ -116,12 +116,12 @@ describe('ConfigurationService', () => {
                 message: 'Invalid value',
                 severity: 'error'
             }];
-            
+
             mockValidator.validateConfigurationKey.mockReturnValue({ isValid: false, errors: validationErrors });
-            
+
             await expect(configService.update('testKey', 'invalidValue'))
                 .rejects.toThrow('Configuration validation failed for key \'testKey\': Invalid value');
-            
+
             expect(mockConfig.update).not.toHaveBeenCalled();
         });
     });
@@ -133,9 +133,9 @@ describe('ConfigurationService', () => {
                 isValid: false,
                 errors: [{ field: 'testKey', message: 'Invalid value', severity: 'error' }]
             });
-            
+
             const result = configService.get('testKey', 'defaultValue');
-            
+
             expect(result).toBe('defaultValue');
             expect(mockValidator.validateConfigurationKey).toHaveBeenCalledWith('testKey', 'invalidValue');
             expect(mockEventBus.publish).toHaveBeenCalledWith('configuration.validation.failed', {
@@ -147,9 +147,9 @@ describe('ConfigurationService', () => {
         it('should validate new values on retrieval', () => {
             mockConfig.get.mockReturnValue('newValue');
             mockValidator.validateConfigurationKey.mockReturnValue({ isValid: true, errors: [] });
-            
+
             const result = configService.get('testKey', 'defaultValue');
-            
+
             expect(result).toBe('newValue');
             expect(mockValidator.validateConfigurationKey).toHaveBeenCalledWith('testKey', 'newValue');
         });
@@ -157,12 +157,12 @@ describe('ConfigurationService', () => {
         it('should validate all configuration', () => {
             const mockConfig = { maxAgents: 5, claudePath: 'claude' };
             mockValidator.validateConfiguration.mockReturnValue({ isValid: true, errors: [] });
-            
+
             // Mock getAll to return test config
             jest.spyOn(configService, 'getAll').mockReturnValue(mockConfig);
-            
+
             const result = configService.validateAll();
-            
+
             expect(mockValidator.validateConfiguration).toHaveBeenCalledWith(mockConfig);
             expect(result.isValid).toBe(true);
         });
@@ -173,11 +173,11 @@ describe('ConfigurationService', () => {
                 message: 'Value too high',
                 severity: 'warning'
             }];
-            
+
             mockValidator.getValidationErrors.mockReturnValue(errors);
-            
+
             const result = configService.getValidationErrors();
-            
+
             expect(result).toEqual(errors);
             expect(mockValidator.getValidationErrors).toHaveBeenCalled();
         });
@@ -279,9 +279,9 @@ describe('ConfigurationService', () => {
         it('should backup configuration', async () => {
             const mockConfig = { maxAgents: 5, claudePath: 'claude' };
             jest.spyOn(configService, 'getAll').mockReturnValue(mockConfig);
-            
+
             const result = await configService.backupConfiguration();
-            
+
             expect(result).toEqual(mockConfig);
             expect(mockEventBus.publish).toHaveBeenCalledWith('configuration.backed.up', {
                 keys: ['maxAgents', 'claudePath']
@@ -292,9 +292,9 @@ describe('ConfigurationService', () => {
             const backup = { maxAgents: 5, claudePath: 'claude' };
             mockValidator.validateConfiguration.mockReturnValue({ isValid: true, errors: [] });
             mockConfig.update.mockResolvedValue(undefined);
-            
+
             await configService.restoreConfiguration(backup);
-            
+
             expect(mockValidator.validateConfiguration).toHaveBeenCalledWith(backup);
             expect(mockConfig.update).toHaveBeenCalledWith('maxAgents', 5);
             expect(mockConfig.update).toHaveBeenCalledWith('claudePath', 'claude');
@@ -310,9 +310,9 @@ describe('ConfigurationService', () => {
                 message: 'Value too high',
                 severity: 'error'
             }];
-            
+
             mockValidator.validateConfiguration.mockReturnValue({ isValid: false, errors: validationErrors });
-            
+
             await expect(configService.restoreConfiguration(backup))
                 .rejects.toThrow('Backup validation failed: Value too high');
         });
@@ -322,11 +322,11 @@ describe('ConfigurationService', () => {
         it('should listen for configuration changes', () => {
             const callback = jest.fn();
             const mockDisposable = { dispose: jest.fn() };
-            
+
             (vscode.workspace.onDidChangeConfiguration as jest.Mock).mockReturnValue(mockDisposable);
-            
+
             const disposable = configService.onDidChange(callback);
-            
+
             expect(vscode.workspace.onDidChangeConfiguration).toHaveBeenCalled();
             expect(disposable).toBe(mockDisposable);
         });
@@ -335,11 +335,11 @@ describe('ConfigurationService', () => {
             const mockEvent = {
                 affectsConfiguration: jest.fn().mockReturnValue(true)
             };
-            
+
             // Simulate configuration change
             const changeHandler = (vscode.workspace.onDidChangeConfiguration as jest.Mock).mock.calls[0][0];
             changeHandler(mockEvent);
-            
+
             expect(mockEvent.affectsConfiguration).toHaveBeenCalledWith('nofx');
             expect(mockEventBus.publish).toHaveBeenCalledWith('configuration.changed', {
                 section: 'nofx'
@@ -352,17 +352,17 @@ describe('ConfigurationService', () => {
             mockConfig.get.mockImplementation(() => {
                 throw new Error('VS Code API error');
             });
-            
+
             const result = configService.get('testKey', 'defaultValue');
-            
+
             expect(result).toBe('defaultValue');
         });
 
         it('should handle validation service unavailability', () => {
             const configServiceWithoutValidator = new ConfigurationService();
-            
+
             const result = configServiceWithoutValidator.get('testKey', 'defaultValue');
-            
+
             expect(result).toBe('defaultValue');
         });
 
@@ -372,9 +372,9 @@ describe('ConfigurationService', () => {
                 isValid: false,
                 errors: [{ field: 'testKey', message: 'Invalid type', severity: 'error' }]
             });
-            
+
             const result = configService.get('testKey', 'defaultValue');
-            
+
             expect(result).toBe('defaultValue');
         });
     });
@@ -383,11 +383,11 @@ describe('ConfigurationService', () => {
         it('should cache validation results', () => {
             mockConfig.get.mockReturnValue('testValue');
             mockValidator.validateConfigurationKey.mockReturnValue({ isValid: true, errors: [] });
-            
+
             // First call
             configService.get('testKey', 'defaultValue');
             expect(mockValidator.validateConfigurationKey).toHaveBeenCalledTimes(1);
-            
+
             // Second call should use cache
             configService.get('testKey', 'defaultValue');
             expect(mockValidator.validateConfigurationKey).toHaveBeenCalledTimes(1);
@@ -397,13 +397,13 @@ describe('ConfigurationService', () => {
             mockConfig.get.mockReturnValue('testValue');
             mockValidator.validateConfigurationKey.mockReturnValue({ isValid: true, errors: [] });
             mockConfig.update.mockResolvedValue(undefined);
-            
+
             // Get value to populate cache
             configService.get('testKey', 'defaultValue');
-            
+
             // Update value
             await configService.update('testKey', 'newValue');
-            
+
             // Next get should validate again
             configService.get('testKey', 'defaultValue');
             expect(mockValidator.validateConfigurationKey).toHaveBeenCalledTimes(3); // Initial, update, and final get
@@ -414,9 +414,9 @@ describe('ConfigurationService', () => {
         it('should dispose properly', () => {
             const mockDisposable = { dispose: jest.fn() };
             (vscode.workspace.onDidChangeConfiguration as jest.Mock).mockReturnValue(mockDisposable);
-            
+
             configService.dispose();
-            
+
             expect(mockDisposable.dispose).toHaveBeenCalled();
         });
     });

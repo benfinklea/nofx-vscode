@@ -3,11 +3,11 @@ import * as path from 'path';
 import { AgentManager } from '../agents/AgentManager';
 import { TaskQueue } from '../tasks/TaskQueue';
 import { Agent } from '../agents/types';
-import { 
-    CodebaseAnalyzer, 
-    CodeComponent, 
-    AgentPerformance, 
-    ProjectArchitecture, 
+import {
+    CodebaseAnalyzer,
+    CodeComponent,
+    AgentPerformance,
+    ProjectArchitecture,
     QualityMetrics,
     CircularDependency
 } from '../intelligence';
@@ -23,13 +23,13 @@ export class SuperSmartConductor {
     private claudePath: string;
     private codebaseAnalyzer: CodebaseAnalyzer;
     private context: vscode.ExtensionContext | undefined;
-    
+
     // VP-level intelligence data structures
     private codebaseKnowledge: Map<string, CodeComponent> = new Map();
     private agentPerformanceHistory: Map<string, AgentPerformance> = new Map();
     private projectArchitecture: ProjectArchitecture | undefined;
     private qualityMetrics: QualityMetrics | undefined;
-    
+
     constructor(agentManager: AgentManager, taskQueue: TaskQueue, context?: vscode.ExtensionContext) {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
@@ -38,18 +38,18 @@ export class SuperSmartConductor {
         this.outputChannel = vscode.window.createOutputChannel('NofX VP Brain 🧠');
         this.codebaseAnalyzer = new CodebaseAnalyzer(this.outputChannel);
     }
-    
+
     /**
      * Set the extension context
      */
     setContext(context: vscode.ExtensionContext): void {
         this.context = context;
     }
-    
+
     async start() {
         this.outputChannel.show();
         this.outputChannel.appendLine('🧠 Super Smart VP Conductor Initializing...');
-        
+
         // Create VP terminal
         if (!this.terminal) {
             this.terminal = vscode.window.createTerminal({
@@ -57,33 +57,33 @@ export class SuperSmartConductor {
                 iconPath: new vscode.ThemeIcon('rocket')
             });
         }
-        
+
         // Setup file watchers if enabled in settings
         const config = vscode.workspace.getConfiguration('nofx');
         const enableFileWatching = config.get<boolean>('enableFileWatching', false);
-        
+
         if (enableFileWatching && this.context) {
             this.codebaseAnalyzer.setupWatchers(this.context);
             this.outputChannel.appendLine('👀 File watchers enabled for automatic re-analysis');
         }
-        
+
         this.terminal.show();
         this.initializeVPConductor();
     }
-    
+
     private initializeVPConductor() {
         if (!this.terminal) return;
-        
+
         this.terminal.sendText('clear');
         this.terminal.sendText('echo "🧠 NofX Super Smart VP Conductor v3.0"');
         this.terminal.sendText('echo "==========================================="');
         this.terminal.sendText('echo "Senior Engineering VP with Deep Intelligence"');
         this.terminal.sendText('echo "==========================================="');
-        
+
         // Start Claude with VP-level prompt using --append-system-prompt
         const systemPrompt = this.getVPSystemPrompt().replace(/'/g, "'\\''"); // Escape single quotes for shell
         this.terminal.sendText(`${this.claudePath} --append-system-prompt '${systemPrompt}'`);
-        
+
         setTimeout(() => {
             if (this.terminal) {
                 this.terminal.sendText('Greetings! I am your VP of Engineering. I will:');
@@ -96,7 +96,7 @@ export class SuperSmartConductor {
             }
         }, 3000);
     }
-    
+
     private getVPSystemPrompt(): string {
         return `You are the VP of Engineering for NofX - a senior technical leader with 20+ years of experience.
 
@@ -279,23 +279,23 @@ When you see problems, you say:
 
 You are proactive, strategic, and always thinking about the bigger picture.`;
     }
-    
+
     /**
      * Analyze codebase to build knowledge graph
      */
     async analyzeCodebase() {
         this.outputChannel.appendLine('🔍 Analyzing codebase structure with TypeScript AST...');
-        
+
         // Use the new CodebaseAnalyzer for proper AST-based analysis
         const analysis = await this.codebaseAnalyzer.analyzeWorkspace({
             includeTests: true,
             cacheResults: true
         });
-        
+
         // Sync results to local knowledge base
         this.codebaseKnowledge = analysis.components;
         this.qualityMetrics = analysis.metrics;
-        
+
         // Build project architecture from analysis
         // Convert dependency graph from Map<string, Set<string>> to Map<string, string[]>
         // getDependencyGraph() now returns a defensive copy, safe from mutation
@@ -305,7 +305,7 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
             // Convert Set to Array safely
             dependencies.set(key, Array.from(value));
         }
-        
+
         this.projectArchitecture = {
             entryPoints: this.findEntryPoints(),
             layers: this.identifyArchitecturalLayers(),
@@ -314,12 +314,12 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
             dependencies: dependencies,
             qualityMetrics: analysis.metrics
         };
-        
+
         this.outputChannel.appendLine(`✅ Analyzed ${this.codebaseKnowledge.size} components`);
         this.outputChannel.appendLine(`📊 Average complexity: ${analysis.metrics.averageComplexity.toFixed(2)}`);
         this.outputChannel.appendLine(`🔗 Found ${analysis.metrics.circularDependencies} circular dependencies`);
     }
-    
+
     /**
      * @deprecated Use CodebaseAnalyzer.analyzeFile() or analyzeText() instead
      * Extract intelligence from code - delegated to CodebaseAnalyzer
@@ -327,19 +327,19 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
     private async extractCodeIntelligence(filePath: string, content: string) {
         // Delegate to the new analyzer for backward compatibility
         // Use analyzeText when content is provided to preserve unsaved buffer analysis
-        const analysis = content 
+        const analysis = content
             ? await this.codebaseAnalyzer.analyzeText(filePath, content)
             : await this.codebaseAnalyzer.analyzeFile(filePath);
         this.codebaseKnowledge.set(filePath, analysis.component);
     }
-    
+
     /**
      * Calculate code complexity - now using AST-based analysis
      * Analyzes the file if not already analyzed
      */
     private async calculateComplexity(filePath: string): Promise<number> {
         let component = this.codebaseAnalyzer.getComponent(filePath);
-        
+
         if (!component) {
             // File hasn't been analyzed yet, analyze it now
             try {
@@ -350,10 +350,10 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
                 return 0;
             }
         }
-        
+
         return component?.complexity || 0;
     }
-    
+
     /**
      * Track agent performance
      */
@@ -370,7 +370,7 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
                 lastActive: new Date()
             });
         }
-        
+
         const performance = this.agentPerformanceHistory.get(agentId)!;
         performance.totalTasks++;
         if (success) {
@@ -380,19 +380,19 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
         }
         performance.averageExecutionTime = (performance.averageExecutionTime * (performance.totalTasks - 1) + timeSpent) / performance.totalTasks;
         performance.lastActive = new Date();
-        
+
         // Update quality score based on success rate
         const successRate = (performance.completedTasks / performance.totalTasks) * 100;
         performance.qualityScore = Math.round(successRate);
-        
+
         // Determine specialization based on task type
         if (task.type) {
             performance.specialization = task.type;
         }
-        
+
         this.outputChannel.appendLine(`📊 Updated performance for Agent ${agentId}: ${successRate.toFixed(1)}% success rate`);
     }
-    
+
     /**
      * Predict task completion time based on history
      */
@@ -401,11 +401,11 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
         const similarTasks = Array.from(this.agentPerformanceHistory.values())
             .filter(p => p.specialization === task.type)
             .map(p => p.averageExecutionTime);
-        
+
         if (similarTasks.length > 0) {
             return similarTasks.reduce((a, b) => a + b) / similarTasks.length;
         }
-        
+
         // Default estimates based on task type
         const estimates: { [key: string]: number } = {
             'feature': 120, // 2 hours
@@ -414,22 +414,22 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
             'test': 45,     // 45 minutes
             'documentation': 30 // 30 minutes
         };
-        
+
         return estimates[task.type] || 60;
     }
-    
+
     /**
      * Identify architectural improvements
      */
     suggestArchitecturalImprovements(): string[] {
         const suggestions: string[] = [];
-        
+
         // Check for circular dependencies using the analyzer
         const circularDeps = this.codebaseAnalyzer.findCircularDependencies();
         if (circularDeps.length > 0) {
             const highSeverity = circularDeps.filter(c => c.severity === 'high');
             const mediumSeverity = circularDeps.filter(c => c.severity === 'medium');
-            
+
             if (highSeverity.length > 0) {
                 suggestions.push(`🔴 Critical: ${highSeverity.length} high-severity circular dependencies detected. Immediate refactoring needed.`);
             }
@@ -437,21 +437,21 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
                 suggestions.push(`🟡 Warning: ${mediumSeverity.length} medium-severity circular dependencies. Consider dependency injection.`);
             }
         }
-        
+
         // Check for high complexity using the analyzer
         const highComplexity = this.codebaseAnalyzer.findComplexComponents(20);
         if (highComplexity.length > 0) {
             const topComplex = highComplexity.slice(0, 3);
             suggestions.push(`📊 High complexity in ${highComplexity.length} files. Top offenders: ${topComplex.map(p => path.basename(p)).join(', ')}`);
         }
-        
+
         // Check for missing tests using the analyzer
         const untested = this.codebaseAnalyzer.findUntestedComponents();
         if (untested.length > 0) {
             const percentage = ((this.codebaseKnowledge.size - untested.length) / this.codebaseKnowledge.size * 100).toFixed(1);
             suggestions.push(`🧪 Test coverage: ${percentage}%. ${untested.length} components lack tests.`);
         }
-        
+
         // Additional quality checks from metrics
         if (this.qualityMetrics) {
             if (this.qualityMetrics.averageComplexity > 15) {
@@ -461,24 +461,24 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
                 suggestions.push(`💸 Technical debt score: ${this.qualityMetrics.technicalDebt}. Schedule refactoring sprint.`);
             }
         }
-        
+
         return suggestions;
     }
-    
+
     /**
      * Find circular dependencies - delegated to analyzer
      */
     private findCircularDependencies(): CircularDependency[] {
         return this.codebaseAnalyzer.findCircularDependencies();
     }
-    
+
     /**
      * Find components without tests - delegated to analyzer
      */
     private findUntestedComponents(): string[] {
         return this.codebaseAnalyzer.findUntestedComponents();
     }
-    
+
     /**
      * Helper methods for architectural analysis
      */
@@ -492,16 +492,16 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
         }
         return entryPoints;
     }
-    
+
     private identifyArchitecturalLayers(): Map<string, string[]> {
         const layers = new Map<string, string[]>();
-        
+
         // Categorize components into layers
         const presentation: string[] = [];
         const business: string[] = [];
         const data: string[] = [];
         const infrastructure: string[] = [];
-        
+
         for (const [path, component] of this.codebaseKnowledge) {
             if (path.includes('view') || path.includes('component') || path.includes('ui')) {
                 presentation.push(path);
@@ -513,22 +513,22 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
                 infrastructure.push(path);
             }
         }
-        
+
         if (presentation.length > 0) layers.set('presentation', presentation);
         if (business.length > 0) layers.set('business', business);
         if (data.length > 0) layers.set('data', data);
         if (infrastructure.length > 0) layers.set('infrastructure', infrastructure);
-        
+
         return layers;
     }
-    
+
     private detectDesignPatterns(): string[] {
         const patterns: string[] = [];
-        
+
         // Detect common patterns from file/class names
         for (const [path, component] of this.codebaseKnowledge) {
             const name = path.toLowerCase();
-            
+
             if (name.includes('factory')) patterns.push('Factory Pattern');
             if (name.includes('singleton')) patterns.push('Singleton Pattern');
             if (name.includes('observer')) patterns.push('Observer Pattern');
@@ -536,13 +536,13 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
             if (name.includes('adapter')) patterns.push('Adapter Pattern');
             if (name.includes('decorator')) patterns.push('Decorator Pattern');
         }
-        
+
         return [...new Set(patterns)]; // Remove duplicates
     }
-    
+
     private detectTechnologies(): string[] {
         const technologies = new Set<string>();
-        
+
         // Detect technologies from imports
         for (const component of this.codebaseKnowledge.values()) {
             for (const imp of component.imports) {
@@ -554,7 +554,7 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
                 if (imp.includes('typescript')) technologies.add('TypeScript');
             }
         }
-        
+
         return Array.from(technologies);
     }
 }

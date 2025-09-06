@@ -1,6 +1,6 @@
 /**
  * Intelligence Module - Barrel Export
- * 
+ *
  * This module provides comprehensive codebase analysis capabilities using
  * TypeScript Compiler API for robust AST-based analysis.
  */

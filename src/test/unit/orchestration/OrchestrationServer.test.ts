@@ -1,9 +1,9 @@
 // VS Code is mocked via jest.config.js moduleNameMapper
 
 import { OrchestrationServer } from '../../../orchestration/OrchestrationServer';
-import { 
-    ILoggingService, 
-    IEventBus, 
+import {
+    ILoggingService,
+    IEventBus,
     IErrorHandler,
     IConnectionPoolService,
     IMessageRouter,
@@ -213,7 +213,7 @@ describe('OrchestrationServer', () => {
             // Mock port conflict by making the first attempt fail
             let attemptCount = 0;
             const originalImpl = currentWebSocketServerImpl;
-            
+
             currentWebSocketServerImpl = jest.fn().mockImplementation((options) => {
                 attemptCount++;
                 if (attemptCount === 1) {
@@ -263,7 +263,7 @@ describe('OrchestrationServer', () => {
 
         it('should handle start errors', async () => {
             const originalImpl = currentWebSocketServerImpl;
-            
+
             currentWebSocketServerImpl = jest.fn().mockImplementation(() => {
                 const server = new MockWebSocketServer({ port: 7777 });
                 setTimeout(() => {
@@ -765,7 +765,7 @@ describe('OrchestrationServer', () => {
     describe('Message Replay', () => {
         it('should replay messages to client', async () => {
             const replayToClient = (orchestrationServer as any).replayToClient.bind(orchestrationServer);
-            
+
             await replayToClient('logical-client-1');
 
             expect(mockMessageRouter.replayToClient).toHaveBeenCalledWith('logical-client-1', {
@@ -781,7 +781,7 @@ describe('OrchestrationServer', () => {
             mockMessageRouter.replayToClient.mockRejectedValue(new Error('Replay failed'));
 
             const replayToClient = (orchestrationServer as any).replayToClient.bind(orchestrationServer);
-            
+
             await replayToClient('logical-client-1');
 
             expect(mockErrorHandler.handleError).toHaveBeenCalledWith(

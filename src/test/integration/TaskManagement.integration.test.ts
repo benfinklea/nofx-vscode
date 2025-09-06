@@ -4,11 +4,11 @@ import { PriorityTaskQueue } from '../../tasks/PriorityTaskQueue';
 import { TaskStateMachine } from '../../tasks/TaskStateMachine';
 import { CapabilityMatcher } from '../../tasks/CapabilityMatcher';
 import { TaskDependencyManager } from '../../tasks/TaskDependencyManager';
-import { 
-    ILoggingService, 
-    IEventBus, 
-    IErrorHandler, 
-    INotificationService, 
+import {
+    ILoggingService,
+    IEventBus,
+    IErrorHandler,
+    INotificationService,
     IConfigurationService,
     IMetricsService,
     SERVICE_TOKENS
@@ -167,8 +167,8 @@ describe('Task Management Integration Tests', () => {
                 expect(task.priority).toBe('high');
 
                 // 2. Create and assign agent
-                const mockAgent = createMockAgent({ 
-                    id: 'agent-1', 
+                const mockAgent = createMockAgent({
+                    id: 'agent-1',
                     status: 'idle',
                     requiredCapabilities: ['general', 'testing']
                 });
@@ -212,8 +212,8 @@ describe('Task Management Integration Tests', () => {
             const task = taskQueue.addTask(taskConfig);
 
             // Create agent
-            const mockAgent = createMockAgent({ 
-                id: 'agent-1', 
+            const mockAgent = createMockAgent({
+                id: 'agent-1',
                 status: 'idle',
                 requiredCapabilities: ['general']
             });
@@ -251,8 +251,8 @@ describe('Task Management Integration Tests', () => {
             }
 
             // Create agent
-            const mockAgent = createMockAgent({ 
-                id: 'agent-1', 
+            const mockAgent = createMockAgent({
+                id: 'agent-1',
                 status: 'idle',
                 requiredCapabilities: ['general']
             });
@@ -288,8 +288,8 @@ describe('Task Management Integration Tests', () => {
             priorityQueue.updatePriority(task.id, 8); // High priority
 
             // Create agent
-            const mockAgent = createMockAgent({ 
-                id: 'agent-1', 
+            const mockAgent = createMockAgent({
+                id: 'agent-1',
                 status: 'idle',
                 requiredCapabilities: ['general']
             });
@@ -331,8 +331,8 @@ describe('Task Management Integration Tests', () => {
             expect(childTask.blockedBy).toContain(parentTask.id);
 
             // Create agent
-            const mockAgent = createMockAgent({ 
-                id: 'agent-1', 
+            const mockAgent = createMockAgent({
+                id: 'agent-1',
                 status: 'idle',
                 requiredCapabilities: ['general']
             });
@@ -404,8 +404,8 @@ describe('Task Management Integration Tests', () => {
             expect(softDepResult).toBe(true);
 
             // Create agent
-            const mockAgent = createMockAgent({ 
-                id: 'agent-1', 
+            const mockAgent = createMockAgent({
+                id: 'agent-1',
                 status: 'idle',
                 requiredCapabilities: ['general']
             });
@@ -493,20 +493,20 @@ describe('Task Management Integration Tests', () => {
             const backendTask = taskQueue.addTask(backendTaskConfig);
 
             // Create specialized agents
-            const frontendAgent = createMockAgent({ 
-                id: 'frontend-agent', 
+            const frontendAgent = createMockAgent({
+                id: 'frontend-agent',
                 status: 'idle',
                 capabilities: ['frontend', 'react', 'javascript']
             });
 
-            const backendAgent = createMockAgent({ 
-                id: 'backend-agent', 
+            const backendAgent = createMockAgent({
+                id: 'backend-agent',
                 status: 'idle',
                 capabilities: ['backend', 'api', 'nodejs']
             });
 
             (agentManager as any).getIdleAgents.mockReturnValue([frontendAgent, backendAgent]);
-            (agentManager as any).getAgent.mockImplementation((id: string) => 
+            (agentManager as any).getAgent.mockImplementation((id: string) =>
                 id === 'frontend-agent' ? frontendAgent : backendAgent
             );
             (agentManager as any).executeTask.mockResolvedValue(undefined);
@@ -534,20 +534,20 @@ describe('Task Management Integration Tests', () => {
             const task = taskQueue.addTask(taskConfig);
 
             // Create agents with different capability matches
-            const agent1 = createMockAgent({ 
-                id: 'agent-1', 
+            const agent1 = createMockAgent({
+                id: 'agent-1',
                 status: 'idle',
                 capabilities: ['frontend', 'testing'] // 2/3 match
             });
 
-            const agent2 = createMockAgent({ 
-                id: 'agent-2', 
+            const agent2 = createMockAgent({
+                id: 'agent-2',
                 status: 'idle',
                 requiredCapabilities: ['frontend', 'backend', 'testing'] // 3/3 match
             });
 
-            const agent3 = createMockAgent({ 
-                id: 'agent-3', 
+            const agent3 = createMockAgent({
+                id: 'agent-3',
                 status: 'idle',
                 capabilities: ['frontend'] // 1/3 match
             });
@@ -570,7 +570,7 @@ describe('Task Management Integration Tests', () => {
         it('should handle high-frequency task creation', async () => {
             const { duration } = await measureTime(async () => {
                 const tasks = [];
-                
+
                 // Create 100 tasks rapidly
                 for (let i = 0; i < 100; i++) {
                     const taskConfig: TaskConfig = {
@@ -579,7 +579,7 @@ describe('Task Management Integration Tests', () => {
                         priority: i % 3 === 0 ? 'high' : i % 3 === 1 ? 'medium' : 'low',
                         requiredCapabilities: ['general']
                     };
-                    
+
                     const task = taskQueue.addTask(taskConfig);
                     tasks.push(task);
                 }
@@ -601,7 +601,7 @@ describe('Task Management Integration Tests', () => {
                         priority: 'medium',
                         requiredCapabilities: ['general']
                     };
-                    
+
                     const task = taskQueue.addTask(taskConfig);
                     tasks.push(task);
                 }
@@ -609,8 +609,8 @@ describe('Task Management Integration Tests', () => {
                 // Create multiple agents
                 const agents: any[] = [];
                 for (let i = 0; i < 5; i++) {
-                    const agent = createMockAgent({ 
-                        id: `agent-${i}`, 
+                    const agent = createMockAgent({
+                        id: `agent-${i}`,
                         status: 'idle',
                         requiredCapabilities: ['general']
                     });
@@ -618,13 +618,13 @@ describe('Task Management Integration Tests', () => {
                 }
 
                 (agentManager as any).getIdleAgents.mockReturnValue(agents);
-                (agentManager as any).getAgent.mockImplementation((id: string) => 
+                (agentManager as any).getAgent.mockImplementation((id: string) =>
                     agents.find((a: any) => a.id === id)
                 );
                 (agentManager as any).executeTask.mockResolvedValue(undefined);
 
                 // Assign tasks concurrently
-                const assignmentPromises = tasks.map(task => 
+                const assignmentPromises = tasks.map(task =>
                     taskQueue.assignTask(task.id, agents[Math.floor(Math.random() * agents.length)].id)
                 );
 
@@ -656,8 +656,8 @@ describe('Task Management Integration Tests', () => {
             });
 
             // Create agent and assign task
-            const mockAgent = createMockAgent({ 
-                id: 'agent-1', 
+            const mockAgent = createMockAgent({
+                id: 'agent-1',
                 status: 'idle',
                 requiredCapabilities: ['general']
             });
@@ -677,7 +677,7 @@ describe('Task Management Integration Tests', () => {
 
         it('should record comprehensive metrics', async () => {
             const tasks = [];
-            
+
             // Create tasks with different priorities
             const priorities = ['low', 'medium', 'high'];
             for (let i = 0; i < 9; i++) {
@@ -687,7 +687,7 @@ describe('Task Management Integration Tests', () => {
                     priority: priorities[i % 3] as any,
                     requiredCapabilities: ['general']
                 };
-                
+
                 const task = taskQueue.addTask(taskConfig);
                 tasks.push(task);
             }
@@ -720,8 +720,8 @@ describe('Task Management Integration Tests', () => {
             const task = taskQueue.addTask(taskConfig);
 
             // Create agent that will fail
-            const mockAgent = createMockAgent({ 
-                id: 'failing-agent', 
+            const mockAgent = createMockAgent({
+                id: 'failing-agent',
                 status: 'idle',
                 requiredCapabilities: ['general']
             });

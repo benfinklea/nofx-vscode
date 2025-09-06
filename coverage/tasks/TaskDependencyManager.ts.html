@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/236</span>
+                <span class='fraction'>0/227</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/84</span>
+                <span class='fraction'>0/83</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/229</span>
+                <span class='fraction'>0/219</span>
             </div>
         
             
@@ -631,22 +631,7 @@
 <a name='L566'></a><a href='#L566'>566</a>
 <a name='L567'></a><a href='#L567'>567</a>
 <a name='L568'></a><a href='#L568'>568</a>
-<a name='L569'></a><a href='#L569'>569</a>
-<a name='L570'></a><a href='#L570'>570</a>
-<a name='L571'></a><a href='#L571'>571</a>
-<a name='L572'></a><a href='#L572'>572</a>
-<a name='L573'></a><a href='#L573'>573</a>
-<a name='L574'></a><a href='#L574'>574</a>
-<a name='L575'></a><a href='#L575'>575</a>
-<a name='L576'></a><a href='#L576'>576</a>
-<a name='L577'></a><a href='#L577'>577</a>
-<a name='L578'></a><a href='#L578'>578</a>
-<a name='L579'></a><a href='#L579'>579</a>
-<a name='L580'></a><a href='#L580'>580</a>
-<a name='L581'></a><a href='#L581'>581</a>
-<a name='L582'></a><a href='#L582'>582</a>
-<a name='L583'></a><a href='#L583'>583</a>
-<a name='L584'></a><a href='#L584'>584</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L569'></a><a href='#L569'>569</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -961,13 +946,17 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1087,31 +1076,12 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1530,7 +1500,7 @@ interface ConflictInfo {
     /**
      * Resolves a conflict for a task
      */
-<span class="fstat-no" title="function not covered" >    resolveConflict(</span>taskId: string, resolution: 'block' | 'allow' | 'merge'): boolean {
+<span class="fstat-no" title="function not covered" >    resolveConflict(</span>taskId: string, resolution: 'block' | 'allow' | 'merge', task?: Task): boolean {
         const conflict = <span class="cstat-no" title="statement not covered" >this.conflicts.get(taskId);</span>
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (!conflict) {</span>
 <span class="cstat-no" title="statement not covered" >            return false;</span>
@@ -1543,15 +1513,19 @@ interface ConflictInfo {
 <span class="cstat-no" title="statement not covered" >                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_DECISION, { taskId, resolution });</span>
 <span class="cstat-no" title="statement not covered" >                break;</span>
             case 'allow':
+            case 'merge':
                 // Allow the task to proceed (remove from conflicts)
 <span class="cstat-no" title="statement not covered" >                this.conflicts.delete(taskId);</span>
-<span class="cstat-no" title="statement not covered" >                this.logger.info(`Resolved conflict for task ${taskId} by allowing`);</span>
-<span class="cstat-no" title="statement not covered" >                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, { taskId, resolution });</span>
-<span class="cstat-no" title="statement not covered" >                break;</span>
-            case 'merge':
-                // Merge with conflicting tasks (complex logic would go here)
-<span class="cstat-no" title="statement not covered" >                this.conflicts.delete(taskId);</span>
-<span class="cstat-no" title="statement not covered" >                this.logger.info(`Resolved conflict for task ${taskId} by merging`);</span>
+                
+                // Update task fields if task is provided
+<span class="cstat-no" title="statement not covered" >                <span class="missing-if-branch" title="if path not taken" >I</span>if (task) {</span>
+                    // Clear conflict-related fields
+<span class="cstat-no" title="statement not covered" >                    task.conflictsWith = [];</span>
+                    // Remove conflict-related blockedBy entries
+<span class="cstat-no" title="statement not covered" >                    task.blockedBy = (task.blockedBy || []).filter(<span class="fstat-no" title="function not covered" >id </span>=&gt; <span class="cstat-no" title="statement not covered" >!conflict.conflictingTasks.includes(id))</span>;</span>
+                }
+                
+<span class="cstat-no" title="statement not covered" >                this.logger.info(`Resolved conflict for task ${taskId} by ${resolution}`);</span>
 <span class="cstat-no" title="statement not covered" >                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, { taskId, resolution });</span>
 <span class="cstat-no" title="statement not covered" >                break;</span>
         }
@@ -1677,25 +1651,6 @@ interface ConflictInfo {
 <span class="cstat-no" title="statement not covered" >        return [];</span>
     }
 &nbsp;
-    /**
-     * Builds the cycle path from the cycle start to the current task
-     */
-    private <span class="fstat-no" title="function not covered" >buildCyclePath(</span>cycleStart: string, currentTask: string): string[] {
-        const path: string[] = <span class="cstat-no" title="statement not covered" >[cycleStart];</span>
-        let current = <span class="cstat-no" title="statement not covered" >currentTask;</span>
-&nbsp;
-<span class="cstat-no" title="statement not covered" >        while (current !== cycleStart) {</span>
-<span class="cstat-no" title="statement not covered" >            path.push(current);</span>
-            const dependencies = <span class="cstat-no" title="statement not covered" >this.dependencyGraph[current] || [];</span>
-<span class="cstat-no" title="statement not covered" >            if (dependencies.length &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >                current = dependencies[0]; </span>// Take first dependency (simplified)
-            } else {
-<span class="cstat-no" title="statement not covered" >                break;</span>
-            }
-        }
-&nbsp;
-<span class="cstat-no" title="statement not covered" >        return path;</span>
-    }
 &nbsp;
     /**
      * Builds precise cycle path from recursion stack
@@ -1819,7 +1774,7 @@ interface ConflictInfo {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-05T02:14:21.897Z
+                at 2025-09-05T12:10:29.182Z
             </div>
         <script src="../prettify.js"></script>
         <script>

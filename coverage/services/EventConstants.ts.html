@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/3</span>
+                <span class='fraction'>0/4</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/3</span>
+                <span class='fraction'>0/4</span>
             </div>
         
             
@@ -304,7 +304,34 @@
 <a name='L239'></a><a href='#L239'>239</a>
 <a name='L240'></a><a href='#L240'>240</a>
 <a name='L241'></a><a href='#L241'>241</a>
-<a name='L242'></a><a href='#L242'>242</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -341,6 +368,33 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -557,6 +611,12 @@ export const <span class="cstat-no" title="statement not covered" >DOMAIN_EVENTS
     AGENT_REMOVED: 'agent.removed',
     AGENT_STATUS_CHANGED: 'agent.status.changed',
     
+    // Agent lifecycle events
+    AGENT_LIFECYCLE_SPAWNING: 'agent.lifecycle.spawning',
+    AGENT_LIFECYCLE_SPAWNED: 'agent.lifecycle.spawned',
+    AGENT_LIFECYCLE_REMOVING: 'agent.lifecycle.removing',
+    AGENT_LIFECYCLE_REMOVED: 'agent.lifecycle.removed',
+    
     // Task events
     TASK_CREATED: 'task.created',
     TASK_ASSIGNED: 'task.assigned',
@@ -588,7 +648,28 @@ export const <span class="cstat-no" title="statement not covered" >DOMAIN_EVENTS
     // Worktree events
     WORKTREE_CREATED: 'worktree.created',
     WORKTREE_REMOVED: 'worktree.removed',
-    WORKTREE_MERGED: 'worktree.merged'
+    WORKTREE_MERGED: 'worktree.merged',
+    
+    // Terminal events
+    TERMINAL_CREATED: 'terminal.created',
+    TERMINAL_CLOSED: 'terminal.closed',
+    TERMINAL_DISPOSED: 'terminal.disposed',
+    
+    // Agent task events
+    AGENT_TASK_ASSIGNED: 'agent.task.assigned',
+    AGENT_TASK_COMPLETED: 'agent.task.completed',
+    AGENT_TASK_INTERRUPTED: 'agent.task.interrupted'
+} as const;
+&nbsp;
+// Configuration events
+export const <span class="cstat-no" title="statement not covered" >CONFIG_EVENTS = {</span>
+    CONFIG_CHANGED: 'configuration.changed',
+    CONFIG_UPDATED: 'configuration.updated',
+    CONFIG_VALIDATION_FAILED: 'configuration.validation.failed',
+    CONFIG_API_ERROR: 'configuration.api.error',
+    CONFIG_UPDATE_FAILED: 'configuration.update.failed',
+    CONFIG_BACKED_UP: 'configuration.backed.up',
+    CONFIG_RESTORED: 'configuration.restored'
 } as const;
 &nbsp;
 // Orchestration events - specific to orchestration server
@@ -793,7 +874,7 @@ export type EventName = DomainEventName | OrchEventName | UIEventName;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-05T02:14:21.897Z
+                at 2025-09-05T12:10:29.182Z
             </div>
         <script src="../prettify.js"></script>
         <script>

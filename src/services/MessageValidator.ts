@@ -1,13 +1,13 @@
-import { 
-    IMessageValidator, 
-    ILoggingService, 
-    IEventBus, 
-    ValidationResult 
+import {
+    IMessageValidator,
+    ILoggingService,
+    IEventBus,
+    ValidationResult
 } from './interfaces';
 import { ORCH_EVENTS, MessageValidationFailedPayload } from './EventConstants';
-import { 
-    OrchestratorMessage, 
-    MessageType, 
+import {
+    OrchestratorMessage,
+    MessageType,
     createMessage,
     isValidMessage,
     generateMessageId
@@ -90,11 +90,11 @@ export class MessageValidator implements IMessageValidator {
             warningCount: warnings.length
         });
 
-        return { 
-            isValid, 
-            errors, 
-            warnings, 
-            result: isValid ? message : undefined 
+        return {
+            isValid,
+            errors,
+            warnings,
+            result: isValid ? message : undefined
         };
     }
 

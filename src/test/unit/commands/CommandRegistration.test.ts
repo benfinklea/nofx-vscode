@@ -23,10 +23,10 @@ describe('Command Registration', () => {
     beforeEach(() => {
         // Set test mode
         process.env.NOFX_TEST_MODE = 'true';
-        
+
         // Create container
         container = new Container();
-        
+
         // Create mock extension context
         mockContext = {
             subscriptions: [],
@@ -146,9 +146,9 @@ describe('Command Registration', () => {
             // Register core services
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
-            container.register(SERVICE_TOKENS.LoggingService, (c) => 
+            container.register(SERVICE_TOKENS.LoggingService, (c) =>
                 new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)), true);
-            container.register(SERVICE_TOKENS.ConfigurationService, () => 
+            container.register(SERVICE_TOKENS.ConfigurationService, () =>
                 new ConfigurationService(), true);
 
             // Verify services can be resolved
@@ -161,15 +161,15 @@ describe('Command Registration', () => {
         it('should handle circular dependencies gracefully', () => {
             const circularToken1 = Symbol('circular1');
             const circularToken2 = Symbol('circular2');
-            
+
             container.register(circularToken1, (c) => ({
                 dep: c.resolve(circularToken2)
             }));
-            
+
             container.register(circularToken2, (c) => ({
                 dep: c.resolve(circularToken1)
             }));
-            
+
             expect(() => container.resolve(circularToken1)).toThrow();
         });
 
@@ -202,27 +202,27 @@ describe('Command Registration', () => {
 
         it('should instantiate AgentCommands with dependencies', () => {
             const AgentCommands = require('../../../commands/AgentCommands').AgentCommands;
-            
+
             // Setup minimal dependencies
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
-            container.register(SERVICE_TOKENS.LoggingService, (c) => 
+            container.register(SERVICE_TOKENS.LoggingService, (c) =>
                 new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)), true);
-            container.register(SERVICE_TOKENS.ConfigurationService, () => 
+            container.register(SERVICE_TOKENS.ConfigurationService, () =>
                 new ConfigurationService(), true);
-            container.register(SERVICE_TOKENS.AgentManager, (c) => 
+            container.register(SERVICE_TOKENS.AgentManager, (c) =>
                 new AgentManager(
                     c.resolve(SERVICE_TOKENS.EventBus),
                     c.resolve(SERVICE_TOKENS.LoggingService),
                     c.resolve(SERVICE_TOKENS.ConfigurationService)
                 ), true);
-            
+
             const agentCommands = new AgentCommands(
                 container.resolve(SERVICE_TOKENS.AgentManager),
                 container.resolve(SERVICE_TOKENS.EventBus),
                 container.resolve(SERVICE_TOKENS.LoggingService)
             );
-            
+
             expect(agentCommands).toBeDefined();
             expect(agentCommands.register).toBeDefined();
         });
@@ -232,18 +232,18 @@ describe('Command Registration', () => {
         it('should register command handlers without errors', () => {
             const mockRegisterCommand = jest.fn();
             (vscode.commands.registerCommand as any) = mockRegisterCommand;
-            
+
             const commands = packageData.contributes?.commands || [];
             commands.forEach((cmd: any) => {
                 const disposable = {
                     dispose: jest.fn()
                 };
                 mockRegisterCommand.mockReturnValue(disposable);
-                
+
                 const result = vscode.commands.registerCommand(cmd.command, () => {});
                 expect(result).toBe(disposable);
             });
-            
+
             const expectedCount = commands.length;
             expect(mockRegisterCommand).toHaveBeenCalledTimes(expectedCount);
         });
@@ -255,10 +255,10 @@ describe('Command Registration', () => {
                 }
                 return Promise.resolve();
             });
-            
+
             // Test with missing parameters
             await expect(handler()).rejects.toThrow('Missing required parameters');
-            
+
             // Test with parameters
             await expect(handler('param1')).resolves.not.toThrow();
         });
@@ -270,7 +270,7 @@ describe('Command Registration', () => {
             const commandIds = new Set(
                 packageData.contributes.commands.map((c: any) => c.command)
             );
-            
+
             Object.entries(menus).forEach(([menuLocation, items]) => {
                 if (Array.isArray(items)) {
                     items.forEach((item: any) => {
@@ -287,7 +287,7 @@ describe('Command Registration', () => {
             const commandIds = new Set(
                 packageData.contributes.commands.map((c: any) => c.command)
             );
-            
+
             keybindings.forEach((binding: any) => {
                 if (binding.command) {
                     expect(commandIds.has(binding.command)).toBe(true);
@@ -297,7 +297,7 @@ describe('Command Registration', () => {
 
         it('should have when clauses for context-dependent commands', () => {
             const menus = packageData.contributes?.menus || {};
-            
+
             // Check view/item/context menu items
             const contextMenus = menus['view/item/context'] || [];
             contextMenus.forEach((item: any) => {
@@ -313,23 +313,23 @@ describe('Command Registration', () => {
         it('should properly dispose command registrations', () => {
             const disposables: vscode.Disposable[] = [];
             const mockDispose = jest.fn();
-            
+
             // Create mock disposables
             const commandCount = packageData.contributes?.commands?.length || 0;
             for (let i = 0; i < commandCount; i++) {
                 disposables.push({ dispose: mockDispose });
             }
-            
+
             // Dispose all
             disposables.forEach(d => d.dispose());
-            
+
             expect(mockDispose).toHaveBeenCalledTimes(commandCount);
         });
 
         it('should clean up resources on deactivation', () => {
             const extensionModule = require('../../../extension');
             expect(extensionModule.deactivate).toBeDefined();
-            
+
             // Should not throw when called
             expect(() => extensionModule.deactivate()).not.toThrow();
         });
@@ -349,12 +349,12 @@ describe('Command Registration', () => {
                 }
                 return { success: true };
             };
-            
+
             // Test with failing command
             const failingCommand = async () => {
                 throw new Error('Command failed');
             };
-            
+
             const result = await errorHandler(failingCommand);
             expect(result.success).toBe(false);
             expect(result.error).toBe('Command failed');
@@ -362,11 +362,11 @@ describe('Command Registration', () => {
 
         it('should handle missing dependencies gracefully', () => {
             const missingToken = Symbol('missing');
-            
+
             expect(() => {
                 container.resolve(missingToken);
             }).toThrow();
-            
+
             const optional = container.resolveOptional(missingToken);
             expect(optional).toBeUndefined();
         });
@@ -375,17 +375,17 @@ describe('Command Registration', () => {
     describe('Performance', () => {
         it('should register all commands within reasonable time', () => {
             const start = Date.now();
-            
+
             // Simulate command registration
             const commands = packageData.contributes?.commands || [];
             const disposables: vscode.Disposable[] = [];
-            
+
             commands.forEach((cmd: any) => {
                 disposables.push({
                     dispose: jest.fn()
                 });
             });
-            
+
             const duration = Date.now() - start;
             expect(duration).toBeLessThan(5000); // Should complete within 5 seconds
         });
@@ -393,14 +393,14 @@ describe('Command Registration', () => {
         it('should resolve services quickly', () => {
             // Register services
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
-            
+
             const start = Date.now();
-            
+
             // Resolve service multiple times
             for (let i = 0; i < 100; i++) {
                 container.resolve(SERVICE_TOKENS.EventBus);
             }
-            
+
             const duration = Date.now() - start;
             expect(duration).toBeLessThan(100); // Should be very fast for cached singletons
         });

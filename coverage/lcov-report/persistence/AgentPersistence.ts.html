@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/130</span>
+                <span class='fraction'>0/131</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/128</span>
+                <span class='fraction'>0/129</span>
             </div>
         
             
@@ -363,7 +363,10 @@
 <a name='L298'></a><a href='#L298'>298</a>
 <a name='L299'></a><a href='#L299'>299</a>
 <a name='L300'></a><a href='#L300'>300</a>
-<a name='L301'></a><a href='#L301'>301</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -372,6 +375,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -380,6 +384,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -668,6 +674,7 @@
 <span class="cstat-no" title="statement not covered" >import * as path from 'path';</span>
 <span class="cstat-no" title="statement not covered" >import { promises as fsPromises } from 'fs';</span>
 import { Agent } from '../agents/types';
+import { ILoggingService } from '../services/interfaces';
 &nbsp;
 /**
  * Handles persistence of agents and their context across sessions
@@ -678,8 +685,10 @@ import { Agent } from '../agents/types';
     private stateFile: string;
     private nofxDir: string;
     private sessionsDir: string;
+    private loggingService?: ILoggingService;
     
-<span class="fstat-no" title="function not covered" >    constructor(w</span>orkspaceRoot: string) {
+<span class="fstat-no" title="function not covered" >    constructor(w</span>orkspaceRoot: string, loggingService?: ILoggingService) {
+<span class="cstat-no" title="statement not covered" >        this.loggingService = loggingService;</span>
         // Create .nofx directory in workspace for persistence
 <span class="cstat-no" title="statement not covered" >        this.persistenceDir = path.join(workspaceRoot, '.nofx');</span>
 <span class="cstat-no" title="statement not covered" >        this.nofxDir = this.persistenceDir; </span>// Alias for compatibility
@@ -696,11 +705,11 @@ import { Agent } from '../agents/types';
     private <span class="fstat-no" title="function not covered" >ensureDirectories(</span>) {
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (!fs.existsSync(this.persistenceDir)) {</span>
 <span class="cstat-no" title="statement not covered" >            fs.mkdirSync(this.persistenceDir, { recursive: true });</span>
-<span class="cstat-no" title="statement not covered" >            console.log(`[NofX Persistence] Created persistence directory: ${this.persistenceDir}`);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.debug(`Created persistence directory: ${this.persistenceDir}`);</span>
         }
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (!fs.existsSync(this.agentSessionsDir)) {</span>
 <span class="cstat-no" title="statement not covered" >            fs.mkdirSync(this.agentSessionsDir, { recursive: true });</span>
-<span class="cstat-no" title="statement not covered" >            console.log(`[NofX Persistence] Created sessions directory: ${this.agentSessionsDir}`);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.debug(`Created sessions directory: ${this.agentSessionsDir}`);</span>
         }
     }
     
@@ -725,27 +734,27 @@ import { Agent } from '../agents/types';
         };
         
 <span class="cstat-no" title="statement not covered" >        fs.writeFileSync(this.stateFile, JSON.stringify(state, null, 2));</span>
-<span class="cstat-no" title="statement not covered" >        console.log(`[NofX Persistence] Saved state for ${agents.length} agents`);</span>
+<span class="cstat-no" title="statement not covered" >        this.loggingService?.debug(`Saved state for ${agents.length} agents`);</span>
     }
     
     /**
      * Load saved agent state
      */
 <span class="fstat-no" title="function not covered" >    async </span>loadAgentState(): Promise&lt;any[]&gt; {
-<span class="cstat-no" title="statement not covered" >        console.log(`[NofX Persistence] Looking for state file: ${this.stateFile}`);</span>
+<span class="cstat-no" title="statement not covered" >        this.loggingService?.debug(`Looking for state file: ${this.stateFile}`);</span>
         
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (!fs.existsSync(this.stateFile)) {</span>
-<span class="cstat-no" title="statement not covered" >            console.log('[NofX Persistence] No state file found');</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.debug('No state file found');</span>
 <span class="cstat-no" title="statement not covered" >            return [];</span>
         }
         
 <span class="cstat-no" title="statement not covered" >        try {</span>
             const content = <span class="cstat-no" title="statement not covered" >fs.readFileSync(this.stateFile, 'utf-8');</span>
             const state = <span class="cstat-no" title="statement not covered" >JSON.parse(content);</span>
-<span class="cstat-no" title="statement not covered" >            console.log(`[NofX Persistence] Loaded state for ${state.agents.length} agents from ${this.stateFile}`);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.debug(`Loaded state for ${state.agents.length} agents from ${this.stateFile}`);</span>
 <span class="cstat-no" title="statement not covered" >            return state.agents;</span>
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >            console.error('[NofX Persistence] Error loading state:', error);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.error('Error loading state:', error);</span>
 <span class="cstat-no" title="statement not covered" >            return [];</span>
         }
     }
@@ -767,7 +776,7 @@ import { Agent } from '../agents/types';
 <span class="cstat-no" title="statement not covered" >            fs.writeFileSync(sessionFile, header + content);</span>
         }
         
-<span class="cstat-no" title="statement not covered" >        console.log(`[NofX Persistence] Saved session for agent ${agentId}`);</span>
+<span class="cstat-no" title="statement not covered" >        this.loggingService?.debug(`Saved session for agent ${agentId}`);</span>
     }
     
     /**
@@ -782,10 +791,10 @@ import { Agent } from '../agents/types';
         
 <span class="cstat-no" title="statement not covered" >        try {</span>
             const content = <span class="cstat-no" title="statement not covered" >fs.readFileSync(sessionFile, 'utf-8');</span>
-<span class="cstat-no" title="statement not covered" >            console.log(`[NofX Persistence] Loaded session for agent ${agentId}`);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.debug(`Loaded session for agent ${agentId}`);</span>
 <span class="cstat-no" title="statement not covered" >            return content;</span>
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >            console.error(`[NofX Persistence] Error loading session for ${agentId}:`, error);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.error(`Error loading session for ${agentId}:`, error);</span>
 <span class="cstat-no" title="statement not covered" >            return null;</span>
         }
     }
@@ -808,7 +817,7 @@ import { Agent } from '../agents/types';
                 const content = <span class="cstat-no" title="statement not covered" >fs.readFileSync(checkpointFile, 'utf-8');</span>
 <span class="cstat-no" title="statement not covered" >                checkpoints = JSON.parse(content);</span>
             } catch (error) {
-<span class="cstat-no" title="statement not covered" >                console.error('[NofX Persistence] Error loading checkpoints:', error);</span>
+<span class="cstat-no" title="statement not covered" >                this.loggingService?.error('Error loading checkpoints:', error);</span>
             }
         }
         
@@ -859,7 +868,7 @@ import { Agent } from '../agents/types';
 <span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (now - stats.mtime.getTime() &gt; maxAge) {</span>
                 const archivePath = <span class="cstat-no" title="statement not covered" >path.join(archiveDir, file);</span>
 <span class="cstat-no" title="statement not covered" >                fs.renameSync(filePath, archivePath);</span>
-<span class="cstat-no" title="statement not covered" >                console.log(`[NofX Persistence] Archived old session: ${file}`);</span>
+<span class="cstat-no" title="statement not covered" >                this.loggingService?.debug(`Archived old session: ${file}`);</span>
             }
         }
     }
@@ -879,7 +888,7 @@ import { Agent } from '../agents/types';
 <span class="cstat-no" title="statement not covered" >            fs.unlinkSync(path.join(this.agentSessionsDir, file));</span>
         }
         
-<span class="cstat-no" title="statement not covered" >        console.log('[NofX Persistence] Cleaned up all persistence data');</span>
+<span class="cstat-no" title="statement not covered" >        this.loggingService?.info('Cleaned up all persistence data');</span>
     }
     
     /**
@@ -926,9 +935,9 @@ import { Agent } from '../agents/types';
 <span class="cstat-no" title="statement not covered" >                await fsPromises.unlink(path.join(this.sessionsDir, file));</span>
             }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >            console.log('[NofX] Cleared all persistence data');</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.info('Cleared all persistence data');</span>
         } catch (error) {
-<span class="cstat-no" title="statement not covered" >            console.error('[NofX] Error clearing persistence data:', error);</span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.error('Error clearing persistence data:', error);</span>
 <span class="cstat-no" title="statement not covered" >            throw error;</span>
         }
     }
@@ -960,7 +969,7 @@ import { Agent } from '../agents/types';
 <span class="cstat-no" title="statement not covered" >            await fsPromises.copyFile(agentStatePath, path.join(archivePath, 'agents.json'));</span>
         }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >        console.log(`[NofX] Archived sessions to ${archivePath}`);</span>
+<span class="cstat-no" title="statement not covered" >        this.loggingService?.info(`Archived sessions to ${archivePath}`);</span>
 <span class="cstat-no" title="statement not covered" >        return archivePath;</span>
     }
 }</pre></td></tr></table></pre>
@@ -970,7 +979,7 @@ import { Agent } from '../agents/types';
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-05T02:14:21.814Z
+                at 2025-09-05T12:10:29.099Z
             </div>
         <script src="../prettify.js"></script>
         <script>

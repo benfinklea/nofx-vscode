@@ -9,7 +9,7 @@ export class MessageFlowDashboard {
     private template: DashboardTemplate;
     private disposables: vscode.Disposable[] = [];
     private disposed = false;
-    
+
     constructor(
         webviewHost: IWebviewHost,
         private context: vscode.ExtensionContext,
@@ -19,7 +19,7 @@ export class MessageFlowDashboard {
         this.webviewHost = webviewHost;
         this.template = new DashboardTemplate(context);
     }
-    
+
     public static create(
         context: vscode.ExtensionContext,
         viewModel: IDashboardViewModel,
@@ -47,7 +47,7 @@ export class MessageFlowDashboard {
             loggingService
         );
         MessageFlowDashboard.currentPanel.show();
-        
+
         return MessageFlowDashboard.currentPanel;
     }
 
@@ -89,7 +89,7 @@ export class MessageFlowDashboard {
         // Set initial HTML content
         const state = await this.viewModel.getDashboardState();
         this.webviewHost.setHtml(this.template.generateDashboardHTML(state, this.webviewHost));
-        
+
         // Handle panel disposal
         this.disposables.push(
             this.webviewHost.onDidDispose(() => {
@@ -105,7 +105,7 @@ export class MessageFlowDashboard {
     public reveal() {
         this.webviewHost.reveal();
     }
-    
+
     public dispose() {
         if (this.disposed) {
             return;
@@ -113,7 +113,7 @@ export class MessageFlowDashboard {
 
         this.disposed = true;
         MessageFlowDashboard.currentPanel = undefined;
-        
+
         // Dispose all subscriptions
         while (this.disposables.length) {
             const disposable = this.disposables.pop();
@@ -121,7 +121,7 @@ export class MessageFlowDashboard {
                 disposable.dispose();
             }
         }
-        
+
         // Dispose webview host
         this.webviewHost.dispose();
     }

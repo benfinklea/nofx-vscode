@@ -82,7 +82,7 @@ EOF`;
                 const testFile = path.join(workspaceFolder.uri.fsPath, '.claude-test.txt');
                 fs.writeFileSync(testFile, 'What programming languages do you know?');
                 terminal.sendText(`${claudePath} < "${testFile}"`);
-                
+
                 // Clean up test file after a delay
                 setTimeout(() => {
                     try {
@@ -108,7 +108,7 @@ EOF`;
         const config = vscode.workspace.getConfiguration('nofx');
         const testMode = config.get<boolean>('testMode', false);
         const isDev = process.env.NODE_ENV === 'development';
-        
+
         if (!testMode && !isDev) {
             await this.notificationService.showWarning(
                 'Command verification is only available in test mode. Set nofx.testMode to true in settings.'
@@ -126,13 +126,13 @@ EOF`;
             if (!extension) {
                 throw new Error('NofX extension not found');
             }
-            
+
             const packageJson = extension.packageJSON;
             const expectedCommands = packageJson.contributes?.commands?.map((cmd: any) => cmd.command) || [];
 
             // Find missing commands
             const missingCommands = expectedCommands.filter((cmd: string) => !registeredSet.has(cmd));
-            
+
             // Log results
             const outputChannel = vscode.window.createOutputChannel('NofX Command Verification');
             outputChannel.show();
@@ -140,20 +140,20 @@ EOF`;
             outputChannel.appendLine(`Total expected commands: ${expectedCommands.length}`);
             outputChannel.appendLine(`Total registered commands: ${registeredCommands.filter(cmd => cmd.startsWith('nofx.')).length}`);
             outputChannel.appendLine('');
-            
+
             if (missingCommands.length > 0) {
                 outputChannel.appendLine('❌ Missing Commands:');
                 missingCommands.forEach((cmd: string) => {
                     outputChannel.appendLine(`  - ${cmd}`);
                 });
-                
+
                 this.loggingService?.warn(`Missing commands detected: ${missingCommands.join(', ')}`);
                 await this.notificationService.showWarning(
                     `${missingCommands.length} commands are not registered. Check the output channel for details.`
                 );
             } else {
                 outputChannel.appendLine('✅ All expected commands are registered!');
-                
+
                 this.loggingService?.info(`All ${expectedCommands.length} expected commands are registered`);
                 await this.notificationService.showInformation(
                     `All ${expectedCommands.length} commands verified successfully!`
@@ -163,14 +163,14 @@ EOF`;
             // Also log any extra registered nofx commands not in package.json
             const nofxCommands = registeredCommands.filter(cmd => cmd.startsWith('nofx.'));
             const extraCommands = nofxCommands.filter(cmd => !expectedCommands.includes(cmd));
-            
+
             if (extraCommands.length > 0) {
                 outputChannel.appendLine('');
                 outputChannel.appendLine('📝 Extra Commands (not in package.json):');
                 extraCommands.forEach((cmd: string) => {
                     outputChannel.appendLine(`  - ${cmd}`);
                 });
-                
+
                 this.loggingService?.debug(`Extra commands registered: ${extraCommands.join(', ')}`);
             }
 

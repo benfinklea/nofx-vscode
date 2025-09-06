@@ -31,7 +31,7 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
 
     async spawnAgent(config: AgentConfig, restoredId?: string): Promise<Agent> {
         const agentId = restoredId || `agent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
+
         // Get icon based on agent type/template
         const iconMap: { [key: string]: string } = {
             'frontend': 'symbol-color',
@@ -44,9 +44,9 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
             'ai': 'hubot',
             'general': 'person'
         };
-        
+
         const terminalIcon = iconMap[config.type] || 'person';
-        
+
         // Create terminal using TerminalManager
         const terminal = this.terminalManager.createTerminal(agentId, {
             ...config,
@@ -54,7 +54,7 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         });
 
         // Create output channel for agent logs using LoggingService
-        const outputChannel = this.loggingService?.getChannel(`Agent: ${config.name}`) || 
+        const outputChannel = this.loggingService?.getChannel(`Agent: ${config.name}`) ||
             vscode.window.createOutputChannel(`n of x: ${config.name}`);
 
         // Create agent object
@@ -100,7 +100,7 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         outputChannel.appendLine(`✅ Agent ${config.name} (${config.type}) initialized`);
         outputChannel.appendLine(`ID: ${agentId}`);
         outputChannel.appendLine(`Status: ${agent.status}`);
-        outputChannel.appendLine(`Ready to receive tasks...`);
+        outputChannel.appendLine('Ready to receive tasks...');
 
         this.loggingService?.info(`Agent ${config.name} ready.`);
 
@@ -149,7 +149,7 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         // Note: Persistence is now handled by AgentManager
 
         this.loggingService?.info(`Agent ${agentId} removed successfully`);
-        this.notificationService.showInformation(`Agent removed successfully`);
+        this.notificationService.showInformation('Agent removed successfully');
         return true;
     }
 

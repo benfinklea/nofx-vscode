@@ -10,13 +10,13 @@ export class ConductorTerminal {
     private agentManager: AgentManager;
     private taskQueue: TaskQueue;
     private claudePath: string;
-    
+
     constructor(agentManager: AgentManager, taskQueue: TaskQueue) {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
         this.claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
     }
-    
+
     async start() {
         // Create or show the conductor terminal
         if (!this.terminal) {
@@ -25,9 +25,9 @@ export class ConductorTerminal {
                 iconPath: new vscode.ThemeIcon('audio')  // Music/audio icon (closest to guitar)
             });
         }
-        
+
         this.terminal.show();
-        
+
         // Clear and start fresh
         this.terminal.sendText('clear');
         this.terminal.sendText('echo "🎸 NofX Conductor Terminal"');
@@ -35,26 +35,26 @@ export class ConductorTerminal {
         this.terminal.sendText('echo ""');
         this.terminal.sendText('echo "Starting Claude conductor with system prompt..."');
         this.terminal.sendText('echo ""');
-        
+
         // Get system prompt and escape it for shell
         const systemPrompt = this.getSystemPrompt();
         const escapedPrompt = systemPrompt.replace(/'/g, "'\\''");
-        
+
         // Start Claude with --append-system-prompt flag
         const command = `${this.claudePath} --append-system-prompt '${escapedPrompt}'`;
-        
+
         // Show the user what we're doing (simplified message)
         this.terminal.sendText('echo "Running: claude --append-system-prompt \'<conductor system prompt>\'"');
         this.terminal.sendText('echo ""');
-        
+
         // Execute the actual command
         this.terminal.sendText(command);
     }
-    
+
     private getSystemPrompt(): string {
         const agents = this.agentManager.getActiveAgents();
         const agentList = agents.map(a => `- ${a.name} (${a.type}): ${a.status}`).join('\n');
-        
+
         return `You are the NofX Conductor - a senior technical leader orchestrating AI agents.
 
 Your role:
@@ -95,7 +95,7 @@ Available agent types:
 
 You are a VP-level technical leader. Make architectural decisions, enforce quality standards, and ensure exceptional software delivery.`;
     }
-    
+
     stop() {
         if (this.terminal) {
             this.terminal.dispose();

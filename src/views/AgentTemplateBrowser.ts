@@ -9,7 +9,7 @@ export class AgentTemplateBrowser {
 
     async showTemplateBrowser() {
         const templates = this.templateManager.getTemplates();
-        
+
         const items = templates.map(template => ({
             label: `${template.icon} ${template.name}`,
             description: template.description,
@@ -217,7 +217,7 @@ ${template.author ? `*Author: ${template.author}*` : ''}`;
             content,
             language: 'markdown'
         });
-        
+
         await vscode.window.showTextDocument(doc, {
             preview: true,
             viewColumn: vscode.ViewColumn.Beside

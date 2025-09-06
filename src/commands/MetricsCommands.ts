@@ -18,14 +18,14 @@ export class MetricsCommands {
         this.notificationService = container.resolve(SERVICE_TOKENS.NotificationService);
         this.configService = container.resolve(SERVICE_TOKENS.ConfigurationService);
         this.commandService = container.resolve(SERVICE_TOKENS.CommandService);
-        
+
         // Subscribe to metrics events for real-time updates
         this.setupEventListeners();
     }
-    
+
     private setupEventListeners(): void {
         const eventBus = this.container.resolve<IEventBus>(SERVICE_TOKENS.EventBus);
-        
+
         // Listen for metrics events
         this.disposables.push(
             eventBus.subscribe('metrics.counter.incremented', () => {
@@ -34,7 +34,7 @@ export class MetricsCommands {
                 }
             })
         );
-        
+
         this.disposables.push(
             eventBus.subscribe('metrics.duration.recorded', () => {
                 if (this.metricsPanel && this.autoRefreshEnabled) {
@@ -42,7 +42,7 @@ export class MetricsCommands {
                 }
             })
         );
-        
+
         this.disposables.push(
             eventBus.subscribe('metrics.gauge.set', () => {
                 if (this.metricsPanel && this.autoRefreshEnabled) {
@@ -50,7 +50,7 @@ export class MetricsCommands {
                 }
             })
         );
-        
+
         this.disposables.push(
             eventBus.subscribe('metrics.recorded', () => {
                 if (this.metricsPanel && this.autoRefreshEnabled) {
@@ -152,31 +152,31 @@ export class MetricsCommands {
         }
 
         const dashboardData = this.metricsService.getDashboardData();
-        
+
         // Apply filters to the data
         const filteredData = this.applyFiltersToData(dashboardData, this.currentFilters);
-        
+
         this.metricsPanel.webview.postMessage({
             command: 'update',
             data: filteredData
         });
     }
-    
+
     private applyFiltersToData(data: any, filters: any): any {
         if (!filters || Object.keys(filters).length === 0) {
             return data;
         }
-        
+
         const filtered = { ...data };
-        
+
         // Start with the recent metrics array for filtering
         let filteredRecent = data.recent || [];
-        
+
         // Apply time range filter
         if (filters.timeRange && filters.timeRange !== 'all') {
             const now = new Date();
             let cutoffTime: Date;
-            
+
             switch (filters.timeRange) {
                 case '1h':
                     cutoffTime = new Date(now.getTime() - 60 * 60 * 1000);
@@ -193,56 +193,56 @@ export class MetricsCommands {
                 default:
                     cutoffTime = new Date(0);
             }
-            
+
             // Filter recent metrics by time
-            filteredRecent = filteredRecent.filter((metric: any) => 
+            filteredRecent = filteredRecent.filter((metric: any) =>
                 new Date(metric.timestamp) >= cutoffTime
             );
         }
-        
+
         // Apply metric type filter
         if (filters.metricType && filters.metricType !== 'all') {
-            filteredRecent = filteredRecent.filter((metric: any) => 
+            filteredRecent = filteredRecent.filter((metric: any) =>
                 metric.type === filters.metricType
             );
         }
-        
+
         // Apply search filter
         if (filters.searchFilter && filters.searchFilter.trim()) {
             const searchTerm = filters.searchFilter.toLowerCase();
-            filteredRecent = filteredRecent.filter((metric: any) => 
+            filteredRecent = filteredRecent.filter((metric: any) =>
                 metric.name.toLowerCase().includes(searchTerm)
             );
         }
-        
+
         // Update the filtered data with recomputed metrics from filtered recent array
         filtered.recent = filteredRecent;
         filtered.recentMetrics = filteredRecent.length;
         filtered.topCounters = this.getTopCountersFromRecent(filteredRecent);
         filtered.averageDurations = this.getAverageDurationsFromRecent(filteredRecent);
-        
+
         return filtered;
     }
-    
+
     private getTopCountersFromRecent(recentMetrics: any[]): Array<{ name: string; count: number }> {
         const counterMap = new Map<string, number>();
-        
+
         recentMetrics
             .filter(m => m.type === 'counter')
             .forEach(m => {
                 const current = counterMap.get(m.name) || 0;
                 counterMap.set(m.name, current + m.value);
             });
-        
+
         return Array.from(counterMap.entries())
             .map(([name, count]) => ({ name, count }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 10);
     }
-    
+
     private getAverageDurationsFromRecent(recentMetrics: any[]): Array<{ name: string; average: number }> {
         const durationMap = new Map<string, { total: number; count: number }>();
-        
+
         recentMetrics
             .filter(m => m.type === 'histogram')
             .forEach(m => {
@@ -251,13 +251,13 @@ export class MetricsCommands {
                 current.count += 1;
                 durationMap.set(m.name, current);
             });
-        
+
         return Array.from(durationMap.entries())
             .map(([name, data]) => ({ name, average: data.total / data.count }))
             .sort((a, b) => b.average - a.average)
             .slice(0, 10);
     }
-    
+
     private setAutoRefresh(enabled: boolean): void {
         this.autoRefreshEnabled = enabled;
     }
@@ -696,7 +696,7 @@ export class MetricsCommands {
             if (!format) return;
 
             const data = this.metricsService.exportMetrics(format.label.toLowerCase() as 'json' | 'csv');
-            
+
             const uri = await vscode.window.showSaveDialog({
                 defaultUri: vscode.Uri.file(`nofx-metrics-${new Date().toISOString().split('T')[0]}.${format.label.toLowerCase()}`),
                 filters: {
@@ -716,7 +716,7 @@ export class MetricsCommands {
     private async exportMetricsFromDashboard(format: string): Promise<void> {
         try {
             const data = this.metricsService.exportMetrics(format as 'json' | 'csv');
-            
+
             const uri = await vscode.window.showSaveDialog({
                 defaultUri: vscode.Uri.file(`nofx-metrics-${new Date().toISOString().split('T')[0]}.${format}`),
                 filters: {
@@ -742,7 +742,7 @@ export class MetricsCommands {
         if (confirmed) {
             this.metricsService.resetMetrics();
             this.notificationService.showInformation('Metrics data has been reset');
-            
+
             if (this.metricsPanel) {
                 this.refreshMetricsDashboard();
             }
@@ -757,7 +757,7 @@ export class MetricsCommands {
 
     private async toggleMetrics(): Promise<void> {
         await this.toggleMetricsImpl();
-        
+
         if (this.metricsPanel) {
             this.refreshMetricsDashboard();
         }
@@ -767,16 +767,16 @@ export class MetricsCommands {
         await this.toggleMetricsImpl();
         this.refreshMetricsDashboard();
     }
-    
+
     private async toggleMetricsImpl(): Promise<void> {
         const currentEnabled = this.configService.get(CONFIG_KEYS.ENABLE_METRICS, false);
         const newEnabled = !currentEnabled;
-        
-        const target = vscode.workspace.workspaceFolders?.length 
-            ? vscode.ConfigurationTarget.Workspace 
+
+        const target = vscode.workspace.workspaceFolders?.length
+            ? vscode.ConfigurationTarget.Workspace
             : vscode.ConfigurationTarget.Global;
         await this.configService.update(CONFIG_KEYS.ENABLE_METRICS, newEnabled, target);
-        
+
         const status = newEnabled ? 'enabled' : 'disabled';
         this.notificationService.showInformation(`Metrics collection ${status}`);
     }
@@ -787,7 +787,7 @@ export class MetricsCommands {
             this.metricsPanel.dispose();
             this.metricsPanel = undefined;
         }
-        
+
         // Dispose all command registrations
         this.disposables.forEach(disposable => disposable.dispose());
         this.disposables = [];

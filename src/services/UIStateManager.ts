@@ -8,7 +8,7 @@ export class UIStateManager implements IUIStateManager {
     private loggingService: ILoggingService;
     private agentReader: IAgentReader;
     private taskReader: ITaskReader;
-    
+
     // Internal state slices
     private agentStats = {
         total: 0,
@@ -17,7 +17,7 @@ export class UIStateManager implements IUIStateManager {
         error: 0,
         offline: 0
     };
-    
+
     private taskStats = {
         queued: 0,
         validated: 0,
@@ -29,7 +29,7 @@ export class UIStateManager implements IUIStateManager {
         blocked: 0,
         conflicted: 0
     };
-    
+
     private agents: AgentDTO[] = [];
     private tasks: TaskDTO[] = [];
     private dependencyGraph: {taskId: string, dependencies: string[], softDependencies: string[]}[] = [];
@@ -37,16 +37,16 @@ export class UIStateManager implements IUIStateManager {
     private blockedTasks: TaskDTO[] = [];
     private readyTasks: TaskDTO[] = [];
     private theme: 'light' | 'dark' = 'light';
-    
+
     // Caching for performance optimization
     private taskHashCache: Map<string, string> = new Map();
     private dependencyGraphCache: {taskId: string, dependencies: string[], softDependencies: string[]}[] | null = null;
     private blockedAndReadyCache: {blockedTasks: TaskDTO[], readyTasks: TaskDTO[]} | null = null;
-    
+
     // Separate cache keys to avoid unnecessary invalidation
     private lastDependencyGraphHash: string = '';
     private lastBlockedReadyHash: string = '';
-    
+
     // Event subscriptions
     private subscriptions: vscode.Disposable[] = [];
     private stateChangeCallbacks: ((state: ConductorViewState) => void)[] = [];
@@ -62,16 +62,16 @@ export class UIStateManager implements IUIStateManager {
         this.loggingService = loggingService;
         this.agentReader = agentReader;
         this.taskReader = taskReader;
-        
+
         this.initialize();
     }
 
     private initialize(): void {
         this.loggingService.info('UIStateManager: Initializing');
-        
+
         // Initialize theme from VS Code color theme
         this.theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
-        
+
         // Subscribe to domain events with explicit handler tracking
         const agentCreatedHandler = () => this.updateAgentStats();
         const agentRemovedHandler = () => this.updateAgentStats();
@@ -131,7 +131,7 @@ export class UIStateManager implements IUIStateManager {
             this.eventBus.subscribe(DOMAIN_EVENTS.TASK_MATCH_SCORE, taskMatchScoreHandler),
             this.eventBus.subscribe(DOMAIN_EVENTS.THEME_CHANGED, themeChangedHandler)
         );
-        
+
         // Subscribe to VS Code theme changes
         this.subscriptions.push(
             vscode.window.onDidChangeActiveColorTheme(() => {
@@ -139,7 +139,7 @@ export class UIStateManager implements IUIStateManager {
                 this.publishStateChange();
             })
         );
-        
+
         // Initial state computation
         this.updateAgentStats();
         this.updateTaskStats();
@@ -161,10 +161,10 @@ export class UIStateManager implements IUIStateManager {
 
     subscribe(callback: (state: ConductorViewState) => void): vscode.Disposable {
         this.stateChangeCallbacks.push(callback);
-        
+
         // Immediately call with current state
         callback(this.getState());
-        
+
         return {
             dispose: () => {
                 const index = this.stateChangeCallbacks.indexOf(callback);
@@ -179,10 +179,10 @@ export class UIStateManager implements IUIStateManager {
         try {
             const activeAgents = this.agentReader.getActiveAgents();
             this.agents = activeAgents.map(toAgentDTO);
-            
+
             // Compute stats using the dedicated method
             this.computeAgentStats();
-            
+
             this.publishStateChange();
             this.loggingService.debug('UIStateManager: Agent stats updated', this.agentStats);
         } catch (error) {
@@ -194,15 +194,15 @@ export class UIStateManager implements IUIStateManager {
         try {
             const allTasks = this.taskReader.getTasks();
             this.tasks = allTasks.map(task => toTaskDTO(task, computeDependencyStatus(task, allTasks)));
-            
+
             // Compute stats using the dedicated method
             this.computeTaskStats();
-            
+
             // Compute dependency and conflict information with caching
             this.computeDependencyGraph();
             this.computeConflicts();
             this.computeBlockedAndReadyTasks();
-            
+
             this.publishStateChange();
             this.loggingService.debug('UIStateManager: Task stats updated', this.taskStats);
         } catch (error) {
@@ -239,10 +239,10 @@ export class UIStateManager implements IUIStateManager {
 
     private computeTaskStats(): void {
         const allTasks = this.taskReader.getTasks();
-        
+
         const assigned = allTasks.filter(t => t.status === 'assigned').length;
         const inProgress = allTasks.filter(t => t.status === 'in-progress').length;
-        
+
         this.taskStats = {
             queued: allTasks.filter(t => t.status === 'queued').length,
             validated: allTasks.filter(t => t.status === 'validated').length,
@@ -265,7 +265,7 @@ export class UIStateManager implements IUIStateManager {
             this.dependencyGraph = this.dependencyGraphCache;
             return;
         }
-        
+
         const allTasks = this.taskReader.getTasks();
         this.dependencyGraph = allTasks
             .filter(task => (task.dependsOn && task.dependsOn.length > 0) || (task.prefers && task.prefers.length > 0))
@@ -274,7 +274,7 @@ export class UIStateManager implements IUIStateManager {
                 dependencies: task.dependsOn || [],
                 softDependencies: task.prefers || []
             }));
-        
+
         this.dependencyGraphCache = this.dependencyGraph;
         this.lastDependencyGraphHash = currentHash;
     }
@@ -303,16 +303,16 @@ export class UIStateManager implements IUIStateManager {
             this.readyTasks = this.blockedAndReadyCache.readyTasks;
             return;
         }
-        
+
         const allTasks = this.taskReader.getTasks();
         this.blockedTasks = allTasks
             .filter(task => task.status === 'blocked')
             .map(task => toTaskDTO(task, computeDependencyStatus(task, allTasks)));
-        
+
         this.readyTasks = allTasks
             .filter(task => task.status === 'ready')
             .map(task => toTaskDTO(task, computeDependencyStatus(task, allTasks)));
-        
+
         this.blockedAndReadyCache = {
             blockedTasks: this.blockedTasks,
             readyTasks: this.readyTasks
@@ -340,10 +340,10 @@ export class UIStateManager implements IUIStateManager {
     getDependencyChain(taskId: string): string[] {
         const task = this.tasks.find(t => t.id === taskId);
         if (!task) return [];
-        
+
         const chain: string[] = [];
         const visited = new Set<string>();
-        
+
         this.buildDependencyChain(taskId, chain, visited);
         return chain;
     }
@@ -353,10 +353,10 @@ export class UIStateManager implements IUIStateManager {
      */
     private buildDependencyChain(taskId: string, chain: string[], visited: Set<string>): void {
         if (visited.has(taskId)) return;
-        
+
         visited.add(taskId);
         chain.push(taskId);
-        
+
         const task = this.tasks.find(t => t.id === taskId);
         if (task && task.dependsOn) {
             for (const depId of task.dependsOn) {
@@ -370,10 +370,10 @@ export class UIStateManager implements IUIStateManager {
      */
     private computeTaskHash(): string {
         const allTasks = this.taskReader.getTasks();
-        const hashData = allTasks.map(task => 
+        const hashData = allTasks.map(task =>
             `${task.id}:${task.status}:${(task.dependsOn || []).join(',')}:${(task.prefers || []).join(',')}:${(task.conflictsWith || []).join(',')}`
         ).join('|');
-        
+
         // Simple hash function
         let hash = 0;
         for (let i = 0; i < hashData.length; i++) {
@@ -389,10 +389,10 @@ export class UIStateManager implements IUIStateManager {
      */
     private computeDependencyGraphHash(): string {
         const allTasks = this.taskReader.getTasks();
-        const hashData = allTasks.map(task => 
+        const hashData = allTasks.map(task =>
             `${task.id}:${(task.dependsOn || []).join(',')}:${(task.prefers || []).join(',')}`
         ).join('|');
-        
+
         // Simple hash function
         let hash = 0;
         for (let i = 0; i < hashData.length; i++) {
@@ -408,10 +408,10 @@ export class UIStateManager implements IUIStateManager {
      */
     private computeBlockedAndReadyHash(): string {
         const allTasks = this.taskReader.getTasks();
-        const hashData = allTasks.map(task => 
+        const hashData = allTasks.map(task =>
             `${task.id}:${task.status}:${(task.blockedBy || []).join(',')}:${(task.conflictsWith || []).join(',')}`
         ).join('|');
-        
+
         // Simple hash function
         let hash = 0;
         for (let i = 0; i < hashData.length; i++) {
@@ -425,7 +425,7 @@ export class UIStateManager implements IUIStateManager {
     private publishStateChange(): void {
         const state = this.getState();
         this.eventBus.publish(UI_EVENTS.UI_STATE_CHANGED, state);
-        
+
         // Notify direct subscribers
         this.stateChangeCallbacks.forEach(callback => {
             try {
@@ -438,17 +438,17 @@ export class UIStateManager implements IUIStateManager {
 
     dispose(): void {
         this.loggingService.info('UIStateManager: Disposing');
-        
+
         // Explicitly unsubscribe from EventBus handlers
         this.eventBusHandlers.forEach((handler, event) => {
             this.eventBus.unsubscribe(event, handler);
         });
         this.eventBusHandlers.clear();
-        
+
         // Dispose all subscriptions
         this.subscriptions.forEach(sub => sub.dispose());
         this.subscriptions = [];
-        
+
         // Clear callbacks
         this.stateChangeCallbacks = [];
     }

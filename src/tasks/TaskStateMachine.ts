@@ -104,7 +104,7 @@ export class TaskStateMachine implements ITaskStateMachine {
             }
 
             this.logger.info(`Task ${task.id} transitioned from ${previousState} to ${nextState}`);
-            
+
             // Publish state change event
             this.eventBus.publish(DOMAIN_EVENTS.TASK_STATE_CHANGED, {
                 taskId: task.id,
@@ -204,7 +204,7 @@ export class TaskStateMachine implements ITaskStateMachine {
      */
     private validateReadiness(task: Task): TaskValidationError[] {
         const errors: TaskValidationError[] = [];
-        
+
         // If no dependencies, task is ready - return immediately
         if (!task.dependsOn || task.dependsOn.length === 0) {
             return errors;
@@ -224,7 +224,7 @@ export class TaskStateMachine implements ITaskStateMachine {
         // Check each dependency
         for (const depId of task.dependsOn) {
             const depTask = taskMap.get(depId);
-            
+
             if (!depTask) {
                 errors.push({
                     field: 'dependsOn',
@@ -245,7 +245,7 @@ export class TaskStateMachine implements ITaskStateMachine {
 
     /**
      * Determines if assignment should be cleared when transitioning states
-     * 
+     *
      * Policy: assignedTo is retained when transitioning assigned -> blocked because:
      * - The task remains assigned to the agent, just temporarily blocked
      * - The agent should be aware they have a blocked task
@@ -255,7 +255,7 @@ export class TaskStateMachine implements ITaskStateMachine {
         // Clear assignment when transitioning from assigned states to non-assigned states
         const assignedStates: TaskStatus[] = ['assigned', 'in-progress', 'failed', 'blocked'];
         const nonAssignedStates: TaskStatus[] = ['ready', 'validated'];
-        
+
         return assignedStates.includes(previousState) && nonAssignedStates.includes(nextState);
     }
 

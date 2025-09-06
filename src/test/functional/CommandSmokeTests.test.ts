@@ -81,20 +81,20 @@ describe('Command Smoke Tests', () => {
 
         // Setup and activate extension
         context = await setupExtension();
-        
+
         // Setup mock workspace
         setupMockWorkspace(workspaceFolder);
 
         // Initialize container and services
         container = Container.getInstance();
         // Remove container.reset() to avoid stale command bindings
-        
+
         // Register essential services
         const configService = new ConfigurationService();
         const mainChannel = vscode.window.createOutputChannel('NofX Test');
         const loggingService = new LoggingService(configService, mainChannel);
         const eventBus = new EventBus();
-        
+
         container.registerInstance(SERVICE_TOKENS.ConfigurationService, configService);
         container.registerInstance(SERVICE_TOKENS.LoggingService, loggingService);
         container.registerInstance(SERVICE_TOKENS.EventBus, eventBus);
@@ -148,7 +148,7 @@ describe('Command Smoke Tests', () => {
 
         // Clear mock workspace
         clearMockWorkspace();
-        
+
         // Teardown extension
         await teardownExtension();
     });
@@ -157,10 +157,10 @@ describe('Command Smoke Tests', () => {
         test('All commands from package.json should be registered', async () => {
             const registered = await vscode.commands.getCommands(true);
             const nofxCommands = registered.filter(cmd => cmd.startsWith('nofx.'));
-            
+
             // Verify we have at least as many registered as in package.json
             expect(nofxCommands.length).toBeGreaterThanOrEqual(expected.length);
-            
+
             // Verify each command from package.json is registered
             for (const command of expected) {
                 expect(nofxCommands).toContain(command);
@@ -171,7 +171,7 @@ describe('Command Smoke Tests', () => {
             // Basic test to ensure commands are defined
             expect(expected).toBeDefined();
             expect(expected.length).toBeGreaterThan(0);
-            
+
             // Verify each command is a string
             for (const cmd of expected) {
                 expect(typeof cmd).toBe('string');
@@ -216,7 +216,7 @@ describe('Command Smoke Tests', () => {
                 }
 
                 const params = COMMANDS_WITH_PARAMS[command] || undefined;
-                
+
                 // Execute command with error handling
                 let error: Error | undefined;
                 try {
@@ -235,11 +235,11 @@ describe('Command Smoke Tests', () => {
                         'No tasks available',
                         'Claude CLI not found'
                     ];
-                    
-                    const isExpectedError = expectedErrors.some(msg => 
+
+                    const isExpectedError = expectedErrors.some(msg =>
                         error!.message.includes(msg)
                     );
-                    
+
                     expect(isExpectedError).toBe(true);
                 }
             }
@@ -258,7 +258,7 @@ describe('Command Smoke Tests', () => {
             for (const command of workspaceCommands) {
                 const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
                 await vscode.commands.executeCommand(command);
-                
+
                 // Should show error message instead of throwing
                 expect(errorSpy).toHaveBeenCalled();
             }
@@ -284,7 +284,7 @@ describe('Command Smoke Tests', () => {
     describe('Command State Modifications', () => {
         test('Agent commands should modify agent state correctly', async () => {
             const agentManager = container.resolve<any>(SERVICE_TOKENS.AgentManager);
-            
+
             // Test add agent
             await vscode.commands.executeCommand('nofx.addAgent');
             expect(agentManager.spawnAgent).toHaveBeenCalled();
@@ -301,7 +301,7 @@ describe('Command Smoke Tests', () => {
 
         test('Task commands should modify task state correctly', async () => {
             const taskQueue = container.resolve<any>(SERVICE_TOKENS.TaskQueue);
-            
+
             // Test create task
             await vscode.commands.executeCommand('nofx.createTask');
             expect(taskQueue.createTask).toHaveBeenCalled();
@@ -314,7 +314,7 @@ describe('Command Smoke Tests', () => {
 
         test('Metrics commands should modify metrics state correctly', async () => {
             const metricsService = container.resolve<any>(SERVICE_TOKENS.MetricsService);
-            
+
             // Test reset metrics
             await vscode.commands.executeCommand('nofx.resetMetrics');
             expect(metricsService.reset).toHaveBeenCalled();
@@ -366,7 +366,7 @@ describe('Command Smoke Tests', () => {
             agentManager.spawnAgent.mockRejectedValueOnce(new Error('Service failure'));
 
             const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
-            
+
             // Should show error but not crash
             await vscode.commands.executeCommand('nofx.addAgent');
             expect(errorSpy).toHaveBeenCalled();
@@ -388,12 +388,12 @@ describe('Command Smoke Tests', () => {
                 renameAgent: jest.fn(),
                 updateAgentType: jest.fn()
             };
-            
+
             // Override the service instead of resetting the container
             container.registerInstance(SERVICE_TOKENS.AgentManager, brokenAgentManager);
 
             const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
-            
+
             // Commands depending on AgentManager should show error
             await vscode.commands.executeCommand('nofx.addAgent');
             expect(errorSpy).toHaveBeenCalled();
@@ -426,10 +426,10 @@ describe('Command Smoke Tests', () => {
 
         test('Commands should dispose resources properly', async () => {
             const disposables: vscode.Disposable[] = [];
-            
+
             // Track disposables created during command execution
             const originalPush = context.subscriptions.push;
-            
+
             try {
                 context.subscriptions.push = jest.fn((item: vscode.Disposable) => {
                     disposables.push(item);

@@ -9,10 +9,10 @@ export class ConductorViewModel implements IConductorViewModel {
     private eventBus: IEventBus;
     private loggingService: ILoggingService;
     private notificationService: INotificationService;
-    
+
     // View-specific state
     private collapsibleSections: Map<string, boolean> = new Map();
-    
+
     // Event subscriptions
     private subscriptions: vscode.Disposable[] = [];
     private stateChangeCallbacks: ((state: ConductorViewState) => void)[] = [];
@@ -29,13 +29,13 @@ export class ConductorViewModel implements IConductorViewModel {
         this.eventBus = eventBus;
         this.loggingService = loggingService;
         this.notificationService = notificationService;
-        
+
         this.initialize();
     }
 
     private initialize(): void {
         this.loggingService.info('ConductorViewModel: Initializing');
-        
+
         // Subscribe to UI state changes
         this.subscriptions.push(
             this.uiStateManager.subscribe((state) => {
@@ -51,7 +51,7 @@ export class ConductorViewModel implements IConductorViewModel {
     async handleCommand(command: string, data?: any): Promise<void> {
         try {
             this.loggingService.debug('ConductorViewModel: Handling command', { command, data });
-            
+
             switch (command as WebviewCommand) {
                 case WEBVIEW_COMMANDS.SPAWN_AGENT_GROUP:
                     await this.spawnAgentGroup(data?.groupName || 'Default Group');
@@ -156,10 +156,10 @@ export class ConductorViewModel implements IConductorViewModel {
 
     subscribe(callback: (state: ConductorViewState) => void): vscode.Disposable {
         this.stateChangeCallbacks.push(callback);
-        
+
         // Immediately call with current state
         callback(this.getViewState());
-        
+
         return {
             dispose: () => {
                 const index = this.stateChangeCallbacks.indexOf(callback);
@@ -172,7 +172,7 @@ export class ConductorViewModel implements IConductorViewModel {
 
     private publishViewStateChange(): void {
         const state = this.getViewState();
-        
+
         // Notify direct subscribers
         this.stateChangeCallbacks.forEach(callback => {
             try {
@@ -185,11 +185,11 @@ export class ConductorViewModel implements IConductorViewModel {
 
     dispose(): void {
         this.loggingService.info('ConductorViewModel: Disposing');
-        
+
         // Dispose all subscriptions
         this.subscriptions.forEach(sub => sub.dispose());
         this.subscriptions = [];
-        
+
         // Clear callbacks
         this.stateChangeCallbacks = [];
     }

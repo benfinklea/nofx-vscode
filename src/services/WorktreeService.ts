@@ -20,7 +20,7 @@ export class WorktreeService implements IWorktreeService {
         this.errorHandler = errorHandler;
         this.worktreeManager = worktreeManager;
         this.initializeWorktrees();
-        
+
         // Subscribe to configuration changes
         this.disposables.push(
             this.configService.onDidChange((e) => {
@@ -36,19 +36,19 @@ export class WorktreeService implements IWorktreeService {
         if (!workspaceFolder) return;
 
         this.useWorktrees = this.configService.isUseWorktrees();
-        
+
         if (!this.useWorktrees) {
             return;
         }
-        
+
         if (!this.worktreeManager) {
             this.loggingService?.debug('WorktreeManager not available, skipping worktree initialization');
             return;
         }
-        
+
         if (WorktreeManager.isWorktreeAvailable(workspaceFolder.uri.fsPath)) {
             this.loggingService?.info('Git worktrees enabled and available');
-            
+
             // Clean up any orphaned worktrees
             this.worktreeManager.cleanupOrphanedWorktrees();
         } else {
@@ -84,19 +84,19 @@ export class WorktreeService implements IWorktreeService {
 
             // Ask user what to do with the worktree
             const action = await this.notificationService.showInformation(
-                `Agent has a worktree. Merge changes before removing?`,
+                'Agent has a worktree. Merge changes before removing?',
                 'Merge & Remove', 'Remove Without Merging', 'Cancel'
             );
-            
+
             if (action === 'Cancel') {
                 return false; // User cancelled
             }
-            
+
             if (action === 'Merge & Remove') {
                 await this.worktreeManager!.mergeAgentWork(agentId);
                 this.loggingService?.debug(`Worktree merged for agent ${agentId}`);
             }
-            
+
             await this.worktreeManager!.removeWorktreeForAgent(agentId);
             this.loggingService?.debug(`Worktree removed for agent ${agentId}`);
             return true;
@@ -125,7 +125,7 @@ export class WorktreeService implements IWorktreeService {
     isAvailable(): boolean {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) return false;
-        
+
         return this.useWorktrees && WorktreeManager.isWorktreeAvailable(workspaceFolder.uri.fsPath);
     }
 
@@ -133,7 +133,7 @@ export class WorktreeService implements IWorktreeService {
         if (!this.worktreeManager) {
             return;
         }
-        
+
         await this.errorHandler?.handleAsync(async () => {
             await this.worktreeManager!.cleanupOrphanedWorktrees();
             this.loggingService?.debug('Orphaned worktrees cleaned up');
@@ -144,7 +144,7 @@ export class WorktreeService implements IWorktreeService {
         // Dispose all subscriptions
         this.disposables.forEach(d => d.dispose());
         this.disposables = [];
-        
+
         // WorktreeManager doesn't need explicit disposal
         this.worktreeManager = undefined;
     }

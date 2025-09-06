@@ -45,10 +45,10 @@ export interface IConfigurationService {
     getAll(): Record<string, any>;
     update(key: string, value: any, target?: vscode.ConfigurationTarget): Promise<void>;
     onDidChange(callback: (e: vscode.ConfigurationChangeEvent) => void): vscode.Disposable;
-    
+
     // Validation
     validateAll(): { isValid: boolean; errors: ValidationError[] };
-    
+
     // NofX specific configuration methods
     getMaxAgents(): number;
     getClaudePath(): string;
@@ -58,7 +58,7 @@ export interface IConfigurationService {
     getTemplatesPath(): string;
     isPersistAgents(): boolean;
     getLogLevel(): string;
-    
+
     // Orchestration service configuration methods
     getOrchestrationHeartbeatInterval(): number;
     getOrchestrationHeartbeatTimeout(): number;
@@ -76,7 +76,7 @@ export interface INotificationService {
     showQuickPick<T extends vscode.QuickPickItem>(items: T[], options?: vscode.QuickPickOptions & { canPickMany: true }): Promise<T[] | undefined>;
     showInputBox(options?: vscode.InputBoxOptions): Promise<string | undefined>;
     withProgress<T>(options: vscode.ProgressOptions, task: (progress: vscode.Progress<{ message?: string; increment?: number }>) => Promise<T>): Promise<T>;
-    
+
     // Confirmation dialogs
     confirm(message: string, confirmText?: string): Promise<boolean>;
     confirmDestructive(message: string, confirmText?: string): Promise<boolean>;
@@ -91,20 +91,20 @@ export interface ILoggingService {
     info(message: string, data?: any): void;
     warn(message: string, data?: any): void;
     error(message: string, data?: any): void;
-    
+
     // Configuration-aware logging
     isLevelEnabled(level: LogLevel): boolean;
-    
+
     // Channel management
     getChannel(name: string): vscode.OutputChannel;
-    
+
     // Utility methods
     time(label: string): void;
     timeEnd(label: string): void;
-    
+
     // Configuration change notification
     onDidChangeConfiguration?(callback: () => void): vscode.Disposable;
-    
+
     dispose(): void;
 }
 
@@ -113,15 +113,15 @@ export interface IEventBus {
     publish(event: string, data?: any): void;
     subscribe(event: string, handler: (data?: any) => void): vscode.Disposable;
     unsubscribe(event: string, handler: Function): void;
-    
+
     // Utility methods
     once(event: string, handler: (data?: any) => void): vscode.Disposable;
     filter(event: string, predicate: (data?: any) => boolean): { event: vscode.Event<any>, dispose: () => void };
     subscribePattern(pattern: string, handler: (event: string, data?: any) => void): vscode.Disposable;
-    
+
     // Configuration methods
     setLoggingService(logger: ILoggingService): void;
-    
+
     dispose(): void;
 }
 
@@ -133,10 +133,10 @@ export interface IErrorHandler {
     handleError(error: Error, context?: string, severity?: ErrorSeverity): void;
     handleAsync<T>(operation: () => Promise<T>, context?: string): Promise<T>;
     wrapSync<T>(operation: () => T, context?: string): T;
-    
+
     // Recovery options
     withRetry<T>(operation: () => Promise<T>, maxRetries?: number, context?: string): Promise<T>;
-    
+
     dispose(): void;
 }
 
@@ -438,43 +438,43 @@ export interface ITaskQueue {
     getTasksForAgent(agentId: string): Task[];
     getBlockedTasks(): Task[];
     getDependentTasks(taskId: string): Task[];
-    
+
     // Task lifecycle operations
     assignNextTask(): boolean;
     assignTask(taskId: string, agentId: string): Promise<boolean>;
     completeTask(taskId: string): boolean;
     failTask(taskId: string, reason?: string): void;
-    
+
     // Task management operations
     clearCompleted(): void;
     clearAllTasks(): void;
-    
+
     // Dependency operations
     addTaskDependency(taskId: string, dependsOnTaskId: string): boolean;
     removeTaskDependency(taskId: string, dependsOnTaskId: string): boolean;
-    
+
     // Conflict resolution
     resolveConflict(taskId: string, resolution: 'block' | 'allow' | 'merge'): boolean;
-    
+
     // Validation
     validateTask(config: TaskConfig): TaskValidationError[];
-    
+
     // Statistics
-    getTaskStats(): { 
-        total: number; 
-        queued: number; 
-        ready: number; 
-        assigned: number; 
-        inProgress: number; 
-        completed: number; 
-        failed: number; 
+    getTaskStats(): {
+        total: number;
+        queued: number;
+        ready: number;
+        assigned: number;
+        inProgress: number;
+        completed: number;
+        failed: number;
         blocked: number;
         validated: number;
     };
-    
+
     // Event handling
     readonly onTaskUpdate: vscode.Event<void>;
-    
+
     dispose(): void;
 }
 

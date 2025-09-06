@@ -29,7 +29,7 @@ export class CodebaseAnalyzer {
     private compilerOptions: ts.CompilerOptions;
     private tsConfigCache: Map<string, ts.ParsedCommandLine | null> = new Map();
     private pathAliasResolver: Map<string, string[]> = new Map();
-    
+
     // Common file extensions for dependency resolution
     private readonly FILE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts', '.json'];
     private readonly INDEX_EXTENSIONS = [
@@ -58,7 +58,7 @@ export class CodebaseAnalyzer {
         this.components.clear();
         this.dependencyGraph.clear();
         this.reverseDependencyGraph.clear();
-        
+
         if (!options.cacheResults) {
             this.analysisCache.clear();
         }
@@ -66,37 +66,37 @@ export class CodebaseAnalyzer {
         try {
             // Find all TypeScript/JavaScript files including module variants
             const pattern = '**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}';
-            
+
             // Get VS Code's file exclusion settings
             const config = vscode.workspace.getConfiguration('files');
             const vsCodeExclusions = config.get<Record<string, boolean>>('exclude', {});
-            
+
             // Build exclusion pattern - be more precise to avoid over-exclusion
             const defaultExclusions: string[] = [];
-            
+
             // Always exclude node_modules unless explicitly included
             if (!options.includeNodeModules) {
                 defaultExclusions.push('**/node_modules/**');
             }
-            
+
             // Add VS Code's configured exclusions
             for (const [pattern, enabled] of Object.entries(vsCodeExclusions)) {
                 if (enabled) {
                     defaultExclusions.push(pattern);
                 }
             }
-            
+
             // Add user-provided exclusions
             const additionalExclusions = options.excludePatterns || [];
             const allExclusions = [...defaultExclusions, ...additionalExclusions];
-            
+
             // Use glob patterns directly instead of combining them
-            const exclude = allExclusions.length > 0 
+            const exclude = allExclusions.length > 0
                 ? `{${allExclusions.join(',')}}`
                 : undefined;
-            
+
             const files = await vscode.workspace.findFiles(pattern, exclude);
-            
+
             this.outputChannel.appendLine(`Found ${files.length} files to analyze`);
 
             // Analyze each file
@@ -175,7 +175,7 @@ export class CodebaseAnalyzer {
             // Extract imports and exports
             const imports = this.extractImports(sourceFile);
             const exports = this.extractExports(sourceFile);
-            
+
             // Collect re-export sources to include in dependencies
             const reExportSources = exports
                 .filter(e => e.type === 're-export' && e.source)
@@ -186,7 +186,7 @@ export class CodebaseAnalyzer {
 
             // Determine component type
             const componentType = this.inferComponentType(sourceFile, filePath);
-            
+
             // Resolve dependencies from both imports and re-exports
             const importDependencies = this.resolveDependencies(imports, filePath);
             const reExportDependencies = this.resolveReExportDependencies(reExportSources, filePath);
@@ -245,7 +245,7 @@ export class CodebaseAnalyzer {
     public async analyzeText(filePath: string, content: string, options: AnalysisOptions = {}): Promise<FileAnalysis> {
         // Use a distinct cache key for text analysis to avoid conflicts
         const textCacheKey = `text:${filePath}`;
-        
+
         // Check cache first if using the text-specific cache key
         if (options.cacheResults && this.analysisCache.has(textCacheKey)) {
             const cached = this.analysisCache.get(textCacheKey)!;
@@ -267,7 +267,7 @@ export class CodebaseAnalyzer {
             // Extract imports and exports
             const imports = this.extractImports(sourceFile);
             const exports = this.extractExports(sourceFile);
-            
+
             // Collect re-export sources to include in dependencies
             const reExportSources = exports
                 .filter(e => e.type === 're-export' && e.source)
@@ -278,7 +278,7 @@ export class CodebaseAnalyzer {
 
             // Determine component type
             const componentType = this.inferComponentType(sourceFile, filePath);
-            
+
             // Resolve dependencies from both imports and re-exports
             const importDependencies = this.resolveDependencies(imports, filePath);
             const reExportDependencies = this.resolveReExportDependencies(reExportSources, filePath);
@@ -334,28 +334,28 @@ export class CodebaseAnalyzer {
      */
     public async updateFile(filePath: string, options: AnalysisOptions = {}): Promise<FileAnalysis> {
         this.outputChannel.appendLine(`Updating analysis for ${filePath}`);
-        
+
         // Get old component data if it exists
         const oldComponent = this.components.get(filePath);
         const oldDependencies = oldComponent?.dependencies || [];
-        
+
         // Remove old entries from dependency graphs
         this.removeFromDependencyGraphs(filePath, oldDependencies);
-        
+
         // Clear cache for this file
         this.analysisCache.delete(filePath);
-        
+
         // Re-analyze the file
         const analysis = await this.analyzeFile(filePath, options);
-        
+
         // Update dependency graphs with new data
         this.updateDependencyGraphsForFile(filePath, analysis.component.dependencies);
-        
+
         // Find and update files that depend on this file
         const dependents = this.reverseDependencyGraph.get(filePath);
         if (dependents && dependents.size > 0) {
             this.outputChannel.appendLine(`File ${filePath} has ${dependents.size} dependents that may need re-analysis`);
-            
+
             // Optionally re-analyze dependent files if incremental update is enabled
             if (options.incrementalUpdate) {
                 for (const dependent of Array.from(dependents)) {
@@ -373,47 +373,47 @@ export class CodebaseAnalyzer {
                 }
             }
         }
-        
+
         this.outputChannel.appendLine(`Updated analysis for ${filePath}`);
         return analysis;
     }
-    
+
     /**
      * Remove a file from the analysis (for file deletion)
      */
     public removeFile(filePath: string): void {
         this.outputChannel.appendLine(`Removing ${filePath} from analysis`);
-        
+
         // Get component data before removal
         const component = this.components.get(filePath);
         if (!component) {
             this.outputChannel.appendLine(`File ${filePath} not found in analysis`);
             return;
         }
-        
+
         // Remove from dependency graphs
         this.removeFromDependencyGraphs(filePath, component.dependencies);
-        
+
         // Remove the file's own entries from graphs
         this.dependencyGraph.delete(filePath);
         this.reverseDependencyGraph.delete(filePath);
-        
+
         // Remove from components and cache
         this.components.delete(filePath);
         this.analysisCache.delete(filePath);
-        
+
         // Check for broken dependencies in other files
         const dependents = this.reverseDependencyGraph.get(filePath);
         if (dependents && dependents.size > 0) {
             this.outputChannel.appendLine(`⚠️ Warning: ${dependents.size} files depend on removed file ${filePath}`);
-            
+
             // Update dependent files to remove the broken dependency
             for (const dependent of Array.from(dependents)) {
                 const depComponent = this.components.get(dependent);
                 if (depComponent) {
                     depComponent.dependencies = depComponent.dependencies.filter(dep => dep !== filePath);
                     this.components.set(dependent, depComponent);
-                    
+
                     // Add error to track broken dependency
                     if (!depComponent.errors) {
                         depComponent.errors = [];
@@ -422,10 +422,10 @@ export class CodebaseAnalyzer {
                 }
             }
         }
-        
+
         this.outputChannel.appendLine(`Removed ${filePath} from analysis`);
     }
-    
+
     /**
      * Remove file from dependency graphs
      */
@@ -444,7 +444,7 @@ export class CodebaseAnalyzer {
                 }
             }
         }
-        
+
         // Remove old dependencies
         for (const dep of dependencies) {
             const reverseDeps = this.reverseDependencyGraph.get(dep);
@@ -456,7 +456,7 @@ export class CodebaseAnalyzer {
             }
         }
     }
-    
+
     /**
      * Update dependency graphs for a file
      */
@@ -465,13 +465,13 @@ export class CodebaseAnalyzer {
         if (!this.dependencyGraph.has(filePath)) {
             this.dependencyGraph.set(filePath, new Set());
         }
-        
+
         const depSet = this.dependencyGraph.get(filePath)!;
         depSet.clear();
-        
+
         for (const dep of dependencies) {
             depSet.add(dep);
-            
+
             // Update reverse dependency graph
             if (!this.reverseDependencyGraph.has(dep)) {
                 this.reverseDependencyGraph.set(dep, new Set());
@@ -525,7 +525,7 @@ export class CodebaseAnalyzer {
             } else if (ts.isCallExpression(node)) {
                 // Dynamic imports - both require() and import()
                 const expressionText = node.expression.getText();
-                
+
                 if (expressionText === 'require' && node.arguments.length > 0) {
                     const arg = node.arguments[0];
                     if (ts.isStringLiteral(arg)) {
@@ -602,7 +602,7 @@ export class CodebaseAnalyzer {
                                 }
                             });
                         }
-                        
+
                         exports.push({
                             name,
                             type: 'named'
@@ -627,8 +627,8 @@ export class CodebaseAnalyzer {
         let loc = 0;
         let lloc = 0;
         let sloc = 0;
-        let operators = new Set<string>();
-        let operands = new Set<string>();
+        const operators = new Set<string>();
+        const operands = new Set<string>();
 
         const visit = (node: ts.Node, depth: number = 0) => {
             // Cyclomatic complexity - count decision points
@@ -704,7 +704,7 @@ export class CodebaseAnalyzer {
         const n2 = operands.size; // unique operands
         const N1 = cyclomatic * 2; // total operators (approximation)
         const N2 = lloc; // total operands (approximation)
-        
+
         const vocabulary = n1 + n2;
         const length = N1 + N2;
         const volume = length * (vocabulary > 0 ? Math.log2(vocabulary) : 0);
@@ -715,10 +715,10 @@ export class CodebaseAnalyzer {
         // Use Math.max(1, value) to avoid log(0) which would be -Infinity
         const safeVolume = Math.max(1, volume);
         const safeLoc = Math.max(1, loc);
-        
-        const maintainabilityIndex = 
+
+        const maintainabilityIndex =
             171 - 5.2 * Math.log(safeVolume) - 0.23 * cyclomatic - 16.2 * Math.log(safeLoc);
-        
+
         // Clamp maintainability to [0, 100] range
         const maintainability = Math.max(0, Math.min(100, maintainabilityIndex * 100 / 171));
 
@@ -742,13 +742,13 @@ export class CodebaseAnalyzer {
      */
     private inferComponentType(sourceFile: ts.SourceFile, filePath: string): CodeComponent['type'] {
         const fileName = path.basename(filePath).toLowerCase();
-        
+
         // Check file naming conventions
         if (fileName.includes('component')) return 'component';
         if (fileName.includes('service')) return 'service';
         if (fileName.includes('interface')) return 'interface';
         if (fileName.includes('type')) return 'type';
-        
+
         // Check main export
         let hasClassExport = false;
         let hasFunctionExport = false;
@@ -813,11 +813,11 @@ export class CodebaseAnalyzer {
         const cyclomaticScore = Math.max(0, Math.min(100, 100 - complexity.cyclomatic * 5));
         const cognitiveScore = Math.max(0, Math.min(100, 100 - complexity.cognitive * 2));
         // Ensure maintainability is a valid number, default to 50 if NaN/undefined
-        const maintainabilityScore = isFinite(complexity.maintainability) ? 
+        const maintainabilityScore = isFinite(complexity.maintainability) ?
             Math.max(0, Math.min(100, complexity.maintainability)) : 50;
         const sizeScore = Math.max(0, Math.min(100, 100 - (complexity.loc / 10)));
 
-        const score = 
+        const score =
             cyclomaticScore * weights.cyclomatic +
             cognitiveScore * weights.cognitive +
             maintainabilityScore * weights.maintainability +
@@ -839,7 +839,7 @@ export class CodebaseAnalyzer {
             if (imp.isType) {
                 continue;
             }
-            
+
             // Try to resolve the import (handles both relative and bare imports)
             const resolvedPath = this.resolveDependencyPath(imp.source, fromFile);
             if (resolvedPath) {
@@ -923,12 +923,12 @@ export class CodebaseAnalyzer {
             if (exports[target]) {
                 return this.resolvePackageExports(exports[target], target, basePath);
             }
-            
+
             // Handle default export
             if (exports.default) {
                 return this.resolvePackageExports(exports.default, target, basePath);
             }
-            
+
             // Handle nested conditions (import/require/node)
             if (exports.import) {
                 return this.resolvePackageExports(exports.import, target, basePath);
@@ -960,13 +960,13 @@ export class CodebaseAnalyzer {
             // Convert pattern to regex (e.g., "@app/*" -> "^@app/(.*)$")
             const regex = new RegExp('^' + pattern.replace('*', '(.*)') + '$');
             const match = specifier.match(regex);
-            
+
             if (match) {
                 // Try each replacement path
                 for (const replacement of replacements as string[]) {
                     const resolvedPath = replacement.replace('*', match[1] || '');
                     const absolutePath = path.resolve(basePath, resolvedPath);
-                    
+
                     // Use the helper method to resolve the path
                     const resolved = this.resolveLocalPath(absolutePath);
                     if (resolved) {
@@ -990,28 +990,28 @@ export class CodebaseAnalyzer {
             const resolved = this.resolveLocalPath(resolvedPath);
             return resolved ? this.normalizePath(resolved) : null;
         }
-        
+
         // Handle non-relative (bare) imports
-        
+
         // First try TypeScript path alias resolution
         const aliasResolved = this.resolvePathAlias(specifier, fromFile);
         if (aliasResolved) {
             return this.normalizePath(aliasResolved);
         }
-        
+
         // Try to resolve as workspace-local package (monorepo scenario)
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (workspaceFolders) {
             for (const folder of workspaceFolders) {
                 const workspaceRoot = folder.uri.fsPath;
                 const localPackagePath = path.join(workspaceRoot, specifier);
-                
+
                 // Check if this bare import exists within the workspace
                 const resolved = this.resolveLocalPath(localPackagePath);
                 if (resolved) {
                     return this.normalizePath(resolved);
                 }
-                
+
                 // Also check common monorepo patterns like packages/
                 const commonPaths = ['packages', 'apps', 'libs'];
                 for (const commonPath of commonPaths) {
@@ -1023,11 +1023,11 @@ export class CodebaseAnalyzer {
                 }
             }
         }
-        
+
         // External dependency
         return null;
     }
-    
+
     /**
      * Resolve a local path (file or directory)
      */
@@ -1035,25 +1035,25 @@ export class CodebaseAnalyzer {
         // Check if the path exists and determine if it's a file or directory
         try {
             const stats = fs.statSync(resolvedPath);
-            
+
             if (stats.isFile()) {
                 // It's already a file, return as-is
                 return resolvedPath;
             } else if (stats.isDirectory()) {
                 // It's a directory, try to resolve via package.json or index files
-                
+
                 // First check for package.json with exports or main field
                 const packageJsonPath = path.join(resolvedPath, 'package.json');
                 if (fs.existsSync(packageJsonPath)) {
                     try {
                         const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-                        
+
                         // Check exports field (modern)
                         if (packageJson.exports) {
                             const exportPath = this.resolvePackageExports(packageJson.exports, '.', resolvedPath);
                             if (exportPath) return exportPath;
                         }
-                        
+
                         // Check main field (legacy)
                         if (packageJson.main) {
                             const mainPath = path.resolve(resolvedPath, packageJson.main);
@@ -1065,7 +1065,7 @@ export class CodebaseAnalyzer {
                         // Failed to parse package.json, continue with index resolution
                     }
                 }
-                
+
                 // Try to resolve index files using the expanded list
                 for (const indexExt of this.INDEX_EXTENSIONS) {
                     const indexPath = resolvedPath + indexExt;
@@ -1073,7 +1073,7 @@ export class CodebaseAnalyzer {
                         return indexPath;
                     }
                 }
-                
+
                 // No index file found in directory
                 return null;
             }
@@ -1127,18 +1127,18 @@ export class CodebaseAnalyzer {
         // Add edges, skipping self-edges (using normalized paths)
         for (const [filePath, component] of Array.from(this.components)) {
             const normalizedFilePath = this.normalizePath(filePath);
-            
+
             for (const dep of component.dependencies) {
                 const normalizedDep = this.normalizePath(dep);
-                
+
                 // Skip self-edges
                 if (normalizedDep === normalizedFilePath) {
                     continue;
                 }
-                
+
                 // Add to forward graph
                 this.dependencyGraph.get(normalizedFilePath)!.add(normalizedDep);
-                
+
                 // Build reverse graph
                 if (!this.reverseDependencyGraph.has(normalizedDep)) {
                     this.reverseDependencyGraph.set(normalizedDep, new Set());
@@ -1176,7 +1176,7 @@ export class CodebaseAnalyzer {
         let totalLines = 0;
         let componentsWithDocs = 0;
         let componentsWithTests = 0;
-        
+
         for (const component of Array.from(this.components.values())) {
             totalComplexity += component.complexity;
             totalLines += component.linesOfCode;
@@ -1289,7 +1289,7 @@ export class CodebaseAnalyzer {
                     const cycleStart = path.indexOf(neighbor);
                     const cycle = path.slice(cycleStart);
                     cycle.push(neighbor); // Complete the cycle
-                    
+
                     // Normalize and check for duplicates
                     const normalizedCycle = normalizeCycle(cycle);
                     if (!normalizedCycles.has(normalizedCycle)) {
@@ -1360,11 +1360,11 @@ export class CodebaseAnalyzer {
      */
     public getComplexityMetrics(): Map<string, ComplexityMetrics> {
         const metrics = new Map<string, ComplexityMetrics>();
-        
+
         for (const [path, analysis] of Array.from(this.analysisCache)) {
             metrics.set(path, analysis.complexity);
         }
-        
+
         return metrics;
     }
 
@@ -1375,32 +1375,32 @@ export class CodebaseAnalyzer {
         const cyclomaticValues: number[] = [];
         const maintainabilityValues: number[] = [];
         const locValues: number[] = [];
-        
+
         let totalCyclomatic = 0;
         let totalMaintainability = 0;
         let totalLines = 0;
         let filesWithMetrics = 0;
-        
+
         // Complexity distribution counters
         let lowComplexity = 0;
         let mediumComplexity = 0;
         let highComplexity = 0;
         let veryHighComplexity = 0;
-        
+
         // Maintainability distribution counters
         let excellentMaintainability = 0;
         let goodMaintainability = 0;
         let fairMaintainability = 0;
         let poorMaintainability = 0;
-        
+
         // Collect metrics from cache for more accurate data
         for (const [path, analysis] of Array.from(this.analysisCache)) {
             const complexity = analysis.complexity;
-            
+
             // Cyclomatic complexity
             cyclomaticValues.push(complexity.cyclomatic);
             totalCyclomatic += complexity.cyclomatic;
-            
+
             // Categorize cyclomatic complexity
             if (complexity.cyclomatic <= 5) {
                 lowComplexity++;
@@ -1411,12 +1411,12 @@ export class CodebaseAnalyzer {
             } else {
                 veryHighComplexity++;
             }
-            
+
             // Maintainability (ensure valid value)
             const maintainability = isFinite(complexity.maintainability) ? complexity.maintainability : 50;
             maintainabilityValues.push(maintainability);
             totalMaintainability += maintainability;
-            
+
             // Categorize maintainability
             if (maintainability > 80) {
                 excellentMaintainability++;
@@ -1427,20 +1427,20 @@ export class CodebaseAnalyzer {
             } else {
                 poorMaintainability++;
             }
-            
+
             // Lines of code
             locValues.push(complexity.loc);
             totalLines += complexity.loc;
-            
+
             filesWithMetrics++;
         }
-        
+
         // If no cached analysis, fall back to component data
         if (filesWithMetrics === 0) {
             for (const [path, component] of Array.from(this.components)) {
                 cyclomaticValues.push(component.complexity);
                 totalCyclomatic += component.complexity;
-                
+
                 // Categorize cyclomatic complexity
                 if (component.complexity <= 5) {
                     lowComplexity++;
@@ -1451,12 +1451,12 @@ export class CodebaseAnalyzer {
                 } else {
                     veryHighComplexity++;
                 }
-                
+
                 // For components, we don't have maintainability, so estimate
                 const estimatedMaintainability = component.qualityScore || 50;
                 maintainabilityValues.push(estimatedMaintainability);
                 totalMaintainability += estimatedMaintainability;
-                
+
                 // Categorize maintainability
                 if (estimatedMaintainability > 80) {
                     excellentMaintainability++;
@@ -1467,33 +1467,33 @@ export class CodebaseAnalyzer {
                 } else {
                     poorMaintainability++;
                 }
-                
+
                 locValues.push(component.linesOfCode);
                 totalLines += component.linesOfCode;
-                
+
                 filesWithMetrics++;
             }
         }
-        
+
         // Calculate averages
         const averageCyclomatic = filesWithMetrics > 0 ? totalCyclomatic / filesWithMetrics : 0;
         const averageMaintainability = filesWithMetrics > 0 ? totalMaintainability / filesWithMetrics : 0;
         const averageLines = filesWithMetrics > 0 ? totalLines / filesWithMetrics : 0;
-        
+
         // Calculate medians
         const sortedCyclomatic = [...cyclomaticValues].sort((a, b) => a - b);
         const sortedMaintainability = [...maintainabilityValues].sort((a, b) => a - b);
-        
+
         const medianCyclomatic = this.calculateMedian(sortedCyclomatic);
         const medianMaintainability = this.calculateMedian(sortedMaintainability);
-        
+
         // Find min and max cyclomatic
         const maxCyclomatic = cyclomaticValues.length > 0 ? Math.max(...cyclomaticValues) : 0;
         const minCyclomatic = cyclomaticValues.length > 0 ? Math.min(...cyclomaticValues) : 0;
-        
+
         // Calculate standard deviation for cyclomatic complexity
         const standardDeviation = this.calculateStandardDeviation(cyclomaticValues, averageCyclomatic);
-        
+
         return {
             averageCyclomatic: Math.round(averageCyclomatic * 100) / 100,
             averageMaintainability: Math.round(averageMaintainability * 100) / 100,
@@ -1520,46 +1520,46 @@ export class CodebaseAnalyzer {
             }
         };
     }
-    
+
     /**
      * Calculate median value from a sorted array
      */
     private calculateMedian(sortedValues: number[]): number {
         if (sortedValues.length === 0) return 0;
-        
+
         const mid = Math.floor(sortedValues.length / 2);
-        
+
         if (sortedValues.length % 2 === 0) {
             return (sortedValues[mid - 1] + sortedValues[mid]) / 2;
         } else {
             return sortedValues[mid];
         }
     }
-    
+
     /**
      * Calculate standard deviation
      */
     private calculateStandardDeviation(values: number[], mean: number): number {
         if (values.length === 0) return 0;
-        
+
         const squaredDifferences = values.map(value => Math.pow(value - mean, 2));
         const avgSquaredDiff = squaredDifferences.reduce((sum, value) => sum + value, 0) / values.length;
-        
+
         return Math.sqrt(avgSquaredDiff);
     }
-    
+
     /**
      * Find untested components
      */
     public findUntestedComponents(): string[] {
         const untested: string[] = [];
-        
+
         for (const [path, component] of Array.from(this.components)) {
             if (!component.testCoverage || component.testCoverage === 0) {
                 untested.push(path);
             }
         }
-        
+
         return untested;
     }
 
@@ -1568,13 +1568,13 @@ export class CodebaseAnalyzer {
      */
     public findComplexComponents(threshold: number = 10): string[] {
         const complex: string[] = [];
-        
+
         for (const [path, component] of Array.from(this.components)) {
             if (component.complexity > threshold) {
                 complex.push(path);
             }
         }
-        
+
         return complex.sort((a, b) => {
             return this.components.get(b)!.complexity - this.components.get(a)!.complexity;
         });
@@ -1598,7 +1598,7 @@ export class CodebaseAnalyzer {
         this.tsConfigCache.clear();
         this.pathAliasResolver.clear();
     }
-    
+
     /**
      * Setup file watchers for incremental analysis updates
      * Call this to enable automatic re-analysis on file changes
@@ -1606,46 +1606,46 @@ export class CodebaseAnalyzer {
     public setupWatchers(context: vscode.ExtensionContext): void {
         // Watch for file changes including module variants
         const watcher = vscode.workspace.createFileSystemWatcher('**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}');
-        
+
         // Handle file changes
         watcher.onDidChange(async (uri) => {
             this.outputChannel.appendLine(`File changed: ${uri.fsPath}`);
             await this.updateFile(uri.fsPath, { incrementalUpdate: true });
         });
-        
+
         // Handle file creation
         watcher.onDidCreate(async (uri) => {
             this.outputChannel.appendLine(`File created: ${uri.fsPath}`);
             await this.analyzeFile(uri.fsPath);
             this.updateDependencyGraphsForFile(uri.fsPath, this.components.get(uri.fsPath)?.dependencies || []);
         });
-        
+
         // Handle file deletion
         watcher.onDidDelete((uri) => {
             this.outputChannel.appendLine(`File deleted: ${uri.fsPath}`);
             this.removeFile(uri.fsPath);
         });
-        
+
         // Register the watcher for disposal
         context.subscriptions.push(watcher);
-        
+
         this.outputChannel.appendLine('File watcher registered for incremental updates');
     }
-    
+
     /**
      * Get files that depend on a given file
      */
     public getDependents(filePath: string): Set<string> | undefined {
         return this.reverseDependencyGraph.get(filePath);
     }
-    
+
     /**
      * Check if analysis is cached for a file
      */
     public isCached(filePath: string): boolean {
         return this.analysisCache.has(filePath);
     }
-    
+
     /**
      * Get cached analysis for a file
      */

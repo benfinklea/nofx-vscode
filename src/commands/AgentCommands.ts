@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import { 
-    ICommandHandler, 
-    IContainer, 
-    ICommandService, 
-    INotificationService, 
+import {
+    ICommandHandler,
+    IContainer,
+    ICommandService,
+    INotificationService,
     IConfigurationService,
-    SERVICE_TOKENS 
+    SERVICE_TOKENS
 } from '../services/interfaces';
 import { PickItem } from '../types/ui';
 import { AgentManager } from '../agents/AgentManager';
@@ -125,7 +125,7 @@ export class AgentCommands implements ICommandHandler {
             {
                 label: '$(rocket) Full-Stack Development Team',
                 description: 'Frontend, Backend, Database, and DevOps specialists',
-                value: { 
+                value: {
                     agents: ['frontend-specialist', 'backend-specialist', 'database-architect', 'devops-engineer'],
                     label: '$(rocket) Full-Stack Development Team'
                 }
@@ -133,7 +133,7 @@ export class AgentCommands implements ICommandHandler {
             {
                 label: '$(beaker) Testing & Quality Team',
                 description: 'Test Engineer, Security Expert, and Performance Specialist',
-                value: { 
+                value: {
                     agents: ['testing-specialist', 'security-expert', 'backend-specialist'],
                     label: '$(beaker) Testing & Quality Team'
                 }
@@ -141,7 +141,7 @@ export class AgentCommands implements ICommandHandler {
             {
                 label: '$(device-mobile) Mobile Development Team',
                 description: 'iOS, Android, and Backend API developers',
-                value: { 
+                value: {
                     agents: ['mobile-developer', 'backend-specialist', 'testing-specialist'],
                     label: '$(device-mobile) Mobile Development Team'
                 }
@@ -149,7 +149,7 @@ export class AgentCommands implements ICommandHandler {
             {
                 label: '$(circuit-board) AI/ML Team',
                 description: 'ML Engineer, Data Scientist, and Backend Developer',
-                value: { 
+                value: {
                     agents: ['ai-ml-specialist', 'backend-specialist', 'database-architect'],
                     label: '$(circuit-board) AI/ML Team'
                 }
@@ -157,7 +157,7 @@ export class AgentCommands implements ICommandHandler {
             {
                 label: '$(dashboard) Startup MVP Team',
                 description: 'Fullstack Developer and DevOps for rapid prototyping',
-                value: { 
+                value: {
                     agents: ['fullstack-developer', 'devops-engineer'],
                     label: '$(dashboard) Startup MVP Team'
                 }
@@ -174,7 +174,7 @@ export class AgentCommands implements ICommandHandler {
 
         // Import required modules
         const { AgentTemplateManager } = await import('../agents/AgentTemplateManager');
-        
+
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
             await this.notificationService.showError('No workspace folder open');
@@ -203,7 +203,7 @@ export class AgentCommands implements ICommandHandler {
             }
         }
 
-        const message = createdCount === teamAgents.length 
+        const message = createdCount === teamAgents.length
             ? `Team "${preset.label}" created with ${createdCount} agents`
             : `Team "${preset.label}" created with ${createdCount} of ${teamAgents.length} agents (${teamAgents.length - createdCount} failed)`;
         await this.notificationService.showInformation(message);
@@ -238,7 +238,7 @@ export class AgentCommands implements ICommandHandler {
         }
 
         const confirmed = await this.notificationService.confirmDestructive(
-            `Delete agent? This will terminate their terminal.`,
+            'Delete agent? This will terminate their terminal.',
             'Delete'
         );
 

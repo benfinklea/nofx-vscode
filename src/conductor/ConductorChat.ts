@@ -7,13 +7,13 @@ export class ConductorChat {
     private agentManager: AgentManager;
     private taskQueue: TaskQueue;
     private claudePath: string;
-    
+
     constructor(agentManager: AgentManager, taskQueue: TaskQueue) {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
         this.claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
     }
-    
+
     async start() {
         // Create or show conductor terminal
         if (!this.terminal) {
@@ -22,9 +22,9 @@ export class ConductorChat {
                 iconPath: new vscode.ThemeIcon('comment-discussion')
             });
         }
-        
+
         this.terminal.show();
-        
+
         // Clear and set up the terminal
         this.terminal.sendText('clear');
         this.terminal.sendText('echo "🎸 NofX Conductor Starting..."');
@@ -33,21 +33,21 @@ export class ConductorChat {
         this.terminal.sendText('echo "I will manage the agents and delegate tasks automatically."');
         this.terminal.sendText('echo "================================================"');
         this.terminal.sendText('echo ""');
-        
+
         // Start Claude with the conductor system prompt using --append-system-prompt
         const conductorPrompt = this.getConductorSystemPrompt();
         const escapedPrompt = conductorPrompt.replace(/'/g, "'\\''"); // Escape single quotes for shell
-        
+
         // Start Claude in conductor mode with system prompt
         this.terminal.sendText(`${this.claudePath} --append-system-prompt '${escapedPrompt}'`);
-        
+
         // Send the initial greeting after Claude starts
         setTimeout(() => {
             if (this.terminal) {
                 this.terminal.sendText('Hello! I am the NofX Conductor. I manage a team of specialized AI agents. Tell me what you want to build or fix, and I will orchestrate the agents to complete your request. What would you like to work on today?');
             }
         }, 2000);
-        
+
         vscode.window.showInformationMessage(
             '🎼 Conductor is ready! Chat with the conductor to manage your development team.',
             'View Conductor'
@@ -57,11 +57,11 @@ export class ConductorChat {
             }
         });
     }
-    
+
     private getConductorSystemPrompt(): string {
         const agents = this.agentManager.getActiveAgents();
         const agentList = agents.map(a => `- ${a.name} (${a.type}): ${a.status}`).join('\n');
-        
+
         return `You are the NofX Conductor, an orchestration AI that manages a team of specialized agents.
 
 Your role:
@@ -91,7 +91,7 @@ When the user gives you a request:
 
 Remember: You are the conductor. The user talks to you, and you manage everything else. Be conversational, helpful, and proactive in managing the development team.`;
     }
-    
+
     dispose() {
         this.terminal?.dispose();
     }

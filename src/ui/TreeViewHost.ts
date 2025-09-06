@@ -11,9 +11,9 @@ export class TreeViewHost implements ITreeViewHost {
         this.treeView = treeView;
         this.dataProvider = dataProvider;
         this.loggingService = loggingService;
-        
-        this.loggingService?.debug('TreeViewHost: Created for tree view', { 
-            title: treeView.title 
+
+        this.loggingService?.debug('TreeViewHost: Created for tree view', {
+            title: treeView.title
         });
     }
 
@@ -40,8 +40,8 @@ export class TreeViewHost implements ITreeViewHost {
     reveal(element: any): void {
         try {
             this.treeView.reveal(element);
-            this.loggingService?.debug('TreeViewHost: Revealed element', { 
-                elementId: element?.id || 'unknown' 
+            this.loggingService?.debug('TreeViewHost: Revealed element', {
+                elementId: element?.id || 'unknown'
             });
         } catch (error) {
             this.loggingService?.error('TreeViewHost: Error revealing element', error);
@@ -53,8 +53,8 @@ export class TreeViewHost implements ITreeViewHost {
         const disposable = this.treeView.onDidChangeSelection(
             (e) => {
                 try {
-                    this.loggingService?.debug('TreeViewHost: Selection changed', { 
-                        selectionCount: e.selection.length 
+                    this.loggingService?.debug('TreeViewHost: Selection changed', {
+                        selectionCount: e.selection.length
                     });
                     handler(e.selection);
                 } catch (error) {
@@ -62,7 +62,7 @@ export class TreeViewHost implements ITreeViewHost {
                 }
             }
         );
-        
+
         this.subscriptions.push(disposable);
         return disposable;
     }
@@ -80,8 +80,8 @@ export class TreeViewHost implements ITreeViewHost {
         try {
             // Note: VS Code TreeView doesn't have a direct setSelection method
             // This would need to be implemented through the data provider
-            this.loggingService?.debug('TreeViewHost: Set selection requested', { 
-                itemCount: items.length 
+            this.loggingService?.debug('TreeViewHost: Set selection requested', {
+                itemCount: items.length
             });
             // Implementation would depend on the specific tree provider
         } catch (error) {
@@ -142,11 +142,11 @@ export class TreeViewHost implements ITreeViewHost {
 
     dispose(): void {
         this.loggingService?.debug('TreeViewHost: Disposing');
-        
+
         // Dispose all subscriptions
         this.subscriptions.forEach(sub => sub.dispose());
         this.subscriptions = [];
-        
+
         // Note: TreeView disposal is typically handled by VS Code
         // We don't dispose the treeView itself here
     }

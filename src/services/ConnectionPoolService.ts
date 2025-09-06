@@ -1,17 +1,17 @@
 import { WebSocket } from 'ws';
-import { 
-    IConnectionPoolService, 
-    ILoggingService, 
-    IEventBus, 
-    IErrorHandler, 
+import {
+    IConnectionPoolService,
+    ILoggingService,
+    IEventBus,
+    IErrorHandler,
     IConfigurationService,
     IMetricsService,
     ManagedConnection,
     ConnectionMetadata
 } from './interfaces';
-import { 
-    OrchestratorMessage, 
-    MessageType, 
+import {
+    OrchestratorMessage,
+    MessageType,
     createMessage,
     generateMessageId
 } from '../orchestration/MessageProtocol';
@@ -57,9 +57,9 @@ export class ConnectionPoolService implements IConnectionPoolService {
 
         this.connections.set(clientId, managedConnection);
 
-        this.loggingService.info(`Connection added: ${clientId}`, { 
+        this.loggingService.info(`Connection added: ${clientId}`, {
             isAgent: connectionMetadata.isAgent,
-            userAgent: connectionMetadata.userAgent 
+            userAgent: connectionMetadata.userAgent
         });
 
         // Set up event listeners
@@ -69,9 +69,9 @@ export class ConnectionPoolService implements IConnectionPoolService {
         this.sendWelcomeMessage(ws, clientId);
 
         // Publish event
-        this.eventBus.publish(ORCH_EVENTS.CLIENT_CONNECTED, { 
-            clientId, 
-            metadata: connectionMetadata 
+        this.eventBus.publish(ORCH_EVENTS.CLIENT_CONNECTED, {
+            clientId,
+            metadata: connectionMetadata
         } as ClientConnectedPayload);
 
         // Start heartbeat if not already running
@@ -83,7 +83,7 @@ export class ConnectionPoolService implements IConnectionPoolService {
     registerLogicalId(clientId: string, logicalId: string): void {
         this.logicalAddressRegistry.set(logicalId, clientId);
         this.loggingService.debug(`Registered logical ID: ${logicalId} -> ${clientId}`);
-        
+
         this.eventBus.publish(ORCH_EVENTS.LOGICAL_ID_REGISTERED, {
             clientId,
             logicalId,
@@ -100,7 +100,7 @@ export class ConnectionPoolService implements IConnectionPoolService {
         if (clientId) {
             this.logicalAddressRegistry.delete(logicalId);
             this.loggingService.debug(`Unregistered logical ID: ${logicalId} -> ${clientId}`);
-            
+
             this.eventBus.publish(ORCH_EVENTS.LOGICAL_ID_UNREGISTERED, {
                 clientId,
                 logicalId,
@@ -135,7 +135,7 @@ export class ConnectionPoolService implements IConnectionPoolService {
         for (const logicalId of logicalIdsToUnregister) {
             this.logicalAddressRegistry.delete(logicalId);
             this.loggingService.debug(`Unregistered logical ID: ${logicalId} -> ${clientId}`);
-            
+
             this.eventBus.publish(ORCH_EVENTS.LOGICAL_ID_UNREGISTERED, {
                 clientId,
                 logicalId,
@@ -150,7 +150,7 @@ export class ConnectionPoolService implements IConnectionPoolService {
         });
 
         // Publish event
-        this.eventBus.publish(ORCH_EVENTS.CLIENT_DISCONNECTED, { 
+        this.eventBus.publish(ORCH_EVENTS.CLIENT_DISCONNECTED, {
             clientId,
             metadata: connection.metadata
         } as ClientDisconnectedPayload);
@@ -186,7 +186,7 @@ export class ConnectionPoolService implements IConnectionPoolService {
             }
         });
 
-        this.loggingService.debug(`Broadcast completed`, {
+        this.loggingService.debug('Broadcast completed', {
             totalConnections: this.connections.size,
             sent: sentCount,
             failed: failedCount,
@@ -242,7 +242,7 @@ export class ConnectionPoolService implements IConnectionPoolService {
                 messageId: message.id,
                 messageType: message.type
             });
-            
+
             // Publish delivery failed event
             this.eventBus.publish(ORCH_EVENTS.MESSAGE_DELIVERY_FAILED, {
                 messageId: message.id,
@@ -250,7 +250,7 @@ export class ConnectionPoolService implements IConnectionPoolService {
                 to: logicalId,
                 reason: 'Logical ID not found'
             } as MessageDeliveryFailedPayload);
-            
+
             return false;
         }
 
@@ -349,13 +349,13 @@ export class ConnectionPoolService implements IConnectionPoolService {
             if (connection) {
                 connection.lastHeartbeat = new Date();
                 connection.metadata.lastHeartbeat = connection.lastHeartbeat;
-                
+
                 // Record heartbeat received metrics
-                this.metricsService?.incrementCounter('heartbeat_received', { 
+                this.metricsService?.incrementCounter('heartbeat_received', {
                     clientId: clientId.substring(0, 8)
                 });
-                
-                this.eventBus.publish(ORCH_EVENTS.HEARTBEAT_RECEIVED, { 
+
+                this.eventBus.publish(ORCH_EVENTS.HEARTBEAT_RECEIVED, {
                     clientId,
                     timestamp: connection.lastHeartbeat.toISOString()
                 } as HeartbeatReceivedPayload);
@@ -380,7 +380,7 @@ export class ConnectionPoolService implements IConnectionPoolService {
             'system',
             clientId,
             MessageType.CONNECTION_ESTABLISHED,
-            { 
+            {
                 clientId,
                 serverTime: new Date().toISOString(),
                 message: 'Welcome to NofX Orchestration Server'
@@ -412,13 +412,13 @@ export class ConnectionPoolService implements IConnectionPoolService {
                 });
 
                 // Record connection timeout metrics
-                this.metricsService?.incrementCounter('connection_timeouts', { 
+                this.metricsService?.incrementCounter('connection_timeouts', {
                     clientId: clientId.substring(0, 8),
                     timeoutMs: timeoutMs.toString()
                 });
 
                 connectionsToRemove.push(clientId);
-                this.eventBus.publish(ORCH_EVENTS.CONNECTION_TIMEOUT, { 
+                this.eventBus.publish(ORCH_EVENTS.CONNECTION_TIMEOUT, {
                     clientId,
                     lastHeartbeat: connection.lastHeartbeat.toISOString(),
                     timeoutMs
@@ -427,26 +427,26 @@ export class ConnectionPoolService implements IConnectionPoolService {
                 // Send ping
                 try {
                     connection.ws.ping();
-                    
+
                     // Record heartbeat sent metrics
-                    this.metricsService?.incrementCounter('heartbeat_sent', { 
+                    this.metricsService?.incrementCounter('heartbeat_sent', {
                         clientId: clientId.substring(0, 8)
                     });
-                    
-                    this.eventBus.publish(ORCH_EVENTS.HEARTBEAT_SENT, { 
+
+                    this.eventBus.publish(ORCH_EVENTS.HEARTBEAT_SENT, {
                         clientId,
                         timestamp: new Date().toISOString()
                     } as HeartbeatSentPayload);
                 } catch (error) {
                     const err = error instanceof Error ? error : new Error(String(error));
                     this.errorHandler.handleError(err, `Failed to ping client ${clientId}`);
-                    
+
                     // Record heartbeat failure metrics
-                    this.metricsService?.incrementCounter('heartbeat_failures', { 
+                    this.metricsService?.incrementCounter('heartbeat_failures', {
                         clientId: clientId.substring(0, 8),
                         errorType: err.name || 'unknown'
                     });
-                    
+
                     connectionsToRemove.push(clientId);
                 }
             }

@@ -1,9 +1,9 @@
-import { 
-    IMessageRouter, 
-    IConnectionPoolService, 
-    IMessagePersistenceService, 
-    ILoggingService, 
-    IEventBus, 
+import {
+    IMessageRouter,
+    IConnectionPoolService,
+    IMessagePersistenceService,
+    ILoggingService,
+    IEventBus,
     IErrorHandler,
     MessageFilter
 } from './interfaces';
@@ -60,7 +60,7 @@ export class MessageRouter implements IMessageRouter {
             if (this.messagePersistence) {
                 try {
                     await this.messagePersistence.save(message);
-                    
+
                     // Check if persistence recovered and flush fallback buffer
                     if (!this.persistenceStatus.isHealthy && this.fallbackBuffer.length > 0) {
                         this.loggingService.info('Persistence recovered, flushing fallback buffer', {
@@ -68,7 +68,7 @@ export class MessageRouter implements IMessageRouter {
                         });
                         await this.flushFallbackBuffer();
                     }
-                    
+
                     this.persistenceStatus.isHealthy = true;
                     this.persistenceStatus.failureCount = 0;
                 } catch (error) {
@@ -76,16 +76,16 @@ export class MessageRouter implements IMessageRouter {
                     this.persistenceStatus.isHealthy = false;
                     this.persistenceStatus.lastFailure = new Date();
                     this.persistenceStatus.failureCount++;
-                    
+
                     this.loggingService.warn('Failed to persist message, using fallback buffer', {
                         messageId: message.id,
                         error: err.message,
                         failureCount: this.persistenceStatus.failureCount
                     });
-                    
+
                     // Add to fallback buffer
                     this.addToFallbackBuffer(message);
-                    
+
                     // Publish persistence status event
                     this.eventBus.publish(ORCH_EVENTS.MESSAGE_PERSISTENCE_FAILED, {
                         messageId: message.id,
@@ -160,7 +160,7 @@ export class MessageRouter implements IMessageRouter {
 
     handleAcknowledgment(clientId: string, messageId: string): void {
         this.deliveryStats.acknowledgments++;
-        
+
         this.eventBus.publish(ORCH_EVENTS.MESSAGE_ACKNOWLEDGED, {
             clientId,
             messageId,
@@ -230,7 +230,7 @@ export class MessageRouter implements IMessageRouter {
         if (!this.connectionPool.resolveLogicalId(target)) {
             if (deferUntilRegistered) {
                 this.loggingService.debug(`Logical ID ${target} not resolved, deferring replay until registered`);
-                
+
                 // Subscribe to logical ID registration event
                 const subscription = this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_REGISTERED, (data) => {
                     if (data.logicalId === target) {
@@ -239,13 +239,13 @@ export class MessageRouter implements IMessageRouter {
                         this.replayToClient(target, filter, false); // Don't defer again
                     }
                 });
-                
+
                 // Set a timeout to avoid indefinite waiting
                 setTimeout(() => {
                     subscription.dispose();
                     this.loggingService.warn(`Timeout waiting for logical ID ${target} to register`);
                 }, 30000); // 30 second timeout
-                
+
                 return;
             } else {
                 this.loggingService.warn(`Logical ID ${target} not resolved, skipping replay`);
@@ -256,7 +256,7 @@ export class MessageRouter implements IMessageRouter {
         try {
             // Get message history with filter
             const messages = await this.messagePersistence.getHistory(filter);
-            
+
             this.loggingService.debug(`Replaying ${messages.length} messages to ${target}`, {
                 target,
                 filter,
@@ -316,18 +316,18 @@ export class MessageRouter implements IMessageRouter {
 
     private async processRetries(): Promise<void> {
         const now = Date.now();
-        
+
         for (const [destination, retryQueue] of this.retryQueues.entries()) {
             const readyMessages = retryQueue.filter(item => now >= item.next);
-            
+
             for (const item of readyMessages) {
                 // Remove from queue
                 const index = retryQueue.indexOf(item);
                 retryQueue.splice(index, 1);
-                
+
                 // Try to deliver
                 const success = this.connectionPool.sendToLogical(destination, item.message);
-                
+
                 if (success) {
                     this.deliveryStats.successfulDeliveries++;
                     this.eventBus.publish(ORCH_EVENTS.MESSAGE_DELIVERED, {
@@ -337,7 +337,7 @@ export class MessageRouter implements IMessageRouter {
                         resolvedTo: destination,
                         timestamp: item.message.timestamp
                     } as MessageDeliveredPayload);
-                    
+
                     this.loggingService.debug('Retry delivery successful', {
                         messageId: item.message.id,
                         destination,
@@ -349,7 +349,7 @@ export class MessageRouter implements IMessageRouter {
                     if (item.attempt <= this.maxRetries) {
                         item.next = now + (this.baseDelay * Math.pow(2, item.attempt - 1));
                         retryQueue.push(item);
-                        
+
                         this.loggingService.debug('Retry delivery failed, rescheduling', {
                             messageId: item.message.id,
                             destination,
@@ -366,7 +366,7 @@ export class MessageRouter implements IMessageRouter {
                             resolvedTo: destination,
                             reason: 'Max retries exceeded'
                         } as MessageDeliveryFailedPayload);
-                        
+
                         this.loggingService.warn('Message dropped after max retries', {
                             messageId: item.message.id,
                             destination,
@@ -375,7 +375,7 @@ export class MessageRouter implements IMessageRouter {
                     }
                 }
             }
-            
+
             // Clean up empty queues
             if (retryQueue.length === 0) {
                 this.retryQueues.delete(destination);
@@ -387,14 +387,14 @@ export class MessageRouter implements IMessageRouter {
         if (!this.retryQueues.has(destination)) {
             this.retryQueues.set(destination, []);
         }
-        
+
         const retryQueue = this.retryQueues.get(destination)!;
         retryQueue.push({
             message,
             attempt: 1,
             next: Date.now() + this.baseDelay
         });
-        
+
         this.loggingService.debug('Message enqueued for retry', {
             messageId: message.id,
             destination,
@@ -404,12 +404,12 @@ export class MessageRouter implements IMessageRouter {
 
     private addToFallbackBuffer(message: OrchestratorMessage): void {
         this.fallbackBuffer.push(message);
-        
+
         // Maintain buffer size limit
         if (this.fallbackBuffer.length > this.maxFallbackBufferSize) {
             this.fallbackBuffer = this.fallbackBuffer.slice(-this.maxFallbackBufferSize);
         }
-        
+
         this.loggingService.debug('Message added to fallback buffer', {
             messageId: message.id,
             bufferSize: this.fallbackBuffer.length
@@ -451,7 +451,7 @@ export class MessageRouter implements IMessageRouter {
         }
 
         const { role, name, template } = message.payload;
-        
+
         try {
             // Find the template
             const { AgentTemplateManager } = await import('../agents/AgentTemplateManager');
@@ -460,7 +460,7 @@ export class MessageRouter implements IMessageRouter {
                 const templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
                 const templates = await templateManager.getTemplates();
                 const selectedTemplate = templates.find(t => t.id === role || t.name.toLowerCase().includes(role));
-                
+
                 if (selectedTemplate) {
                     // Create the agent
                     const agent = await this.agentManager.spawnAgent({
@@ -468,7 +468,7 @@ export class MessageRouter implements IMessageRouter {
                         type: selectedTemplate.id,
                         template: selectedTemplate
                     });
-                    
+
                     // Send confirmation back
                     const confirmMessage: OrchestratorMessage = {
                         id: Date.now().toString(),
@@ -482,7 +482,7 @@ export class MessageRouter implements IMessageRouter {
                             role: agent.type
                         }
                     };
-                    
+
                     this.connectionPool.sendToLogical(message.from, confirmMessage);
                 }
             }
@@ -499,7 +499,7 @@ export class MessageRouter implements IMessageRouter {
         }
 
         const { agentId, taskId, title, description, priority } = message.payload;
-        
+
         try {
             // Create task config and add to queue
             const taskConfig = {
@@ -508,13 +508,13 @@ export class MessageRouter implements IMessageRouter {
                 priority: priority || 'medium' as const,
                 files: []
             };
-            
+
             const task = this.taskQueue.addTask(taskConfig);
-            
+
             if (agentId) {
                 await this.taskQueue.assignTask(task.id, agentId);
             }
-            
+
             // Send confirmation
             const confirmMessage: OrchestratorMessage = {
                 id: Date.now().toString(),
@@ -524,7 +524,7 @@ export class MessageRouter implements IMessageRouter {
                 type: MessageType.TASK_ACCEPTED,
                 payload: { taskId: task.id, agentId }
             };
-            
+
             this.connectionPool.sendToLogical(message.from, confirmMessage);
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
@@ -557,7 +557,7 @@ export class MessageRouter implements IMessageRouter {
                     tasks: this.taskQueue.getAllTasks()
                 }
             };
-            
+
             this.connectionPool.sendToLogical(message.from, statusMessage);
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
@@ -572,11 +572,11 @@ export class MessageRouter implements IMessageRouter {
         }
 
         const { agentId } = message.payload;
-        
+
         try {
             if (agentId) {
                 await this.agentManager.removeAgent(agentId);
-                
+
                 // Send confirmation
                 const confirmMessage: OrchestratorMessage = {
                     id: Date.now().toString(),
@@ -586,7 +586,7 @@ export class MessageRouter implements IMessageRouter {
                     type: MessageType.AGENT_READY, // Using AGENT_READY as a generic response
                     payload: { agentId, status: 'terminated' }
                 };
-                
+
                 this.connectionPool.sendToLogical(message.from, confirmMessage);
             }
         } catch (error) {
@@ -599,7 +599,7 @@ export class MessageRouter implements IMessageRouter {
         try {
             // Send to all connections except sender
             this.connectionPool.broadcast(message, [message.from]);
-            
+
             // Note: MESSAGE_BROADCASTED event is emitted by ConnectionPoolService.broadcast()
 
             return true;
@@ -620,7 +620,7 @@ export class MessageRouter implements IMessageRouter {
             }
 
             this.dashboardCallback(message);
-            
+
             this.eventBus.publish(ORCH_EVENTS.MESSAGE_TO_DASHBOARD, {
                 messageId: message.id,
                 sender: message.from,
@@ -638,7 +638,7 @@ export class MessageRouter implements IMessageRouter {
     private async routeDirect(message: OrchestratorMessage): Promise<boolean> {
         try {
             const { to } = message;
-            
+
             // Resolve logical ID to client ID if needed
             let targetClientId = to;
             if (to === 'conductor' || to.startsWith('agent-')) {
@@ -649,9 +649,9 @@ export class MessageRouter implements IMessageRouter {
                     this.loggingService.debug(`Resolved logical ID ${to} to client ID ${targetClientId}`);
                 }
             }
-            
+
             const success = this.connectionPool.sendToClient(targetClientId, message);
-            
+
             if (success) {
                 this.eventBus.publish(ORCH_EVENTS.MESSAGE_DELIVERED, {
                     messageId: message.id,
@@ -708,7 +708,7 @@ export class MessageRouter implements IMessageRouter {
             }
 
             const success = successCount > 0;
-            
+
             this.eventBus.publish(ORCH_EVENTS.MESSAGE_TO_AGENTS, {
                 messageId: message.id,
                 sender: message.from,
@@ -742,7 +742,7 @@ export class MessageRouter implements IMessageRouter {
             };
 
             const success = this.connectionPool.sendToLogical(message.from, ackMessage);
-            
+
             if (success) {
                 this.handleAcknowledgment(message.from, message.id);
             } else {

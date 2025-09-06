@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
 import { WebSocketServer, WebSocket } from 'ws';
-import { 
-    OrchestratorMessage, 
-    MessageType, 
+import {
+    OrchestratorMessage,
+    MessageType,
     ClientConnection,
     createMessage,
     generateMessageId
 } from './MessageProtocol';
-import { 
-    ILoggingService, 
-    IEventBus, 
+import {
+    ILoggingService,
+    IEventBus,
     IErrorHandler,
     IConnectionPoolService,
     IMessageRouter,
@@ -28,18 +28,18 @@ export class OrchestrationServer {
     private loggingService?: ILoggingService;
     private eventBus?: IEventBus;
     private errorHandler?: IErrorHandler;
-    
+
     // New service dependencies
     private connectionPool?: IConnectionPoolService;
     private messageRouter?: IMessageRouter;
     private messageValidator?: IMessageValidator;
     private messagePersistence?: IMessagePersistenceService;
     private metricsService?: IMetricsService;
-    
+
     // Metrics tracking
     private metricsInterval?: NodeJS.Timeout;
     private concurrentConnectionsPeak = 0;
-    
+
     // Throughput metrics tracking
     private msgTimestamps: number[] = [];
     private readonly maxTimestamps = 300; // 5 minutes at 1-second intervals
@@ -47,7 +47,7 @@ export class OrchestrationServer {
     private bytesOutTotal = 0;
     private prevBytesInTotal = 0;
     private prevBytesOutTotal = 0;
-    
+
     constructor(
         port: number = 7777,
         loggingService?: ILoggingService,
@@ -70,7 +70,7 @@ export class OrchestrationServer {
         this.metricsService = metricsService;
         this.orchChannel = loggingService?.getChannel('Orchestration');
     }
-    
+
     /**
      * Start the WebSocket server
      */
@@ -83,21 +83,21 @@ export class OrchestrationServer {
         await this.errorHandler?.handleAsync(async () => {
             await this.tryStartOnPort(this.port);
             this.isRunning = true;
-            
+
             // Record server start metrics
-            this.metricsService?.incrementCounter('server_started', { 
+            this.metricsService?.incrementCounter('server_started', {
                 port: this.actualPort.toString()
             });
-            
+
             this.loggingService?.info(`Orchestration server started on port ${this.actualPort}`);
             this.orchChannel?.appendLine(`[STARTED] port ${this.actualPort}`);
             this.eventBus?.publish(ORCH_EVENTS.SERVER_STARTED, { port: this.actualPort } as ServerStartedPayload);
-            
+
             // Start periodic metrics collection
             this.startMetricsCollection();
         }, 'Failed to start orchestration server');
     }
-    
+
     /**
      * Stop the WebSocket server
      */
@@ -110,43 +110,43 @@ export class OrchestrationServer {
         await this.errorHandler?.handleAsync(async () => {
             // Store the actual port before resetting it
             const stoppedPort = this.actualPort;
-            
+
             // Stop heartbeat monitoring
             this.connectionPool?.stopHeartbeat();
-            
+
             // Close all connections
             this.connectionPool?.dispose();
-            
+
             // Stop metrics collection
             this.stopMetricsCollection();
-            
+
             // Close WebSocket server
             if (this.wss) {
                 this.wss.close();
                 this.wss = undefined;
             }
-            
+
             this.isRunning = false;
             this.actualPort = 0;
-            
+
             this.loggingService?.info('Orchestration server stopped');
             this.orchChannel?.appendLine('[STOPPED]');
             this.eventBus?.publish(ORCH_EVENTS.SERVER_STOPPED, {} as ServerStoppedPayload);
-            
+
             // Record server stop metrics with the correct port
-            this.metricsService?.incrementCounter('server_stopped', { 
+            this.metricsService?.incrementCounter('server_stopped', {
                 port: stoppedPort.toString()
             });
         }, 'Failed to stop orchestration server');
     }
-    
+
     /**
      * Try to start server on specified port, with fallback to other ports
      */
     private async tryStartOnPort(port: number): Promise<void> {
         const maxAttempts = 10;
         let currentPort = port;
-        
+
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             try {
                 await this.startOnPort(currentPort);
@@ -161,46 +161,46 @@ export class OrchestrationServer {
             }
         }
     }
-    
+
     /**
      * Start server on specific port
      */
     private async startOnPort(port: number): Promise<void> {
         return new Promise((resolve, reject) => {
             this.wss = new WebSocketServer({ port });
-            
+
             this.wss.on('listening', () => {
                 this.loggingService?.info(`WebSocket server listening on port ${port}`);
                 this.orchChannel?.appendLine(`[LISTENING] port ${port}`);
                 resolve();
             });
-            
+
             this.wss.on('error', (error) => {
                 reject(error);
             });
-            
+
             this.wss.on('connection', (ws: WebSocket, req: any) => {
                 this.handleConnection(ws, req);
             });
         });
     }
-    
+
     /**
      * Handle new WebSocket connection
      */
     private handleConnection(ws: WebSocket, req: any): void {
         const clientId = generateMessageId();
         const clientIp = req.socket.remoteAddress;
-        
+
         this.loggingService?.info(`New connection from ${clientIp} (assigned ID: ${clientId})`);
-        
+
         // Determine if this is an agent connection based on user agent or other headers
         const userAgent = req.headers['user-agent'] || '';
         const isAgent = userAgent.includes('nofx-agent') || userAgent.includes('claude');
-        
+
         // Log connection summary to orchestration channel
         this.orchChannel?.appendLine(`New connection ${clientId} (${isAgent ? 'agent' : 'client'})`);
-        
+
         // Add connection to pool
         this.connectionPool?.addConnection(ws, clientId, {
             clientId,
@@ -210,92 +210,92 @@ export class OrchestrationServer {
             messageCount: 0,
             isAgent
         });
-        
+
         // Record connection metrics
-        this.metricsService?.incrementCounter('connections_established', { 
+        this.metricsService?.incrementCounter('connections_established', {
             clientType: isAgent ? 'agent' : 'client',
             userAgent: userAgent.substring(0, 50) // Truncate for storage
         });
-        
+
         // Set up message handling
         ws.on('message', (data: Buffer) => {
             this.handleMessage(clientId, data.toString());
         });
-        
+
         // Set up connection close handling
         ws.on('close', () => {
-            this.metricsService?.incrementCounter('connections_closed', { 
+            this.metricsService?.incrementCounter('connections_closed', {
                 clientType: isAgent ? 'agent' : 'client'
             });
         });
-        
+
         // Set up connection error handling
         ws.on('error', (error) => {
-            this.metricsService?.incrementCounter('connection_errors', { 
+            this.metricsService?.incrementCounter('connection_errors', {
                 clientType: isAgent ? 'agent' : 'client',
                 errorType: error.name || 'unknown'
             });
         });
     }
-    
+
     /**
      * Handle incoming message from a client
      */
     private async handleMessage(clientId: string, rawMessage: string): Promise<void> {
         const startTime = Date.now();
-        
+
         try {
             this.loggingService?.debug(`Received message from ${clientId}: ${rawMessage.substring(0, 100)}...`);
-            
+
             // Log message summary to orchestration channel (first 100 chars, message type)
             const messagePreview = rawMessage.substring(0, 100);
             const messageType = this.extractMessageType(rawMessage);
             this.orchChannel?.appendLine(`Message from ${clientId}: ${messageType} - ${messagePreview}...`);
-            
+
             // Track message timestamp for throughput calculation
             this.msgTimestamps.push(Date.now());
             if (this.msgTimestamps.length > this.maxTimestamps) {
                 this.msgTimestamps.shift(); // Remove oldest timestamp
             }
-            
+
             // Track bytes transferred
             const messageBytes = Buffer.byteLength(rawMessage, 'utf8');
             this.bytesInTotal += messageBytes;
-            
+
             // Record message received metrics
-            this.metricsService?.incrementCounter('messages_received', { 
+            this.metricsService?.incrementCounter('messages_received', {
                 clientId: clientId.substring(0, 8) // Truncate for storage
             });
-            
+
             // Record bytes in metrics
-            this.metricsService?.incrementCounter('bytes_in_total', { 
+            this.metricsService?.incrementCounter('bytes_in_total', {
                 clientId: clientId.substring(0, 8),
                 bytes: messageBytes.toString()
             });
-            
+
             // Validate message
             const validationResult = this.messageValidator?.validate(rawMessage);
             if (!validationResult?.isValid) {
                 this.loggingService?.warn(`Invalid message from ${clientId}:`, validationResult?.errors);
-                
+
                 // Send error response
                 const errorResponse = this.messageValidator?.createErrorResponse(
                     `Validation failed: ${validationResult?.errors.join(', ')}`,
                     clientId
                 );
-                
+
                 if (errorResponse) {
                     this.connectionPool?.sendToClient(clientId, errorResponse);
                 }
                 return;
             }
-            
+
             // Use parsed message from validation result
             const message: OrchestratorMessage = validationResult.result;
-            
+
             // Publish MESSAGE_RECEIVED event
             this.eventBus?.publish(ORCH_EVENTS.MESSAGE_RECEIVED, { message } as MessageReceivedPayload);
-            
+
             // Register logical ID if this is the first message from a client
             if (message.from && message.from !== 'system') {
                 const connection = this.connectionPool?.getConnection(clientId);
@@ -304,23 +304,23 @@ export class OrchestrationServer {
                     if (!existingClientId) {
                         // No existing mapping, register normally
                         this.connectionPool?.registerLogicalId(clientId, message.from);
-                        
+
                         // Replay recent messages to newly registered client
                         await this.replayToClient(message.from);
                     } else if (existingClientId !== clientId) {
                         // Duplicate logical ID registration - warn and reassign
-                        this.loggingService?.warn(`Duplicate logical ID registration detected`, {
+                        this.loggingService?.warn('Duplicate logical ID registration detected', {
                             logicalId: message.from,
                             previousClientId: existingClientId,
                             newClientId: clientId
                         });
-                        
+
                         // Unregister the previous mapping
                         this.connectionPool?.unregisterLogicalId(message.from);
-                        
+
                         // Register the new mapping
                         this.connectionPool?.registerLogicalId(clientId, message.from);
-                        
+
                         // Publish reassignment event
                         this.eventBus?.publish(ORCH_EVENTS.LOGICAL_ID_REASSIGNED, {
                             logicalId: message.from,
@@ -328,56 +328,56 @@ export class OrchestrationServer {
                             newClientId: clientId,
                             timestamp: new Date().toISOString()
                         } as LogicalIdReassignedPayload);
-                        
+
                         // Replay recent messages to newly registered client
                         await this.replayToClient(message.from);
                     }
                     // If existingClientId === clientId, it's already correctly mapped, do nothing
                 }
             }
-            
+
             // Route message
             try {
                 await this.messageRouter?.route(message);
-                
+
                 // Record successful message routing
-                this.metricsService?.incrementCounter('messages_sent', { 
+                this.metricsService?.incrementCounter('messages_sent', {
                     clientId: clientId.substring(0, 8),
                     messageType: message.type || 'unknown'
                 });
             } catch (routingError) {
                 // Record routing failure
-                this.metricsService?.incrementCounter('routing_failures', { 
+                this.metricsService?.incrementCounter('routing_failures', {
                     clientId: clientId.substring(0, 8),
                     messageType: message.type || 'unknown',
                     errorType: routingError instanceof Error ? routingError.name : 'unknown'
                 });
                 throw routingError; // Re-throw to be handled by outer catch
             }
-            
+
             // Record message processing duration
             const processingTime = Date.now() - startTime;
             this.metricsService?.recordDuration('message_processing_duration', processingTime, {
                 clientId: clientId.substring(0, 8),
                 messageType: message.type || 'unknown'
             });
-            
+
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler?.handleError(err, `Error handling message from ${clientId}`);
-            
+
             // Send error response
             const errorResponse = this.messageValidator?.createErrorResponse(
                 'Internal server error',
                 clientId
             );
-            
+
             if (errorResponse) {
                 this.connectionPool?.sendToClient(clientId, errorResponse);
             }
         }
     }
-    
+
     /**
      * Set dashboard callback for receiving messages
      */
@@ -400,13 +400,13 @@ export class OrchestrationServer {
     getConnections(): Map<string, WebSocket> {
         const connections = new Map<string, WebSocket>();
         const managedConnections = this.connectionPool?.getAllConnections();
-        
+
         if (managedConnections) {
             managedConnections.forEach((connection, clientId) => {
                 connections.set(clientId, connection.ws);
             });
         }
-        
+
         return connections;
     }
 
@@ -457,15 +457,15 @@ export class OrchestrationServer {
         this.connectionPool?.broadcast(message, excludeIds);
         this.trackOutboundBytes(message);
     }
-    
+
     /**
      * Track outbound bytes for metrics
      */
     private trackOutboundBytes(message: OrchestratorMessage): void {
         const messageBytes = Buffer.byteLength(JSON.stringify(message), 'utf8');
         this.bytesOutTotal += messageBytes;
-        
-        this.metricsService?.incrementCounter('bytes_out_total', { 
+
+        this.metricsService?.incrementCounter('bytes_out_total', {
             messageType: message.type || 'unknown',
             bytes: messageBytes.toString()
         });
@@ -517,7 +517,7 @@ export class OrchestrationServer {
             this.collectPeriodicMetrics();
         }, 30000);
     }
-    
+
     /**
      * Stop periodic metrics collection
      */
@@ -527,48 +527,48 @@ export class OrchestrationServer {
             this.metricsInterval = undefined;
         }
     }
-    
+
     /**
      * Collect periodic metrics
      */
     private collectPeriodicMetrics(): void {
         if (!this.metricsService) return;
-        
+
         const connections = this.connectionPool?.getAllConnections();
         const currentConnections = connections?.size || 0;
-        
+
         // Update peak concurrent connections
         if (currentConnections > this.concurrentConnectionsPeak) {
             this.concurrentConnectionsPeak = currentConnections;
         }
-        
+
         // Record current concurrent connections
         this.metricsService.setGauge('concurrent_connections', currentConnections);
         this.metricsService.setGauge('concurrent_connections_peak', this.concurrentConnectionsPeak);
-        
+
         // Calculate messages per second from ring buffer
         const now = Date.now();
         const thirtySecondsAgo = now - 30000; // 30 seconds ago
-        
+
         // Count messages in the last 30 seconds
         const recentMessages = this.msgTimestamps.filter(timestamp => timestamp > thirtySecondsAgo);
         const messagesPerSecond = recentMessages.length / 30; // Messages per second over last 30 seconds
-        
+
         this.metricsService.setGauge('messages_per_second', messagesPerSecond);
-        
+
         // Record bytes transferred metrics
         this.metricsService.setGauge('bytes_in_total', this.bytesInTotal);
         this.metricsService.setGauge('bytes_out_total', this.bytesOutTotal);
-        
+
         // Calculate bytes per second rates as deltas between intervals
         const bytesInDelta = this.bytesInTotal - this.prevBytesInTotal;
         const bytesInRate = bytesInDelta / 30; // Bytes per second over last 30 seconds
         this.metricsService.setGauge('bytes_in_rate', bytesInRate);
-        
+
         const bytesOutDelta = this.bytesOutTotal - this.prevBytesOutTotal;
         const bytesOutRate = bytesOutDelta / 30; // Bytes per second over last 30 seconds
         this.metricsService.setGauge('bytes_out_rate', bytesOutRate);
-        
+
         // Update previous totals for next calculation
         this.prevBytesInTotal = this.bytesInTotal;
         this.prevBytesOutTotal = this.bytesOutTotal;

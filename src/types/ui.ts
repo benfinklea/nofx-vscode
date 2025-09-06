@@ -153,11 +153,11 @@ export const enum WEBVIEW_COMMANDS {
     TOGGLE_THEME = 'toggleTheme',
     SPAWN_CUSTOM_AGENT = 'spawnCustomAgent',
     SHOW_AGENT_PROMPT = 'showAgentPrompt',
-    
+
     // State management commands
     SET_STATE = 'setState',
     UPDATE_STATE = 'updateState',
-    
+
     // Dashboard commands
     APPLY_FILTER = 'applyFilter',
     CLEAR_MESSAGES = 'clearMessages',
@@ -167,7 +167,7 @@ export const enum WEBVIEW_COMMANDS {
 }
 
 // Webview Command union type (for backward compatibility)
-export type WebviewCommand = 
+export type WebviewCommand =
     | 'spawnAgentGroup'
     | 'createTask'
     | 'removeAgent'
@@ -405,7 +405,7 @@ export function computeSoftDependencyStatus(task: Task, allTasks: Task[]): 'sati
 
     const taskMap = new Map(allTasks.map(t => [t.id, t]));
     let completedCount = 0;
-    let totalCount = task.prefers.length;
+    const totalCount = task.prefers.length;
 
     for (const prefId of task.prefers) {
         const prefTask = taskMap.get(prefId);
@@ -432,7 +432,7 @@ export function formatSoftDependencyHint(task: Task, allTasks: Task[]): string |
     }
 
     const status = computeSoftDependencyStatus(task, allTasks);
-    
+
     switch (status) {
         case 'satisfied':
             return '✨ Soft deps satisfied';

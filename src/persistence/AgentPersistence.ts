@@ -15,7 +15,7 @@ export class AgentPersistence {
     private nofxDir: string;
     private sessionsDir: string;
     private loggingService?: ILoggingService;
-    
+
     constructor(workspaceRoot: string, loggingService?: ILoggingService) {
         this.loggingService = loggingService;
         // Create .nofx directory in workspace for persistence
@@ -24,10 +24,10 @@ export class AgentPersistence {
         this.agentSessionsDir = path.join(this.persistenceDir, 'sessions');
         this.sessionsDir = this.agentSessionsDir; // Alias for compatibility
         this.stateFile = path.join(this.persistenceDir, 'agents.json');
-        
+
         this.ensureDirectories();
     }
-    
+
     /**
      * Ensure persistence directories exist
      */
@@ -41,7 +41,7 @@ export class AgentPersistence {
             this.loggingService?.debug(`Created sessions directory: ${this.agentSessionsDir}`);
         }
     }
-    
+
     /**
      * Save agent state and metadata
      */
@@ -61,22 +61,22 @@ export class AgentPersistence {
                 createdAt: agent.startTime
             }))
         };
-        
+
         fs.writeFileSync(this.stateFile, JSON.stringify(state, null, 2));
         this.loggingService?.debug(`Saved state for ${agents.length} agents`);
     }
-    
+
     /**
      * Load saved agent state
      */
     async loadAgentState(): Promise<any[]> {
         this.loggingService?.debug(`Looking for state file: ${this.stateFile}`);
-        
+
         if (!fs.existsSync(this.stateFile)) {
             this.loggingService?.debug('No state file found');
             return [];
         }
-        
+
         try {
             const content = fs.readFileSync(this.stateFile, 'utf-8');
             const state = JSON.parse(content);
@@ -87,13 +87,13 @@ export class AgentPersistence {
             return [];
         }
     }
-    
+
     /**
      * Save agent's Claude session/chat history
      */
     async saveAgentSession(agentId: string, content: string, append: boolean = true) {
         const sessionFile = path.join(this.agentSessionsDir, this.getSessionFileName(agentId));
-        
+
         if (append && fs.existsSync(sessionFile)) {
             // Append to existing session
             const timestamp = new Date().toISOString();
@@ -104,20 +104,20 @@ export class AgentPersistence {
             const header = `# Agent Session: ${agentId}\n# Started: ${new Date().toISOString()}\n\n`;
             fs.writeFileSync(sessionFile, header + content);
         }
-        
+
         this.loggingService?.debug(`Saved session for agent ${agentId}`);
     }
-    
+
     /**
      * Load agent's previous session
      */
     async loadAgentSession(agentId: string): Promise<string | null> {
         const sessionFile = path.join(this.agentSessionsDir, this.getSessionFileName(agentId));
-        
+
         if (!fs.existsSync(sessionFile)) {
             return null;
         }
-        
+
         try {
             const content = fs.readFileSync(sessionFile, 'utf-8');
             this.loggingService?.debug(`Loaded session for agent ${agentId}`);
@@ -127,7 +127,7 @@ export class AgentPersistence {
             return null;
         }
     }
-    
+
     /**
      * Save a checkpoint of current conversation
      */
@@ -137,9 +137,9 @@ export class AgentPersistence {
             user: userMessage,
             agent: agentResponse
         };
-        
+
         const checkpointFile = path.join(this.agentSessionsDir, `${agentId}_checkpoint.json`);
-        
+
         let checkpoints = [];
         if (fs.existsSync(checkpointFile)) {
             try {
@@ -149,34 +149,34 @@ export class AgentPersistence {
                 this.loggingService?.error('Error loading checkpoints:', error);
             }
         }
-        
+
         checkpoints.push(checkpoint);
-        
+
         // Keep only last 100 checkpoints
         if (checkpoints.length > 100) {
             checkpoints = checkpoints.slice(-100);
         }
-        
+
         fs.writeFileSync(checkpointFile, JSON.stringify(checkpoints, null, 2));
     }
-    
+
     /**
      * Get context summary for agent restoration
      */
     async getAgentContextSummary(agentId: string): Promise<string> {
         const sessionContent = await this.loadAgentSession(agentId);
-        
+
         if (!sessionContent) {
             return '';
         }
-        
+
         // Extract last N lines or last N characters for context
         const lines = sessionContent.split('\n');
         const recentLines = lines.slice(-50); // Last 50 lines
-        
+
         return `Previous session context:\n${recentLines.join('\n')}`;
     }
-    
+
     /**
      * Archive old sessions
      */
@@ -185,15 +185,15 @@ export class AgentPersistence {
         if (!fs.existsSync(archiveDir)) {
             fs.mkdirSync(archiveDir);
         }
-        
+
         const now = Date.now();
         const maxAge = daysOld * 24 * 60 * 60 * 1000;
-        
+
         const files = fs.readdirSync(this.agentSessionsDir);
         for (const file of files) {
             const filePath = path.join(this.agentSessionsDir, file);
             const stats = fs.statSync(filePath);
-            
+
             if (now - stats.mtime.getTime() > maxAge) {
                 const archivePath = path.join(archiveDir, file);
                 fs.renameSync(filePath, archivePath);
@@ -201,7 +201,7 @@ export class AgentPersistence {
             }
         }
     }
-    
+
     /**
      * Clean up persistence data
      */
@@ -210,42 +210,42 @@ export class AgentPersistence {
         if (fs.existsSync(this.stateFile)) {
             fs.unlinkSync(this.stateFile);
         }
-        
+
         // Remove all session files
         const files = fs.readdirSync(this.agentSessionsDir);
         for (const file of files) {
             fs.unlinkSync(path.join(this.agentSessionsDir, file));
         }
-        
+
         this.loggingService?.info('Cleaned up all persistence data');
     }
-    
+
     /**
      * Export all sessions as markdown
      */
     async exportSessionsAsMarkdown(): Promise<string> {
         const exportPath = path.join(this.persistenceDir, `export_${Date.now()}.md`);
         let content = '# NofX Agent Sessions Export\n\n';
-        
+
         const state = await this.loadAgentState();
-        
+
         for (const agent of state) {
             content += `## Agent: ${agent.name} (${agent.type})\n\n`;
             content += `- ID: ${agent.id}\n`;
             content += `- Status: ${agent.status}\n`;
             content += `- Tasks Completed: ${agent.tasksCompleted}\n\n`;
-            
+
             const session = await this.loadAgentSession(agent.id);
             if (session) {
                 content += '### Session History\n\n';
                 content += '```\n' + session + '\n```\n\n';
             }
         }
-        
+
         fs.writeFileSync(exportPath, content);
         return exportPath;
     }
-    
+
     private getSessionFileName(agentId: string): string {
         return `${agentId}_session.md`;
     }

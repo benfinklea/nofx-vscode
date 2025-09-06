@@ -16,7 +16,7 @@ export class ConfigurationService implements IConfigurationService {
         this.eventBus = eventBus;
         this.config = vscode.workspace.getConfiguration(ConfigurationService.CONFIG_SECTION);
         this.initializeCache();
-        
+
         // Listen for configuration changes
         const disposable = vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(ConfigurationService.CONFIG_SECTION)) {
@@ -31,7 +31,7 @@ export class ConfigurationService implements IConfigurationService {
         this.configCache.clear();
         // Refresh the configuration reference
         this.config = vscode.workspace.getConfiguration(ConfigurationService.CONFIG_SECTION);
-        
+
         // Cache all known configuration keys
         Object.values(CONFIG_KEYS).forEach(key => {
             const value = this.config.get(key);
@@ -45,7 +45,7 @@ export class ConfigurationService implements IConfigurationService {
         // Check cache first
         if (this.configCache.has(key)) {
             const cachedValue = this.configCache.get(key) as T;
-            
+
             // Validate cached value if validator is available
             if (this.validator) {
                 const validation = this.validateConfigurationKey(key, cachedValue);
@@ -56,7 +56,7 @@ export class ConfigurationService implements IConfigurationService {
                     return defaultValue as T;
                 }
             }
-            
+
             return cachedValue;
         }
 
@@ -65,7 +65,7 @@ export class ConfigurationService implements IConfigurationService {
             const value = this.config.get<T>(key);
             if (value !== undefined) {
                 this.configCache.set(key, value);
-                
+
                 // Validate the value if validator is available
                 if (this.validator) {
                     const validation = this.validateConfigurationKey(key, value);
@@ -75,16 +75,16 @@ export class ConfigurationService implements IConfigurationService {
                         return defaultValue as T;
                     }
                 }
-                
+
                 return value;
             }
         } catch (error) {
             // Handle VS Code API errors gracefully
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            this.eventBus?.publish(CONFIG_EVENTS.CONFIG_API_ERROR, { 
-                key, 
-                error: errorMessage, 
-                operation: 'get' 
+            this.eventBus?.publish(CONFIG_EVENTS.CONFIG_API_ERROR, {
+                key,
+                error: errorMessage,
+                operation: 'get'
             });
             // Return default value on API error
         }
@@ -94,7 +94,7 @@ export class ConfigurationService implements IConfigurationService {
 
     getAll(): Record<string, any> {
         const result: Record<string, any> = {};
-        
+
         // Iterate through all known configuration keys
         Object.values(CONFIG_KEYS).forEach(key => {
             const value = this.get(key);
@@ -115,24 +115,24 @@ export class ConfigurationService implements IConfigurationService {
                 throw new Error(`Configuration validation failed for key '${key}': ${errorMessage}`);
             }
         }
-        
+
         try {
             await this.config.update(key, value, target);
             this.configCache.set(key, value);
-            
+
             // Clear validation cache for this key
             this.validationCache.delete(key);
-            
+
             // Publish configuration update event
             this.eventBus?.publish(CONFIG_EVENTS.CONFIG_UPDATED, { key, value, target });
         } catch (error) {
             // Handle VS Code API errors and provide context
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            this.eventBus?.publish(CONFIG_EVENTS.CONFIG_UPDATE_FAILED, { 
-                key, 
-                value, 
-                target, 
-                error: errorMessage 
+            this.eventBus?.publish(CONFIG_EVENTS.CONFIG_UPDATE_FAILED, {
+                key,
+                value,
+                target,
+                error: errorMessage
             });
             throw new Error(`Failed to update configuration key '${key}': ${errorMessage}`);
         }
@@ -205,23 +205,23 @@ export class ConfigurationService implements IConfigurationService {
         if (!this.validator) {
             return { isValid: true, errors: [] };
         }
-        
+
         const allConfig = this.getAll();
         const nestedConfig = this.nestKeys(allConfig);
-        
+
         // Validate basic configuration schema
         const schemaValidation = this.validator.validateConfiguration(nestedConfig);
-        
+
         // Validate NofX-specific cross-field rules
         const nofxValidation = this.validator.validateNofXConfiguration(nestedConfig);
-        
+
         // Merge errors from both validations
         const allErrors = [...schemaValidation.errors, ...nofxValidation.errors];
-        
+
         // Determine overall validity based on error severity
         const hasErrors = allErrors.some(error => error.severity === 'error');
         const isValid = !hasErrors;
-        
+
         return { isValid, errors: allErrors };
     }
 
@@ -251,7 +251,7 @@ export class ConfigurationService implements IConfigurationService {
         if (!this.validator) {
             return [];
         }
-        
+
         return this.validator.getValidationErrors();
     }
 
@@ -259,16 +259,16 @@ export class ConfigurationService implements IConfigurationService {
         if (!this.validator) {
             return { isValid: true, errors: [] };
         }
-        
+
         // Check validation cache first
         const cacheKey = `${key}:${JSON.stringify(value)}`;
         if (this.validationCache.has(cacheKey)) {
             return this.validationCache.get(cacheKey)!;
         }
-        
+
         const validation = this.validator.validateConfigurationKey(key, value);
         this.validationCache.set(cacheKey, validation);
-        
+
         return validation;
     }
 
@@ -288,12 +288,12 @@ export class ConfigurationService implements IConfigurationService {
                 throw new Error(`Backup validation failed: ${validation.errors.map(e => e.message).join('; ')}`);
             }
         }
-        
+
         // Restore each configuration value
         for (const [key, value] of Object.entries(backup)) {
             await this.update(key, value);
         }
-        
+
         this.eventBus?.publish(CONFIG_EVENTS.CONFIG_RESTORED, { keys: Object.keys(backup) });
     }
 

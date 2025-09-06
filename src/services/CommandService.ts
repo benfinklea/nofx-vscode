@@ -18,12 +18,12 @@ export class CommandService implements ICommandService {
             this.loggingService?.warn(`Command ${commandId} is already registered, returning existing disposable`);
             return this.commandDisposables.get(commandId)!;
         }
-        
+
         const disposable = vscode.commands.registerCommand(commandId, handler, thisArg);
         this.disposables.push(disposable);
         this.registeredCommands.add(commandId);
         this.commandDisposables.set(commandId, disposable);
-        
+
         this.loggingService?.debug(`Command registered: ${commandId}`);
         return disposable;
     }
@@ -33,12 +33,12 @@ export class CommandService implements ICommandService {
             this.loggingService?.warn(`Text editor command ${commandId} is already registered, returning existing disposable`);
             return this.commandDisposables.get(commandId)!;
         }
-        
+
         const disposable = vscode.commands.registerTextEditorCommand(commandId, handler, thisArg);
         this.disposables.push(disposable);
         this.registeredCommands.add(commandId);
         this.commandDisposables.set(commandId, disposable);
-        
+
         this.loggingService?.debug(`Text editor command registered: ${commandId}`);
         return disposable;
     }
@@ -67,7 +67,7 @@ export class CommandService implements ICommandService {
         const config = vscode.workspace.getConfiguration('nofx');
         const testMode = config.get<boolean>('testMode', false);
         const isDev = process.env.NODE_ENV === 'development';
-        
+
         if (!testMode && !isDev) {
             this.loggingService?.debug('Command verification skipped (not in test/dev mode)');
             return;
@@ -83,14 +83,14 @@ export class CommandService implements ICommandService {
                 vscode.Uri.file(vscode.extensions.getExtension('nofx.nofx')?.extensionPath || ''),
                 'package.json'
             );
-            
+
             const packageJsonContent = await vscode.workspace.fs.readFile(packageJsonPath);
             const packageJson = JSON.parse(packageJsonContent.toString());
             const expectedCommands = packageJson.contributes?.commands?.map((cmd: any) => cmd.command) || [];
 
             // Find missing commands
             const missingCommands = expectedCommands.filter((cmd: string) => !registeredSet.has(cmd));
-            
+
             // Log results
             if (missingCommands.length > 0) {
                 this.loggingService?.warn(`Missing commands detected: ${missingCommands.join(', ')}`);
@@ -107,7 +107,7 @@ export class CommandService implements ICommandService {
             // Also log any extra registered nofx commands not in package.json
             const nofxCommands = registeredCommands.filter(cmd => cmd.startsWith('nofx.'));
             const extraCommands = nofxCommands.filter(cmd => !expectedCommands.includes(cmd));
-            
+
             if (extraCommands.length > 0) {
                 this.loggingService?.debug(`Extra commands registered: ${extraCommands.join(', ')}`);
             }
@@ -129,7 +129,7 @@ export class CommandService implements ICommandService {
             disposable.dispose();
             this.registeredCommands.delete(commandId);
             this.commandDisposables.delete(commandId);
-            
+
             // Remove from main disposables array
             const index = this.disposables.indexOf(disposable);
             if (index > -1) {

@@ -54,7 +54,7 @@ export async function setupExtension(): Promise<vscode.ExtensionContext> {
     try {
         // Import the compiled extension module
         extension = require('../../../out/extension');
-        
+
         // Activate the extension
         if (extension && typeof extension.activate === 'function') {
             await extension.activate(extensionContext);

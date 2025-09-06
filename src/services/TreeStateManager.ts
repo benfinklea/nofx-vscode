@@ -6,12 +6,12 @@ export class TreeStateManager implements ITreeStateManager {
     private uiStateManager: IUIStateManager;
     private eventBus: IEventBus;
     private loggingService: ILoggingService;
-    
+
     // Tree-specific state
     private teamName: string = 'Default Team';
     private expandedSections: Set<string> = new Set();
     private selectedItems: Set<string> = new Set();
-    
+
     // Event subscriptions
     private subscriptions: vscode.Disposable[] = [];
     private stateChangeCallbacks: (() => void)[] = [];
@@ -25,13 +25,13 @@ export class TreeStateManager implements ITreeStateManager {
         this.uiStateManager = uiStateManager;
         this.eventBus = eventBus;
         this.loggingService = loggingService;
-        
+
         this.initialize();
     }
 
     private initialize(): void {
         this.loggingService.info('TreeStateManager: Initializing');
-        
+
         // Subscribe to UI state changes
         const uiStateChangeHandler = () => {
             this.publishTreeRefresh();
@@ -96,7 +96,7 @@ export class TreeStateManager implements ITreeStateManager {
         // Return pure data without presentation concerns
         const agents = this.uiStateManager.getAgents();
         const tasks = this.uiStateManager.getTasks();
-        
+
         return {
             teamName: this.teamName,
             agents: agents,
@@ -112,7 +112,7 @@ export class TreeStateManager implements ITreeStateManager {
 
     subscribe(callback: () => void): vscode.Disposable {
         this.stateChangeCallbacks.push(callback);
-        
+
         return {
             dispose: () => {
                 const index = this.stateChangeCallbacks.indexOf(callback);
@@ -128,7 +128,7 @@ export class TreeStateManager implements ITreeStateManager {
 
     private publishTreeRefresh(): void {
         this.eventBus.publish('tree.refresh');
-        
+
         // Notify direct subscribers
         this.stateChangeCallbacks.forEach(callback => {
             try {
@@ -141,17 +141,17 @@ export class TreeStateManager implements ITreeStateManager {
 
     dispose(): void {
         this.loggingService.info('TreeStateManager: Disposing');
-        
+
         // Explicitly unsubscribe from EventBus handlers
         this.eventBusHandlers.forEach((handler, event) => {
             this.eventBus.unsubscribe(event, handler);
         });
         this.eventBusHandlers.clear();
-        
+
         // Dispose all subscriptions
         this.subscriptions.forEach(sub => sub.dispose());
         this.subscriptions = [];
-        
+
         // Clear callbacks
         this.stateChangeCallbacks = [];
     }

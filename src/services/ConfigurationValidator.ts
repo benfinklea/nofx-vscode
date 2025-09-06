@@ -21,39 +21,39 @@ export class ConfigurationValidator implements IConfigurationValidator {
                 .int('Max agents must be an integer')
                 .min(1, 'Max agents must be at least 1')
                 .max(10, 'Max agents cannot exceed 10'),
-            
+
             claudePath: z.string()
                 .min(1, 'Claude path cannot be empty')
                 .refine((path) => path.trim().length > 0, 'Claude path cannot be just whitespace'),
-            
+
             autoAssignTasks: z.boolean(),
-            
+
             useWorktrees: z.boolean(),
-            
+
             logLevel: z.enum(['debug', 'info', 'warn', 'error'], {
                 errorMap: () => ({ message: 'Log level must be one of: debug, info, warn, error' })
             }).optional(),
-            
+
             autoStart: z.boolean(),
-            
+
             claudeCommandStyle: z.enum(['simple', 'interactive', 'heredoc', 'file'], {
                 errorMap: () => ({ message: 'Claude command style must be one of: simple, interactive, heredoc, file' })
             }),
-            
+
             enableMetrics: z.boolean(),
-            
+
             metricsOutputLevel: z.enum(['none', 'basic', 'detailed'], {
                 errorMap: () => ({ message: 'Metrics output level must be one of: none, basic, detailed' })
             }),
-            
+
             testMode: z.boolean(),
-            
+
             metricsRetentionHours: z.number()
                 .int('Metrics retention hours must be an integer')
                 .min(1, 'Metrics retention must be at least 1 hour')
                 .max(168, 'Metrics retention cannot exceed 168 hours (1 week)')
                 .optional(),
-            
+
             // Orchestration settings
             orchestration: z.object({
                 heartbeatInterval: z.number().int().min(1000).max(60000),
@@ -76,11 +76,11 @@ export class ConfigurationValidator implements IConfigurationValidator {
 
     validateConfiguration(config: Record<string, any>): { isValid: boolean; errors: ValidationError[] } {
         this.logger?.debug('Validating configuration', { configKeys: Object.keys(config) });
-        
+
         try {
             const schema = this.buildValidationSchema();
             const result = schema.safeParse(config);
-            
+
             if (result.success) {
                 this.validationErrors = [];
                 this.logger?.debug('Configuration validation successful');
@@ -93,13 +93,13 @@ export class ConfigurationValidator implements IConfigurationValidator {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown validation error';
             this.logger?.error('Configuration validation error', { error: errorMessage });
-            
+
             const validationError: ValidationError = {
                 field: 'general',
                 message: `Validation failed: ${errorMessage}`,
                 severity: 'error'
             };
-            
+
             this.validationErrors = [validationError];
             return { isValid: false, errors: this.validationErrors };
         }
@@ -107,19 +107,19 @@ export class ConfigurationValidator implements IConfigurationValidator {
 
     validateConfigurationKey(key: string, value: any): { isValid: boolean; errors: ValidationError[] } {
         this.logger?.debug('Validating configuration key', { key, value });
-        
+
         try {
             const schema = this.buildValidationSchema();
-            
+
             // Handle dotted keys (e.g., orchestration.heartbeatInterval)
             if (key.includes('.')) {
                 const parts = key.split('.');
                 const nestedObj = this.buildNestedObject(parts, value);
-                
+
                 // Use partial base schema to validate just the nested structure
                 const baseSchema = this.buildBaseSchema();
                 const partialResult = baseSchema.partial().safeParse(nestedObj);
-                
+
                 if (partialResult.success) {
                     this.logger?.debug('Configuration key validation successful', { key });
                     return { isValid: true, errors: [] };
@@ -136,7 +136,7 @@ export class ConfigurationValidator implements IConfigurationValidator {
                     // Known key - validate normally
                     const partialSchema = baseSchema.pick({ [key]: true } as any);
                     const result = partialSchema.safeParse({ [key]: value });
-                    
+
                     if (result.success) {
                         this.logger?.debug('Configuration key validation successful', { key });
                         return { isValid: true, errors: [] };
@@ -154,13 +154,13 @@ export class ConfigurationValidator implements IConfigurationValidator {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown validation error';
             this.logger?.error('Configuration key validation error', { key, error: errorMessage });
-            
+
             const validationError: ValidationError = {
                 field: key,
                 message: `Validation failed for ${key}: ${errorMessage}`,
                 severity: 'error'
             };
-            
+
             return { isValid: false, errors: [validationError] };
         }
     }
@@ -177,7 +177,7 @@ export class ConfigurationValidator implements IConfigurationValidator {
         return zodErrors.map(error => {
             const field = error.path.join('.');
             const message = error.message;
-            
+
             // Determine severity based on error type
             let severity: 'error' | 'warning' | 'info' = 'error';
             if (error.code === 'custom' && error.message.includes('recommendation')) {
@@ -185,7 +185,7 @@ export class ConfigurationValidator implements IConfigurationValidator {
             } else if (error.code === 'too_small' || error.code === 'too_big') {
                 severity = 'warning';
             }
-            
+
             return {
                 field,
                 message: this.formatErrorMessage(field, message),
@@ -210,28 +210,28 @@ export class ConfigurationValidator implements IConfigurationValidator {
 
     /**
      * Build a nested object from dotted key parts
-     * e.g., ['orchestration', 'heartbeatInterval'] with value 5000 
+     * e.g., ['orchestration', 'heartbeatInterval'] with value 5000
      * becomes { orchestration: { heartbeatInterval: 5000 } }
      */
     private buildNestedObject(parts: string[], value: any): Record<string, any> {
         const result: Record<string, any> = {};
         let current = result;
-        
+
         for (let i = 0; i < parts.length - 1; i++) {
             current[parts[i]] = {};
             current = current[parts[i]];
         }
-        
+
         // Set the final value
         current[parts[parts.length - 1]] = value;
-        
+
         return result;
     }
 
     // Validate specific NofX configuration scenarios
     validateNofXConfiguration(config: Record<string, any>): { isValid: boolean; errors: ValidationError[] } {
         const errors: ValidationError[] = [];
-        
+
         // Check if useWorktrees is enabled but workspace is not a Git repository
         if (config.useWorktrees && !this.isGitRepository()) {
             errors.push({
@@ -240,7 +240,7 @@ export class ConfigurationValidator implements IConfigurationValidator {
                 severity: 'warning'
             });
         }
-        
+
         // Check if maxAgents is too high for system resources
         if (config.maxAgents && config.maxAgents > 5) {
             errors.push({
@@ -249,7 +249,7 @@ export class ConfigurationValidator implements IConfigurationValidator {
                 severity: 'info'
             });
         }
-        
+
         // Check if metrics are enabled but output level is none
         if (config.enableMetrics && config.metricsOutputLevel === 'none') {
             errors.push({
@@ -258,7 +258,7 @@ export class ConfigurationValidator implements IConfigurationValidator {
                 severity: 'warning'
             });
         }
-        
+
         return {
             isValid: errors.filter(e => e.severity === 'error').length === 0,
             errors
@@ -271,9 +271,9 @@ export class ConfigurationValidator implements IConfigurationValidator {
         if (!workspaceFolders || workspaceFolders.length === 0) {
             return false;
         }
-        
+
         const root = workspaceFolders[0].uri.fsPath;
-        
+
         // Check if .git directory exists
         const gitPath = path.join(root, '.git');
         return fs.existsSync(gitPath);
@@ -282,7 +282,7 @@ export class ConfigurationValidator implements IConfigurationValidator {
     // Validate configuration migration between versions
     validateConfigurationMigration(oldConfig: Record<string, any>, newConfig: Record<string, any>): { isValid: boolean; errors: ValidationError[] } {
         const errors: ValidationError[] = [];
-        
+
         // Check for removed configuration keys
         const removedKeys = Object.keys(oldConfig).filter(key => !(key in newConfig));
         if (removedKeys.length > 0) {
@@ -292,7 +292,7 @@ export class ConfigurationValidator implements IConfigurationValidator {
                 severity: 'info'
             });
         }
-        
+
         // Check for new required configuration keys
         const newRequiredKeys = Object.keys(newConfig).filter(key => !(key in oldConfig));
         if (newRequiredKeys.length > 0) {
@@ -302,7 +302,7 @@ export class ConfigurationValidator implements IConfigurationValidator {
                 severity: 'info'
             });
         }
-        
+
         return {
             isValid: true, // Migration validation is informational
             errors

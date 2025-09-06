@@ -20,7 +20,7 @@ export class EventBus implements IEventBus {
         this.loggingService = logger;
         // Enable debug logging if debug level is enabled
         this.updateDebugLogging();
-        
+
         // Subscribe to configuration changes to update debug logging
         if (this.loggingService) {
             const disposable = this.loggingService.onDidChangeConfiguration?.(() => {
@@ -31,7 +31,7 @@ export class EventBus implements IEventBus {
             }
         }
     }
-    
+
     private updateDebugLogging(): void {
         this.debugLogging = this.loggingService?.isLevelEnabled('debug') || false;
     }
@@ -40,11 +40,11 @@ export class EventBus implements IEventBus {
         if (!this.eventEmitters.has(event)) {
             const emitter = new vscode.EventEmitter<any>();
             this.eventEmitters.set(event, emitter);
-            
+
             if (this.debugLogging) {
                 this.loggingService?.debug(`EventBus: Created emitter for event '${event}'`);
             }
-            
+
             // Subscribe any registered patterns that match this new event
             for (const patternSub of this.patternSubscriptions) {
                 if (this.matchesPattern(event, patternSub.pattern)) {
@@ -69,55 +69,55 @@ export class EventBus implements IEventBus {
 
     publish(event: string, data?: any): void {
         this.logEvent(event, 'publish', data);
-        
+
         const emitter = this.getOrCreateEmitter(event);
         emitter.fire(data);
     }
 
     subscribe(event: string, handler: (data?: any) => void): vscode.Disposable {
         this.logEvent(event, 'subscribe');
-        
+
         const emitter = this.getOrCreateEmitter(event);
         const disposable = emitter.event(handler);
-        
+
         // Track handler->disposable mapping for unsubscribe
         if (!this.handlerDisposables.has(event)) {
             this.handlerDisposables.set(event, new Map());
         }
         this.handlerDisposables.get(event)!.set(handler, disposable);
-        
+
         // Update listener count
         const currentCount = this.listenerCounts.get(event) || 0;
         this.listenerCounts.set(event, currentCount + 1);
-        
+
         // Track disposables for cleanup
         this.disposables.push(disposable);
-        
+
         return disposable;
     }
 
     unsubscribe(event: string, handler: Function): void {
         this.logEvent(event, 'unsubscribe');
-        
+
         const eventHandlers = this.handlerDisposables.get(event);
         if (eventHandlers) {
             const disposable = eventHandlers.get(handler);
             if (disposable) {
                 disposable.dispose();
                 eventHandlers.delete(handler);
-                
+
                 // Remove from main disposables array
                 const index = this.disposables.indexOf(disposable);
                 if (index > -1) {
                     this.disposables.splice(index, 1);
                 }
-                
+
                 // Update listener count
                 const currentCount = this.listenerCounts.get(event) || 0;
                 if (currentCount > 0) {
                     this.listenerCounts.set(event, currentCount - 1);
                 }
-                
+
                 // Clean up empty event handler map
                 if (eventHandlers.size === 0) {
                     this.handlerDisposables.delete(event);
@@ -129,10 +129,10 @@ export class EventBus implements IEventBus {
 
     once(event: string, handler: (data?: any) => void): vscode.Disposable {
         this.logEvent(event, 'subscribe', { once: true });
-        
+
         const emitter = this.getOrCreateEmitter(event);
         let disposed = false;
-        
+
         const disposable = emitter.event((data) => {
             if (!disposed) {
                 disposed = true;
@@ -140,25 +140,25 @@ export class EventBus implements IEventBus {
                 disposable.dispose();
             }
         });
-        
+
         this.disposables.push(disposable);
         return disposable;
     }
 
     filter(event: string, predicate: (data?: any) => boolean): { event: vscode.Event<any>, dispose: () => void } {
         this.logEvent(event, 'subscribe', { filter: true });
-        
+
         const emitter = this.getOrCreateEmitter(event);
         const filteredEmitter = new vscode.EventEmitter<any>();
-        
+
         const disposable = emitter.event((data) => {
             if (predicate(data)) {
                 filteredEmitter.fire(data);
             }
         });
-        
+
         this.disposables.push(disposable);
-        
+
         // Return the filtered event stream with disposal
         return {
             event: filteredEmitter.event,
@@ -179,9 +179,9 @@ export class EventBus implements IEventBus {
         if (this.debugLogging) {
             this.loggingService?.debug(`EventBus: Subscribing to pattern '${pattern}'`);
         }
-        
+
         const disposables: vscode.Disposable[] = [];
-        
+
         // Subscribe to all existing events that match the pattern
         for (const event of this.eventEmitters.keys()) {
             if (this.matchesPattern(event, pattern)) {
@@ -189,11 +189,11 @@ export class EventBus implements IEventBus {
                 disposables.push(disposable);
             }
         }
-        
+
         // Store pattern subscription for future events
         const patternSub = { pattern, handler, disposables };
         this.patternSubscriptions.push(patternSub);
-        
+
         // Return a disposable that cleans up all pattern subscriptions
         return {
             dispose: () => {
@@ -229,20 +229,20 @@ export class EventBus implements IEventBus {
         if (this.debugLogging) {
             this.loggingService?.debug(`EventBus: Disposing ${this.eventEmitters.size} event emitters`);
         }
-        
+
         // Dispose all tracked disposables
         this.disposables.forEach(d => d.dispose());
         this.disposables.length = 0;
-        
+
         // Clear handler disposables
         this.handlerDisposables.clear();
-        
+
         // Clear listener counts
         this.listenerCounts.clear();
-        
+
         // Clear pattern subscriptions
         this.patternSubscriptions.length = 0;
-        
+
         // Dispose all event emitters
         this.eventEmitters.forEach(emitter => emitter.dispose());
         this.eventEmitters.clear();

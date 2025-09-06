@@ -2,13 +2,13 @@ import * as vscode from 'vscode';
 
 // Core services
 import { Container } from './services/Container';
-import { 
-    SERVICE_TOKENS, 
-    IContainer, 
-    CONFIG_KEYS, 
-    ILoggingService, 
-    IEventBus, 
-    ITaskStateMachine, 
+import {
+    SERVICE_TOKENS,
+    IContainer,
+    CONFIG_KEYS,
+    ILoggingService,
+    IEventBus,
+    ITaskStateMachine,
     IMessagePersistenceService,
     INotificationService,
     IConfigurationService,
@@ -80,94 +80,94 @@ let container: IContainer;
 export async function activate(context: vscode.ExtensionContext) {
     // Initialize dependency injection container
     container = new Container();
-    
+
     // Register core services
     container.registerInstance(SERVICE_TOKENS.ExtensionContext, context);
-    
+
     const outputChannel = vscode.window.createOutputChannel('NofX');
     container.registerInstance(SERVICE_TOKENS.OutputChannel, outputChannel);
-    
+
     // Register foundational services first (in dependency order)
-    container.register(SERVICE_TOKENS.EventBus, 
+    container.register(SERVICE_TOKENS.EventBus,
         (container) => new EventBus(container.resolveOptional(SERVICE_TOKENS.LoggingService)), 'singleton');
-    container.register(SERVICE_TOKENS.NotificationService, 
+    container.register(SERVICE_TOKENS.NotificationService,
         () => new NotificationService(), 'singleton');
-    
+
     // Register validation service first (no dependencies)
-    container.register(SERVICE_TOKENS.ConfigurationValidator, 
+    container.register(SERVICE_TOKENS.ConfigurationValidator,
         (container) => new ConfigurationValidator(
             container.resolveOptional(SERVICE_TOKENS.LoggingService),
             container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService)
         ), 'singleton');
-    
+
     // Register configuration service (depends on ConfigurationValidator and EventBus)
-    container.register(SERVICE_TOKENS.ConfigurationService, 
+    container.register(SERVICE_TOKENS.ConfigurationService,
         (container) => new ConfigurationService(
             container.resolve(SERVICE_TOKENS.ConfigurationValidator),
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus)
         ), 'singleton');
-    
+
     // Register LoggingService after ConfigurationService (depends on ConfigurationService)
-    container.register(SERVICE_TOKENS.LoggingService, 
+    container.register(SERVICE_TOKENS.LoggingService,
         (container) => new LoggingService(
             container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService),
             container.resolve(SERVICE_TOKENS.OutputChannel)
         ), 'singleton');
-    
+
     // Register metrics service (depends on ConfigurationService, LoggingService, EventBus)
-    container.register(SERVICE_TOKENS.MetricsService, 
+    container.register(SERVICE_TOKENS.MetricsService,
         (container) => new MetricsService(
             container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService),
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus)
         ), 'singleton');
-    container.register(SERVICE_TOKENS.ErrorHandler, 
+    container.register(SERVICE_TOKENS.ErrorHandler,
         (container) => new ErrorHandler(
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService)
         ), 'singleton');
-    
-    container.register(SERVICE_TOKENS.CommandService, 
+
+    container.register(SERVICE_TOKENS.CommandService,
         (container) => new CommandService(
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<IErrorHandler>(SERVICE_TOKENS.ErrorHandler)
         ), 'singleton');
-    
+
     // Get logging service for use in activation
     const loggingService = container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
     const errorHandler = container.resolve<IErrorHandler>(SERVICE_TOKENS.ErrorHandler);
-    
+
     // Set logging service on container for future operations
     container.setLoggingService(loggingService);
-    
+
     // Set logging service on EventBus to enable debug event logging
     const eventBus = container.resolve<IEventBus>(SERVICE_TOKENS.EventBus);
     eventBus.setLoggingService(loggingService);
-    
+
     loggingService.info('🎸 n of x Multi-Agent Orchestrator is now active!');
-    
+
     // Get workspace folder once
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    
+
     // Register WorktreeManager and AgentPersistence BEFORE WorktreeService
     if (workspaceFolder) {
         const worktreeManager = new WorktreeManager(workspaceFolder.uri.fsPath, loggingService, container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService));
         container.registerInstance(SERVICE_TOKENS.WorktreeManager, worktreeManager);
-        
+
         // Register AgentPersistence
         const agentPersistence = new AgentPersistence(workspaceFolder.uri.fsPath, loggingService);
         container.registerInstance(SERVICE_TOKENS.AgentPersistence, agentPersistence);
     }
-    
+
     // Register new services
-    container.register(SERVICE_TOKENS.TerminalManager, 
+    container.register(SERVICE_TOKENS.TerminalManager,
         (container) => new TerminalManager(
             container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService),
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus),
             container.resolve<IErrorHandler>(SERVICE_TOKENS.ErrorHandler)
         ), 'singleton');
-    container.register(SERVICE_TOKENS.WorktreeService, 
+    container.register(SERVICE_TOKENS.WorktreeService,
         (container) => new WorktreeService(
             container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService),
             container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService),
@@ -175,13 +175,13 @@ export async function activate(context: vscode.ExtensionContext) {
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<IErrorHandler>(SERVICE_TOKENS.ErrorHandler)
         ), 'singleton');
-    
+
     // Register business services
     const agentManager = new AgentManager(context, container.resolveOptional(SERVICE_TOKENS.AgentPersistence));
     container.registerInstance(SERVICE_TOKENS.AgentManager, agentManager);
-    
+
     // Register AgentLifecycleManager with callback to AgentManager
-    container.register(SERVICE_TOKENS.AgentLifecycleManager, 
+    container.register(SERVICE_TOKENS.AgentLifecycleManager,
         (container) => new AgentLifecycleManager(
             container.resolve(SERVICE_TOKENS.TerminalManager),
             container.resolve(SERVICE_TOKENS.WorktreeService),
@@ -195,7 +195,7 @@ export async function activate(context: vscode.ExtensionContext) {
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus),
             container.resolve<IErrorHandler>(SERVICE_TOKENS.ErrorHandler)
         ), 'singleton');
-    
+
     // Set the dependencies in AgentManager after registration
     agentManager.setDependencies(
         container.resolve(SERVICE_TOKENS.AgentLifecycleManager),
@@ -208,30 +208,30 @@ export async function activate(context: vscode.ExtensionContext) {
         container.resolve<IErrorHandler>(SERVICE_TOKENS.ErrorHandler),
         container.resolve<IMetricsService>(SERVICE_TOKENS.MetricsService)
     );
-    
+
     // Register new task management services
-    container.register(SERVICE_TOKENS.TaskStateMachine, 
+    container.register(SERVICE_TOKENS.TaskStateMachine,
         (container) => new TaskStateMachine(
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus),
             container.resolveOptional(SERVICE_TOKENS.TaskQueue) // Optional to avoid circular dependency during initial registration
         ), 'singleton');
-    
+
     // Register TaskDependencyManager BEFORE PriorityTaskQueue to ensure it's available
-    container.register(SERVICE_TOKENS.TaskDependencyManager, 
+    container.register(SERVICE_TOKENS.TaskDependencyManager,
         (container) => new TaskDependencyManager(
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus),
             container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService)
         ), 'singleton');
-    
-    container.register(SERVICE_TOKENS.PriorityTaskQueue, 
+
+    container.register(SERVICE_TOKENS.PriorityTaskQueue,
         (container) => new PriorityTaskQueue(
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve(SERVICE_TOKENS.TaskDependencyManager)
         ), 'singleton');
-    
-    container.register(SERVICE_TOKENS.CapabilityMatcher, 
+
+    container.register(SERVICE_TOKENS.CapabilityMatcher,
         (container) => new CapabilityMatcher(
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService)
@@ -251,50 +251,50 @@ export async function activate(context: vscode.ExtensionContext) {
         container.resolve<IMetricsService>(SERVICE_TOKENS.MetricsService)
     );
     container.registerInstance(SERVICE_TOKENS.TaskQueue, taskQueue);
-    
+
     // Inject TaskQueue into TaskStateMachine for dependency validation
     const taskStateMachine = container.resolve<ITaskStateMachine>(SERVICE_TOKENS.TaskStateMachine);
     taskStateMachine.setTaskReader(taskQueue);
-    
+
     // Check if we're in test mode to skip auto behaviors and noisy services
     const config = container.resolve<ConfigurationService>(SERVICE_TOKENS.ConfigurationService);
     const isTestMode = config.get(CONFIG_KEYS.TEST_MODE, false);
-    
+
     if (isTestMode) {
         loggingService.info('🧪 Test mode enabled - skipping auto behaviors and noisy services');
-        
+
         // Optionally disable metrics in test mode
         await config.update(CONFIG_KEYS.ENABLE_METRICS, false, vscode.ConfigurationTarget.Global);
     }
-    
+
     // Initialize agent manager (this will check for saved agents)
     await agentManager.initialize();
-    
+
     // Migrate existing tasks to normalize new fields
     await migrateExistingTasks(taskQueue, loggingService);
-    
+
     // Set initial context for UI
     const commandService = container.resolve<ICommandService>(SERVICE_TOKENS.CommandService);
     await commandService.execute('setContext', 'nofx.hasAgents', agentManager.getActiveAgents().length > 0);
-    
+
     // Register orchestration services
-    container.register(SERVICE_TOKENS.ConnectionPoolService, 
+    container.register(SERVICE_TOKENS.ConnectionPoolService,
         (container) => new ConnectionPoolService(
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus),
             container.resolve<IErrorHandler>(SERVICE_TOKENS.ErrorHandler),
             container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService)
         ), 'singleton');
-    
-    container.register(SERVICE_TOKENS.MessageValidator, 
+
+    container.register(SERVICE_TOKENS.MessageValidator,
         (container) => new MessageValidator(
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus)
         ), 'singleton');
-    
+
     // Register MessagePersistenceService with workspace path or use in-memory fallback
     let messagePersistence: IMessagePersistenceService;
-    
+
     if (workspaceFolder) {
         messagePersistence = new MessagePersistenceService(
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
@@ -309,10 +309,10 @@ export async function activate(context: vscode.ExtensionContext) {
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus)
         );
     }
-    
+
     container.registerInstance(SERVICE_TOKENS.MessagePersistenceService, messagePersistence);
-    
-    container.register(SERVICE_TOKENS.MessageRouter, 
+
+    container.register(SERVICE_TOKENS.MessageRouter,
         (container) => new MessageRouter(
             container.resolve(SERVICE_TOKENS.ConnectionPoolService),
             container.resolve(SERVICE_TOKENS.MessagePersistenceService),
@@ -322,7 +322,7 @@ export async function activate(context: vscode.ExtensionContext) {
             container.resolve(SERVICE_TOKENS.AgentManager),
             container.resolve(SERVICE_TOKENS.TaskQueue)
         ), 'singleton');
-    
+
     // Start orchestration server with new services (skip in test mode)
     let orchestrationServer: OrchestrationServer | undefined;
     if (!isTestMode) {
@@ -337,14 +337,14 @@ export async function activate(context: vscode.ExtensionContext) {
             container.resolve(SERVICE_TOKENS.MessagePersistenceService),
             container.resolve<IMetricsService>(SERVICE_TOKENS.MetricsService)
         );
-        
+
         // Wrap orchestration server start with error handling for port conflicts
         try {
             await orchestrationServer.start();
         } catch (error: any) {
             const notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
             loggingService.error('Failed to start orchestration server', error);
-            
+
             if (error.code === 'EADDRINUSE') {
                 notificationService.showWarning(
                     'NofX orchestration server could not start on port 7777 (port already in use). ' +
@@ -355,11 +355,11 @@ export async function activate(context: vscode.ExtensionContext) {
                     `NofX orchestration server could not start: ${error.message}. Some features may be unavailable.`
                 );
             }
-            
+
             // Continue activation without failing - other features can still work
             orchestrationServer = undefined;
         }
-        
+
         if (orchestrationServer) {
             container.registerInstance(SERVICE_TOKENS.OrchestrationServer, orchestrationServer);
         } else {
@@ -382,24 +382,24 @@ export async function activate(context: vscode.ExtensionContext) {
         };
         container.registerInstance(SERVICE_TOKENS.OrchestrationServer, mockOrchestrationServer);
     }
-    
+
     // Register UI services
-    container.register(SERVICE_TOKENS.UIStateManager, 
+    container.register(SERVICE_TOKENS.UIStateManager,
         (container) => new UIStateManager(
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus),
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve(SERVICE_TOKENS.AgentManager), // Now implements IAgentReader
             container.resolve(SERVICE_TOKENS.TaskQueue)     // Now implements ITaskReader
         ), 'singleton');
-    
-    container.register(SERVICE_TOKENS.TreeStateManager, 
+
+    container.register(SERVICE_TOKENS.TreeStateManager,
         (container) => new TreeStateManager(
             container.resolve(SERVICE_TOKENS.UIStateManager),
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus),
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService)
         ), 'singleton');
-    
-    container.register(SERVICE_TOKENS.ConductorViewModel, 
+
+    container.register(SERVICE_TOKENS.ConductorViewModel,
         (container) => new ConductorViewModel(
             container.resolve(SERVICE_TOKENS.UIStateManager),
             container.resolve<ICommandService>(SERVICE_TOKENS.CommandService),
@@ -407,8 +407,8 @@ export async function activate(context: vscode.ExtensionContext) {
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService)
         ), 'singleton');
-    
-    container.register(SERVICE_TOKENS.DashboardViewModel, 
+
+    container.register(SERVICE_TOKENS.DashboardViewModel,
         (container) => new DashboardViewModel(
             container.resolve(SERVICE_TOKENS.UIStateManager),
             container.resolve(SERVICE_TOKENS.OrchestrationServer),
@@ -420,13 +420,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register message flow dashboard factory for on-demand creation
     // Dashboard will be created via 'nofx.openMessageFlow' command when needed
-    container.register(SERVICE_TOKENS.MessageFlowDashboard, 
+    container.register(SERVICE_TOKENS.MessageFlowDashboard,
         (container) => MessageFlowDashboard.create(
             context,
             container.resolve(SERVICE_TOKENS.DashboardViewModel),
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService)
         ), 'transient');
-    
+
     // Message handling is now done through MessageRouter
 
     // Register tree data providers for sidebar views
@@ -439,9 +439,9 @@ export async function activate(context: vscode.ExtensionContext) {
         container.resolve(SERVICE_TOKENS.UIStateManager),
         container
     );
-    
+
     vscode.window.registerTreeDataProvider('nofx.dev', nofxDevProvider);
-    
+
     // Register task tree with drag and drop support
     const taskTreeView = vscode.window.createTreeView('nofx.tasks', {
         treeDataProvider: taskProvider,
@@ -449,16 +449,16 @@ export async function activate(context: vscode.ExtensionContext) {
         showCollapseAll: true
     });
     context.subscriptions.push(taskTreeView);
-    
+
     const agentTreeView = vscode.window.createTreeView('nofx.agents', {
         treeDataProvider: agentProvider,
         showCollapseAll: true
     });
-    
+
     // Create TreeViewHost for the agents tree view
     const agentTreeViewHost = TreeViewHost.create(agentTreeView, agentProvider, loggingService);
     container.registerInstance(SERVICE_TOKENS.AgentTreeViewHost, agentTreeViewHost);
-    
+
     // Hook into expand/collapse events to update TreeStateManager
     const treeStateManager = container.resolve<ITreeStateManager>(SERVICE_TOKENS.TreeStateManager);
     context.subscriptions.push(
@@ -475,9 +475,9 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         })
     );
-    
+
     context.subscriptions.push(agentTreeView);
-    
+
     // Register NofX terminal panel provider
     const terminalProvider = new NofxTerminalProvider(context.extensionUri, agentManager);
     context.subscriptions.push(
@@ -491,7 +491,7 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         )
     );
-    
+
     // Update context when agents change
     agentManager.onAgentUpdate(() => {
         const hasAgents = agentManager.getActiveAgents().length > 0;
@@ -502,48 +502,48 @@ export async function activate(context: vscode.ExtensionContext) {
     const agentCommands = new AgentCommands(container);
     agentCommands.register();
     context.subscriptions.push({ dispose: () => agentCommands.dispose() });
-    
+
     const taskCommands = new TaskCommands(container);
     taskCommands.register();
     context.subscriptions.push({ dispose: () => taskCommands.dispose() });
-    
+
     const conductorCommands = new ConductorCommands(container);
     conductorCommands.setAgentProvider(agentProvider);
     conductorCommands.register();
     context.subscriptions.push({ dispose: () => conductorCommands.dispose() });
-    
+
     const orchestrationCommands = new OrchestrationCommands(container);
     if (orchestrationServer) { orchestrationCommands.setOrchestrationServer(orchestrationServer); }
     orchestrationCommands.register();
     context.subscriptions.push({ dispose: () => orchestrationCommands.dispose() });
-    
+
     const persistenceCommands = new PersistenceCommands(container);
     persistenceCommands.register();
     context.subscriptions.push({ dispose: () => persistenceCommands.dispose() });
-    
+
     const templateCommands = new TemplateCommands(container);
     templateCommands.register();
     context.subscriptions.push({ dispose: () => templateCommands.dispose() });
-    
+
     const worktreeCommands = new WorktreeCommands(container);
     worktreeCommands.register();
     context.subscriptions.push({ dispose: () => worktreeCommands.dispose() });
-    
+
     const utilityCommands = new UtilityCommands(container);
     utilityCommands.register();
     context.subscriptions.push({ dispose: () => utilityCommands.dispose() });
-    
+
     // Register metrics commands
     const metricsCommands = new MetricsCommands(container);
     metricsCommands.register();
-    
+
     // Ensure MetricsCommands are disposed on deactivation
     context.subscriptions.push({ dispose: () => metricsCommands.dispose() });
-    
+
     // Status Bar Item (skip in test mode to reduce noise)
     let statusBarItem: vscode.StatusBarItem | undefined;
     let updateStatusBar: (() => void) | undefined;
-    
+
     if (!isTestMode) {
         statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
         statusBarItem.text = '$(organization) NofX';
@@ -557,7 +557,7 @@ export async function activate(context: vscode.ExtensionContext) {
         updateStatusBar = () => {
             const taskStats = taskQueue.getTaskStats();
             const agentStats = agentManager.getAgentStats();
-            
+
             let statusText = '$(organization) NofX';
             if (taskStats.total > 0) {
                 statusText += ` | 📋 ${taskStats.ready} ready, ${taskStats.inProgress} active`;
@@ -568,7 +568,7 @@ export async function activate(context: vscode.ExtensionContext) {
             if (agentStats.total > 0) {
                 statusText += ` | 🤖 ${agentStats.idle} idle, ${agentStats.working} working`;
             }
-            
+
             statusBarItem!.text = statusText;
         };
 
@@ -584,10 +584,10 @@ export async function activate(context: vscode.ExtensionContext) {
             eventBus.subscribe(DOMAIN_EVENTS.AGENT_REMOVED, updateStatusBar),
             eventBus.subscribe(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, updateStatusBar)
         ];
-        
+
         // Add all event subscriptions to context for disposal
         context.subscriptions.push(...eventSubscriptions);
-        
+
         // Initial update
         updateStatusBar();
     } else {
@@ -621,7 +621,7 @@ export async function activate(context: vscode.ExtensionContext) {
     if (!validationResult.isValid) {
         const errorMessages = validationResult.errors.map((e: ValidationError) => `${e.field}: ${e.message}`).join('; ');
         loggingService.warn('Configuration validation issues detected', { errors: validationResult.errors });
-        
+
         // Show notification for critical errors
         const criticalErrors = validationResult.errors.filter((e: ValidationError) => e.severity === 'error');
         if (criticalErrors.length > 0) {
@@ -630,7 +630,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 `Configuration validation failed: ${errorMessages}. Some features may not work correctly.`
             );
         }
-        
+
         // Show notification for warnings
         const warnings = validationResult.errors.filter((e: ValidationError) => e.severity === 'warning');
         if (warnings.length > 0) {
@@ -740,45 +740,45 @@ export async function deactivate(): Promise<void> {
     if (loggingService) {
         loggingService.info('NofX extension deactivating...');
     }
-    
+
     // Stop orchestration server and services
     const orchestrationServer = container?.resolveOptional<OrchestrationServer>(SERVICE_TOKENS.OrchestrationServer);
     if (orchestrationServer) {
         await orchestrationServer.stop();
     }
-    
+
     // Dispose orchestration services
     const connectionPool = container?.resolveOptional(SERVICE_TOKENS.ConnectionPoolService);
     if (connectionPool && typeof connectionPool === 'object' && connectionPool !== null && 'dispose' in connectionPool) {
         (connectionPool as any).dispose();
     }
-    
+
     const messageRouter = container?.resolveOptional(SERVICE_TOKENS.MessageRouter);
     if (messageRouter && typeof messageRouter === 'object' && messageRouter !== null && 'dispose' in messageRouter) {
         (messageRouter as any).dispose();
     }
-    
+
     const messageValidator = container?.resolveOptional(SERVICE_TOKENS.MessageValidator);
     if (messageValidator && typeof messageValidator === 'object' && messageValidator !== null && 'dispose' in messageValidator) {
         (messageValidator as any).dispose();
     }
-    
+
     const messagePersistence = container?.resolveOptional(SERVICE_TOKENS.MessagePersistenceService);
     if (messagePersistence && typeof messagePersistence === 'object' && messagePersistence !== null && 'dispose' in messagePersistence) {
         (messagePersistence as any).dispose();
     }
-    
+
     // Dispose any active MessageFlowDashboard instances
     const messageFlowDashboard = container?.resolveOptional(SERVICE_TOKENS.MessageFlowDashboard);
     if (messageFlowDashboard && typeof messageFlowDashboard === 'object' && messageFlowDashboard !== null && 'dispose' in messageFlowDashboard) {
         (messageFlowDashboard as any).dispose();
     }
-    
+
     // Log deactivation before disposing container
     if (loggingService) {
         loggingService.info('NofX extension deactivated');
     }
-    
+
     // Dispose container and all services
     if (container) {
         // Get agent manager and dispose it properly
@@ -786,7 +786,7 @@ export async function deactivate(): Promise<void> {
         if (agentManager && typeof agentManager === 'object' && agentManager !== null && 'dispose' in agentManager) {
             await (agentManager as any).dispose();
         }
-        
+
         await container.dispose();
     }
 }

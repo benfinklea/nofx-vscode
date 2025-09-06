@@ -12,10 +12,10 @@ export class WebviewHost implements IWebviewHost {
         this.panel = panel;
         this.loggingService = loggingService;
         this.nonce = this.generateNonce();
-        
-        this.loggingService?.debug('WebviewHost: Created for panel', { 
+
+        this.loggingService?.debug('WebviewHost: Created for panel', {
             viewType: panel.viewType,
-            title: panel.title 
+            title: panel.title
         });
     }
 
@@ -26,9 +26,9 @@ export class WebviewHost implements IWebviewHost {
     postMessage(data: any): Thenable<boolean> {
         try {
             const result = this.panel.webview.postMessage(data);
-            this.loggingService?.debug('WebviewHost: Posted message', { 
+            this.loggingService?.debug('WebviewHost: Posted message', {
                 command: data.command,
-                hasData: !!data.data 
+                hasData: !!data.data
             });
             return result;
         } catch (error) {
@@ -40,8 +40,8 @@ export class WebviewHost implements IWebviewHost {
     setHtml(content: string): void {
         try {
             this.panel.webview.html = content;
-            this.loggingService?.debug('WebviewHost: Set HTML content', { 
-                contentLength: content.length 
+            this.loggingService?.debug('WebviewHost: Set HTML content', {
+                contentLength: content.length
             });
         } catch (error) {
             this.loggingService?.error('WebviewHost: Error setting HTML', error);
@@ -53,8 +53,8 @@ export class WebviewHost implements IWebviewHost {
         const disposable = this.panel.webview.onDidReceiveMessage(
             (message) => {
                 try {
-                    this.loggingService?.debug('WebviewHost: Received message', { 
-                        command: message.command 
+                    this.loggingService?.debug('WebviewHost: Received message', {
+                        command: message.command
                     });
                     handler(message);
                 } catch (error) {
@@ -62,7 +62,7 @@ export class WebviewHost implements IWebviewHost {
                 }
             }
         );
-        
+
         this.subscriptions.push(disposable);
         return disposable;
     }
@@ -124,11 +124,11 @@ export class WebviewHost implements IWebviewHost {
 
     dispose(): void {
         this.loggingService?.debug('WebviewHost: Disposing');
-        
+
         // Dispose all subscriptions
         this.subscriptions.forEach(sub => sub.dispose());
         this.subscriptions = [];
-        
+
         // Dispose the panel
         this.panel.dispose();
     }

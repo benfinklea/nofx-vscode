@@ -56,7 +56,7 @@ describe('Error Handling', () => {
         };
         loggingService = new LoggingService(configService, mainChannel as any);
         eventBus = new EventBus();
-        
+
         const mockNotificationService = {
             showInformation: jest.fn(),
             showWarning: jest.fn(),
@@ -70,7 +70,7 @@ describe('Error Handling', () => {
             confirm: jest.fn(),
             confirmDestructive: jest.fn()
         };
-        
+
         errorHandler = new ErrorHandler(loggingService, mockNotificationService);
         configValidator = new ConfigurationValidator(loggingService, mockNotificationService);
 
@@ -111,11 +111,11 @@ describe('Error Handling', () => {
     describe('Configuration Validation', () => {
         test('should validate required configuration fields', async () => {
             const result = configValidator.validateConfiguration({});
-            
+
             // Check that validation returns a result object
             expect(result).toBeDefined();
             expect(result).toHaveProperty('isValid');
-            
+
             // If there are errors, they should be in an array
             if (result.errors) {
                 expect(Array.isArray(result.errors)).toBe(true);
@@ -151,7 +151,7 @@ describe('Error Handling', () => {
             agentManager.spawnAgent.mockRejectedValue(new Error('Spawn failed'));
 
             const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
-            
+
             try {
                 await vscode.commands.executeCommand('nofx.addAgent');
             } catch (error) {
@@ -170,7 +170,7 @@ describe('Error Handling', () => {
             });
 
             const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
-            
+
             try {
                 await vscode.commands.executeCommand('nofx.createTask');
             } catch (error) {
@@ -182,9 +182,9 @@ describe('Error Handling', () => {
 
         test('should handle missing workspace gracefully', async () => {
             clearMockWorkspace();
-            
+
             const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
-            
+
             try {
                 await vscode.commands.executeCommand('nofx.addAgent');
             } catch (error) {
@@ -194,7 +194,7 @@ describe('Error Handling', () => {
             expect(errorSpy).toHaveBeenCalledWith(
                 expect.stringContaining('workspace')
             );
-            
+
             // Restore workspace for other tests
             setupMockWorkspace();
         });
@@ -203,7 +203,7 @@ describe('Error Handling', () => {
     describe('Service Error Recovery', () => {
         test('should recover from EventBus errors', () => {
             const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-            
+
             // Simulate event handler error
             eventBus.subscribe('test-event', () => {
                 throw new Error('Event handler error');
@@ -211,7 +211,7 @@ describe('Error Handling', () => {
 
             // Should not throw - EventBus should catch and log
             expect(() => eventBus.publish('test-event', {})).not.toThrow();
-            
+
             expect(errorSpy).toHaveBeenCalled();
             errorSpy.mockRestore();
         });
@@ -223,7 +223,7 @@ describe('Error Handling', () => {
 
         test('should handle container resolution failures', () => {
             expect(() => container.resolve('NonExistentService')).toThrow();
-            
+
             // Should provide helpful error message
             try {
                 container.resolve('NonExistentService');
@@ -238,7 +238,7 @@ describe('Error Handling', () => {
             // Get a free port and start a simple server on it
             const port = await getPort();
             const server = require('http').createServer();
-            
+
             // Start server on the port
             await new Promise<void>((resolve) => {
                 server.listen(port, () => resolve());
@@ -246,7 +246,7 @@ describe('Error Handling', () => {
 
             // Now try to start OrchestrationServer on the same port
             const orchestrationServer = new OrchestrationServer(port, loggingService, eventBus);
-            
+
             try {
                 await orchestrationServer.start();
             } catch (error: any) {
@@ -266,7 +266,7 @@ describe('Error Handling', () => {
             } as any;
 
             const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-            
+
             // Should handle send errors gracefully
             try {
                 mockClient.send(JSON.stringify({ type: 'test' }));
@@ -281,7 +281,7 @@ describe('Error Handling', () => {
     describe('File System Error Handling', () => {
         test('should handle missing template files', async () => {
             const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
-            
+
             try {
                 await vscode.commands.executeCommand('nofx.browseAgentTemplates');
             } catch (error) {
@@ -294,7 +294,7 @@ describe('Error Handling', () => {
         test('should handle permission errors', () => {
             const errorHandler = container.resolve<ErrorHandler>(SERVICE_TOKENS.ErrorHandler);
             errorHandler.handleError(new Error('EACCES: permission denied'));
-            
+
             // handleError doesn't return a value, it just handles the error
         });
     });
@@ -320,7 +320,7 @@ describe('Error Handling', () => {
 
         test('should provide fallback values for missing configuration', () => {
             const config = new ConfigurationService();
-            
+
             // Should return default values
             expect(config.get('orchestrationPort', 7777)).toBe(7777);
             expect(config.get('enableMetrics', true)).toBe(true);
@@ -331,7 +331,7 @@ describe('Error Handling', () => {
     describe('User-Friendly Error Messages', () => {
         test('should show user-friendly messages for common errors', async () => {
             const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
-            
+
             const commonErrors = [
                 { error: new Error('ENOENT'), expectedMessage: 'not found' },
                 { error: new Error('EACCES'), expectedMessage: 'permission' },
@@ -341,7 +341,7 @@ describe('Error Handling', () => {
 
             for (const { error, expectedMessage } of commonErrors) {
                 errorHandler.handleError(error);
-                
+
                 if (errorSpy.mock.calls.length > 0) {
                     const lastCall = errorSpy.mock.calls[errorSpy.mock.calls.length - 1];
                     expect(lastCall[0].toLowerCase()).toContain(expectedMessage.toLowerCase());
@@ -351,9 +351,9 @@ describe('Error Handling', () => {
 
         test('should provide actionable error messages', () => {
             const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
-            
+
             errorHandler.handleError(new Error('Claude CLI not found at /usr/local/bin/claude'));
-            
+
             if (errorSpy.mock.calls.length > 0) {
                 const message = errorSpy.mock.calls[0][0];
                 // Should suggest how to fix the issue

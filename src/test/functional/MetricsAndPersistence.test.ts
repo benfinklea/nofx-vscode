@@ -36,7 +36,7 @@ describe('Metrics and Persistence', () => {
         // Setup and activate extension
         context = await setupExtension();
         setupMockWorkspace();
-        
+
         // Create temp directory for persistence testing
         tempDir = path.join(__dirname, 'test-persistence-' + Date.now());
         fs.mkdirSync(tempDir, { recursive: true });
@@ -103,7 +103,7 @@ describe('Metrics and Persistence', () => {
         if (fs.existsSync(tempDir)) {
             fs.rmSync(tempDir, { recursive: true, force: true });
         }
-        
+
         clearMockWorkspace();
         await teardownExtension();
     });
@@ -172,7 +172,7 @@ describe('Metrics and Persistence', () => {
             resolvedMetricsService.recordHistogram('test.histogram', 150);
 
             const metrics = resolvedMetricsService.getMetrics();
-            
+
             expect(metrics['test.counter']).toBe(5);
             expect(metrics['test.gauge']).toBe(100);
             expect(metrics['test.histogram']).toBeDefined();
@@ -182,7 +182,7 @@ describe('Metrics and Persistence', () => {
             // Record some metrics
             const resolvedMetricsService = container.resolve(SERVICE_TOKENS.MetricsService);
             resolvedMetricsService.incrementCounter('export.test', 10);
-            
+
             const saveSpy = jest.spyOn(vscode.workspace, 'saveAll').mockResolvedValue(true);
             const showSaveSpy = jest.spyOn(vscode.window, 'showSaveDialog').mockResolvedValue(
                 vscode.Uri.file(path.join(tempDir, 'metrics.json'))
@@ -191,7 +191,7 @@ describe('Metrics and Persistence', () => {
             await vscode.commands.executeCommand('nofx.exportMetrics');
 
             expect(showSaveSpy).toHaveBeenCalled();
-            
+
             // Check if metrics file was created (in actual implementation)
             const expectedPath = path.join(tempDir, 'metrics.json');
             if (fs.existsSync(expectedPath)) {
@@ -204,7 +204,7 @@ describe('Metrics and Persistence', () => {
             // Record some metrics
             const resolvedMetricsService = container.resolve(SERVICE_TOKENS.MetricsService);
             resolvedMetricsService.incrementCounter('reset.test', 5);
-            
+
             const beforeReset = resolvedMetricsService.getMetrics();
             expect(beforeReset['reset.test']).toBe(5);
 
@@ -217,11 +217,11 @@ describe('Metrics and Persistence', () => {
         test('should handle metrics toggle command', async () => {
             const resolvedMetricsService = container.resolve(SERVICE_TOKENS.MetricsService);
             const isEnabled = resolvedMetricsService.isEnabled();
-            
+
             await vscode.commands.executeCommand('nofx.toggleMetrics');
-            
+
             expect(resolvedMetricsService.isEnabled()).toBe(!isEnabled);
-            
+
             // Toggle back
             await vscode.commands.executeCommand('nofx.toggleMetrics');
             expect(resolvedMetricsService.isEnabled()).toBe(isEnabled);
@@ -277,9 +277,9 @@ describe('Metrics and Persistence', () => {
             } as any]);
 
             const infoSpy = jest.spyOn(vscode.window, 'showInformationMessage');
-            
+
             await vscode.commands.executeCommand('nofx.restoreAgents');
-            
+
             expect(infoSpy).toHaveBeenCalledWith(
                 expect.stringContaining('restored')
             );
@@ -362,7 +362,7 @@ describe('Metrics and Persistence', () => {
         test('should handle message limits', async () => {
             const resolvedMessagePersistence = container.resolve(SERVICE_TOKENS.MessagePersistenceService);
             const inMemoryService = resolvedMessagePersistence as InMemoryMessagePersistenceService;
-            
+
             // Add many messages (assuming default limit is 1000)
             for (let i = 0; i < 1100; i++) {
                 await inMemoryService.saveMessage({
@@ -403,9 +403,9 @@ describe('Metrics and Persistence', () => {
 
         test('should archive old sessions', async () => {
             const infoSpy = jest.spyOn(vscode.window, 'showInformationMessage');
-            
+
             await vscode.commands.executeCommand('nofx.archiveSessions');
-            
+
             expect(infoSpy).toHaveBeenCalledWith(
                 expect.stringContaining('archived')
             );
@@ -416,14 +416,14 @@ describe('Metrics and Persistence', () => {
         test('should track operation latencies', async () => {
             const resolvedMetricsService = container.resolve(SERVICE_TOKENS.MetricsService);
             const histogramSpy = jest.spyOn(resolvedMetricsService, 'recordHistogram');
-            
+
             // Simulate timed operation
             const startTime = Date.now();
             await new Promise(resolve => setTimeout(resolve, 10));
             const duration = Date.now() - startTime;
-            
+
             resolvedMetricsService.recordHistogram('operation.latency', duration);
-            
+
             expect(histogramSpy).toHaveBeenCalledWith('operation.latency', expect.any(Number));
         });
 
@@ -438,7 +438,7 @@ describe('Metrics and Persistence', () => {
             } as any);
 
             await vscode.commands.executeCommand('nofx.showMetricsDashboard');
-            
+
             expect(panelSpy).toHaveBeenCalledWith(
                 'nofxMetrics',
                 expect.any(String),

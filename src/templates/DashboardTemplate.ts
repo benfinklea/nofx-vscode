@@ -376,7 +376,7 @@ export class DashboardTemplate {
 
     private generateSourceOptions(connections: any[]): string {
         const sources = new Set(connections.map(conn => conn.name));
-        return Array.from(sources).map(source => 
+        return Array.from(sources).map(source =>
             `<option value="${source}">${source}</option>`
         ).join('');
     }

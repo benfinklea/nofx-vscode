@@ -65,7 +65,7 @@ export class EnhancedConductorPanel {
             viewModel,
             loggingService
         );
-        
+
         return EnhancedConductorPanel.currentPanel;
     }
 
@@ -91,13 +91,13 @@ export class EnhancedConductorPanel {
         if (this.disposed) {
             return;
         }
-        
+
         this.disposed = true;
         EnhancedConductorPanel.currentPanel = undefined;
-        
+
         // Dispose panel binder (handles all subscriptions)
         this.panelBinder.dispose();
-        
+
         // Dispose webview host
         this.webviewHost.dispose();
     }

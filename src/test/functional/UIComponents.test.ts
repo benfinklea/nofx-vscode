@@ -66,7 +66,7 @@ describe('UI Components', () => {
         // Create tree providers
         const treeStateManager = new TreeStateManager({} as any, eventBus, loggingService);
         const uiStateManager = new UIStateManager(eventBus, loggingService, agentManager, taskQueue);
-        
+
         agentTreeProvider = new AgentTreeProvider(treeStateManager, uiStateManager);
         taskTreeProvider = new TaskTreeProvider(uiStateManager, container);
     });
@@ -129,7 +129,7 @@ describe('UI Components', () => {
 
         test('should refresh tree when agents change', async () => {
             const refreshSpy = jest.spyOn(agentTreeProvider, 'refresh');
-            
+
             // Simulate agent change event
             eventBus.publish(DOMAIN_EVENTS.AGENT_CREATED, { id: 'agent1' });
 
@@ -267,7 +267,7 @@ describe('UI Components', () => {
     describe('Webviews', () => {
         test('should create conductor webview', async () => {
             const createWebviewSpy = jest.spyOn(vscode.window, 'createWebviewPanel');
-            
+
             await vscode.commands.executeCommand('nofx.openConductorChat');
 
             expect(createWebviewSpy).toHaveBeenCalledWith(
@@ -283,7 +283,7 @@ describe('UI Components', () => {
 
         test('should create message flow dashboard', async () => {
             const createWebviewSpy = jest.spyOn(vscode.window, 'createWebviewPanel');
-            
+
             await vscode.commands.executeCommand('nofx.openMessageFlow');
 
             expect(createWebviewSpy).toHaveBeenCalledWith(
@@ -302,7 +302,7 @@ describe('UI Components', () => {
                 dispose: jest.fn(),
                 onDidDispose: jest.fn()
             };
-            
+
             jest.spyOn(vscode.window, 'createWebviewPanel').mockReturnValue(mockWebview as any);
 
             await vscode.commands.executeCommand('nofx.openConductorChat');

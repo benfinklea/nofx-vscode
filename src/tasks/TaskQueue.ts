@@ -16,7 +16,7 @@ import { priorityToNumeric } from './priority';
 
 /**
  * TaskQueue manages task lifecycle and assignment.
- * 
+ *
  * Queue Behavior:
  * - Tasks in 'ready' and 'validated' states are queued in the priority queue
  * - 'validated' tasks are queued to provide visibility and proper ordering
@@ -61,7 +61,7 @@ export class TaskQueue implements ITaskReader {
         this.configService = configService;
         this.taskStateMachine = taskStateMachine;
         this.priorityQueue = priorityQueue;
-        
+
         // If we have both priorityQueue and taskStateMachine, inject the state machine
         if (this.priorityQueue && this.taskStateMachine && 'taskStateMachine' in this.priorityQueue) {
             (this.priorityQueue as any).taskStateMachine = this.taskStateMachine;
@@ -69,7 +69,7 @@ export class TaskQueue implements ITaskReader {
         this.capabilityMatcher = capabilityMatcher;
         this.dependencyManager = dependencyManager;
         this.metricsService = metricsService;
-        
+
         // Auto-assign tasks when agents become available
         this.agentManager.onAgentUpdate(() => {
             this.tryAssignTasks();
@@ -112,7 +112,7 @@ export class TaskQueue implements ITaskReader {
                 if (this.dependencyManager) {
                     const allTasks = this.getTasks();
                     const blockedTasks = allTasks.filter(task => task.status === 'blocked');
-                    
+
                     for (const blockedTask of blockedTasks) {
                         // Re-validate dependencies for blocked tasks
                         const depErrors = this.dependencyManager.validateDependencies(blockedTask, allTasks);
@@ -134,16 +134,16 @@ export class TaskQueue implements ITaskReader {
 
     addTask(config: TaskConfig): Task {
         const taskId = `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
+
         this.loggingService?.debug(`Creating task ${taskId}`);
-        this.loggingService?.debug(`Config:`, config);
-        
+        this.loggingService?.debug('Config:', config);
+
         // Record task creation metrics
-        this.metricsService?.incrementCounter('tasks_created', { 
+        this.metricsService?.incrementCounter('tasks_created', {
             priority: config.priority || 'medium',
             hasDependencies: (config.dependsOn && config.dependsOn.length > 0) ? 'true' : 'false'
         });
-        
+
         const task: Task = {
             id: taskId,
             title: config.title,
@@ -165,13 +165,13 @@ export class TaskQueue implements ITaskReader {
         // Validate task configuration
         const validationErrors = this.validateTask(config);
         if (validationErrors.length > 0) {
-            this.loggingService?.error(`Task validation failed:`, validationErrors);
+            this.loggingService?.error('Task validation failed:', validationErrors);
             throw new Error(`Task validation failed: ${validationErrors.map(e => e.message).join(', ')}`);
         }
 
         this.tasks.set(taskId, task);
         this.loggingService?.debug(`Task added to map. Total tasks: ${this.tasks.size}`);
-        
+
         // Add dependencies to dependency manager and validate existence
         if (this.dependencyManager) {
             // Validate dependency existence
@@ -185,13 +185,13 @@ export class TaskQueue implements ITaskReader {
                     if (this.taskStateMachine) {
                         const validationErrors = this.taskStateMachine.transition(task, 'validated');
                         if (validationErrors.length > 0) {
-                            this.loggingService?.error(`State transition to validated failed:`, validationErrors);
+                            this.loggingService?.error('State transition to validated failed:', validationErrors);
                             throw new Error(`State transition failed: ${validationErrors.map(e => e.message).join(', ')}`);
                         }
-                        
+
                         const blockedErrors = this.taskStateMachine.transition(task, 'blocked');
                         if (blockedErrors.length > 0) {
-                            this.loggingService?.error(`State transition to blocked failed:`, blockedErrors);
+                            this.loggingService?.error('State transition to blocked failed:', blockedErrors);
                             throw new Error(`State transition failed: ${blockedErrors.map(e => e.message).join(', ')}`);
                         }
                     } else {
@@ -199,12 +199,12 @@ export class TaskQueue implements ITaskReader {
                     }
                     // Do not enqueue blocked tasks
                     this.loggingService?.info(`Task ${taskId} blocked due to dependency errors - returning early without further transitions`);
-                    
+
                     // Publish task.created event before early return
                     if (this.eventBus) {
                         safePublish(this.eventBus, this.loggingService, DOMAIN_EVENTS.TASK_CREATED, { taskId, task });
                     }
-                    
+
                     this._onTaskUpdate.fire();
                     return task;
                 }
@@ -223,13 +223,13 @@ export class TaskQueue implements ITaskReader {
                 }
             }
         }
-        
+
         // Use state machine to transition through states
         if (this.taskStateMachine) {
             // Transition to validated
             const validationErrors = this.taskStateMachine.transition(task, 'validated');
             if (validationErrors.length > 0) {
-                this.loggingService?.error(`State transition failed:`, validationErrors);
+                this.loggingService?.error('State transition failed:', validationErrors);
                 throw new Error(`State transition failed: ${validationErrors.map(e => e.message).join(', ')}`);
             }
 
@@ -242,12 +242,12 @@ export class TaskQueue implements ITaskReader {
                     task.conflictsWith = conflicts;
                     task.blockedBy = conflicts;
                     this.taskStateMachine.transition(task, 'blocked');
-                    this.loggingService?.warn(`Task blocked due to conflicts:`, conflicts);
+                    this.loggingService?.warn('Task blocked due to conflicts:', conflicts);
                 } else {
                     // Let state machine handle readiness validation (including dependency completion)
                     const readinessErrors = this.taskStateMachine.transition(task, 'ready');
                     if (readinessErrors.length > 0) {
-                        this.loggingService?.warn(`Task readiness transition failed:`, readinessErrors);
+                        this.loggingService?.warn('Task readiness transition failed:', readinessErrors);
                         // Set blockedBy to dependencies for UI visibility
                         task.blockedBy = task.dependsOn || [];
                         // Publish waiting event for observability
@@ -258,7 +258,7 @@ export class TaskQueue implements ITaskReader {
                 // Let state machine handle readiness validation
                 const readinessErrors = this.taskStateMachine.transition(task, 'ready');
                 if (readinessErrors.length > 0) {
-                    this.loggingService?.warn(`Task readiness transition failed:`, readinessErrors);
+                    this.loggingService?.warn('Task readiness transition failed:', readinessErrors);
                     // Set blockedBy to dependencies for UI visibility
                     task.blockedBy = task.dependsOn || [];
                     // Publish waiting event for observability
@@ -271,7 +271,7 @@ export class TaskQueue implements ITaskReader {
         if ((task.status === 'ready' || task.status === 'validated') && this.priorityQueue) {
             this.priorityQueue.enqueue(task);
             this.loggingService?.debug(`Task added to priority queue with status: ${task.status}`);
-            
+
             // Recompute priority to account for soft dependencies
             this.recomputeTaskPriorityWithSoftDeps(task);
         }
@@ -285,7 +285,7 @@ export class TaskQueue implements ITaskReader {
         // Note: task.ready and task.blocked events are already published by TaskStateMachine.transition()
 
         // Try to assign immediately
-        this.loggingService?.debug(`Attempting immediate assignment...`);
+        this.loggingService?.debug('Attempting immediate assignment...');
         this.tryAssignTasks();
 
         return task;
@@ -299,7 +299,7 @@ export class TaskQueue implements ITaskReader {
 
         const idleAgents = this.agentManager.getIdleAgents();
         this.loggingService?.debug(`Idle agents available: ${idleAgents.length}`);
-        
+
         if (idleAgents.length === 0) {
             return false;
         }
@@ -336,26 +336,26 @@ export class TaskQueue implements ITaskReader {
             if (scoredAgents.length > 0) {
                 task.agentMatchScore = scoredAgents[0].score;
                 // Publish match score event for UI
-                this.eventBus?.publish(DOMAIN_EVENTS.TASK_MATCH_SCORE, { 
-                    taskId: task.id, 
+                this.eventBus?.publish(DOMAIN_EVENTS.TASK_MATCH_SCORE, {
+                    taskId: task.id,
                     score: scoredAgents[0].score,
-                    agentId: scoredAgents[0].agent.id 
+                    agentId: scoredAgents[0].agent.id
                 });
             }
         }
 
         // Find best agent using capability matcher
         const agent = this.capabilityMatcher?.findBestAgent(idleAgents, task);
-        
+
         if (agent) {
             // Set assignedTo before transition to ensure required fields validate
             task.assignedTo = agent.id;
-            
+
             // Use state machine to transition to assigned
             if (this.taskStateMachine) {
                 const transitionErrors = this.taskStateMachine.transition(task, 'assigned');
                 if (transitionErrors.length > 0) {
-                    this.loggingService?.error(`State transition failed:`, transitionErrors);
+                    this.loggingService?.error('State transition failed:', transitionErrors);
                     task.assignedTo = undefined; // clear stale assignee
                     this.priorityQueue.enqueue(task);
                     return false;
@@ -371,19 +371,19 @@ export class TaskQueue implements ITaskReader {
             }
 
             this.loggingService?.info(`Executing task on agent: ${agent.name}`);
-            
+
             // Execute task on agent
             try {
                 this.loggingService?.debug(`About to execute task on agent ${agent.id}`);
                 this.agentManager.executeTask(agent.id, task);
-                
+
                 // Transition to in-progress
                 if (this.taskStateMachine) {
                     this.taskStateMachine.transition(task, 'in-progress');
                 } else {
                     task.status = 'in-progress';
                 }
-                
+
                 // Show detailed notification
                 this.notificationService?.showInformation(
                     `📋 Task "${task.title}" assigned to ${agent.template?.icon || '🤖'} ${agent.name}`,
@@ -396,17 +396,17 @@ export class TaskQueue implements ITaskReader {
                         }
                     }
                 });
-                
-                this.loggingService?.info(`Task successfully assigned and executing`);
-                
+
+                this.loggingService?.info('Task successfully assigned and executing');
+
                 // Clear transient match score after assignment
                 delete task.agentMatchScore;
-                
+
                 return true;
             } catch (error: any) {
                 const err = error instanceof Error ? error : new Error(String(error));
                 this.errorHandler?.handleError(err, 'assignNextTask');
-                
+
                 // Put task back in queue and revert status
                 this.priorityQueue.enqueue(task);
                 if (this.taskStateMachine) {
@@ -431,29 +431,29 @@ export class TaskQueue implements ITaskReader {
 
     private tryAssignTasks() {
         const autoAssign = this.configService?.isAutoAssignTasks() ?? true;
-        
+
         this.loggingService?.debug(`Auto-assign: ${autoAssign}`);
-        
+
         if (!autoAssign) {
-            this.loggingService?.debug(`Auto-assign disabled`);
+            this.loggingService?.debug('Auto-assign disabled');
             this.notificationService?.showInformation('📋 Task added. Auto-assign is disabled - assign manually.');
             return;
         }
 
         let assigned = false;
         let attempts = 0;
-        
+
         // Recompute queue size and idle agents per iteration
         while (attempts < 10) {
             const idleAgents = this.agentManager.getIdleAgents();
             const queueSize = this.priorityQueue?.size() || 0;
-            
+
             this.loggingService?.debug(`Assignment attempt ${attempts + 1}: Queue: ${queueSize}, Idle agents: ${idleAgents.length}`);
-            
+
             if (queueSize === 0 || idleAgents.length === 0) {
                 break;
             }
-            
+
             const result = this.assignNextTask();
             this.loggingService?.debug(`Assignment result: ${result}`);
             if (result) {
@@ -463,7 +463,7 @@ export class TaskQueue implements ITaskReader {
             }
             attempts++;
         }
-        
+
         if (!assigned) {
             const idleCount = this.agentManager.getIdleAgents().length;
             const queueSize = this.priorityQueue?.size() || 0;
@@ -488,7 +488,7 @@ export class TaskQueue implements ITaskReader {
         if (this.taskStateMachine) {
             const transitionErrors = this.taskStateMachine.transition(task, 'completed');
             if (transitionErrors.length > 0) {
-                this.loggingService?.error(`State transition failed:`, transitionErrors);
+                this.loggingService?.error('State transition failed:', transitionErrors);
                 this.metricsService?.incrementCounter('tasks_completion_failed', { reason: 'transition_error' });
                 return false;
             }
@@ -496,16 +496,16 @@ export class TaskQueue implements ITaskReader {
             task.status = 'completed';
             task.completedAt = new Date();
         }
-        
+
         // Record successful completion metrics
-        this.metricsService?.incrementCounter('tasks_completed', { 
+        this.metricsService?.incrementCounter('tasks_completed', {
             priority: task.priority,
-            duration: task.completedAt && task.createdAt ? 
+            duration: task.completedAt && task.createdAt ?
                 String(task.completedAt.getTime() - task.createdAt.getTime()) : '0'
         });
 
         this._onTaskUpdate.fire();
-        
+
         // Update queue depth metrics
         this.updateQueueMetrics();
 
@@ -513,14 +513,14 @@ export class TaskQueue implements ITaskReader {
         if (this.dependencyManager) {
             const allTasks = this.getTasks();
             const readyTasks = this.dependencyManager.getReadyTasks(allTasks);
-            
+
             // Transition and enqueue newly ready tasks
             for (const readyTask of readyTasks) {
                 if (readyTask.id !== taskId && readyTask.status !== 'ready' && this.priorityQueue) {
                     // Check for conflicts before transitioning to ready
                     const activeOrAssignedTasks = this.getActiveOrAssignedTasks();
                     const conflicts = this.dependencyManager.checkConflicts(readyTask, activeOrAssignedTasks);
-                    
+
                     if (conflicts.length > 0) {
                         // Set conflictsWith and transition to blocked
                         readyTask.conflictsWith = conflicts;
@@ -538,7 +538,7 @@ export class TaskQueue implements ITaskReader {
                             readyTask.conflictsWith = [];
                             readyTask.blockedBy = (readyTask.blockedBy || []).filter(id => !prevConflicts.includes(id));
                         }
-                        
+
                         // Transition to ready state
                         if (this.taskStateMachine) {
                             const transitionErrors = this.taskStateMachine.transition(readyTask, 'ready');
@@ -573,7 +573,7 @@ export class TaskQueue implements ITaskReader {
 
         // Try to assign more tasks
         this.tryAssignTasks();
-        
+
         return true;
     }
 
@@ -585,7 +585,7 @@ export class TaskQueue implements ITaskReader {
         if (this.taskStateMachine) {
             const transitionErrors = this.taskStateMachine.transition(task, 'failed');
             if (transitionErrors.length > 0) {
-                this.loggingService?.error(`State transition failed:`, transitionErrors);
+                this.loggingService?.error('State transition failed:', transitionErrors);
                 return;
             }
         } else {
@@ -616,11 +616,11 @@ export class TaskQueue implements ITaskReader {
     getAllTasks(): Task[] {
         return Array.from(this.tasks.values());
     }
-    
+
     getPendingTasks(): Task[] {
         return Array.from(this.tasks.values()).filter(t => t.status === 'queued');
     }
-    
+
     getActiveTasks(): Task[] {
         return Array.from(this.tasks.values()).filter(t => t.status === 'in-progress');
     }
@@ -656,7 +656,7 @@ export class TaskQueue implements ITaskReader {
 
     async assignTask(taskId: string, agentId: string): Promise<boolean> {
         const assignmentTimer = this.metricsService?.startTimer('task_assignment_duration');
-        
+
         const task = this.tasks.get(taskId);
         if (!task) {
             this.loggingService?.warn(`Task ${taskId} not found`);
@@ -686,7 +686,7 @@ export class TaskQueue implements ITaskReader {
         if (this.taskStateMachine) {
             const transitionErrors = this.taskStateMachine.transition(task, 'assigned');
             if (transitionErrors.length > 0) {
-                this.loggingService?.error(`State transition failed:`, transitionErrors);
+                this.loggingService?.error('State transition failed:', transitionErrors);
                 // Reset assignedTo and re-queue task on failure
                 task.assignedTo = undefined;
                 if (this.priorityQueue) {
@@ -706,17 +706,17 @@ export class TaskQueue implements ITaskReader {
         }
 
         this.loggingService?.info(`Executing task ${taskId} on agent ${agentId}`);
-        
+
         try {
             this.agentManager.executeTask(agentId, task);
-            
+
             // Transition to in-progress
             if (this.taskStateMachine) {
                 this.taskStateMachine.transition(task, 'in-progress');
             } else {
                 task.status = 'in-progress';
             }
-            
+
             // Show notification
             this.notificationService?.showInformation(
                 `📋 Task "${task.title}" assigned to ${agent.template?.icon || '🤖'} ${agent.name}`,
@@ -729,26 +729,26 @@ export class TaskQueue implements ITaskReader {
                     }
                 }
             });
-            
+
             // Record successful assignment metrics
             this.metricsService?.endTimer(assignmentTimer!);
-            this.metricsService?.incrementCounter('assignments_made', { 
+            this.metricsService?.incrementCounter('assignments_made', {
                 agentId,
-                taskPriority: task.priority 
+                taskPriority: task.priority
             });
-            
+
             return true;
         } catch (error: any) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler?.handleError(err, 'assignTask');
-            
+
             // Record failed assignment metrics
             this.metricsService?.endTimer(assignmentTimer!);
-            this.metricsService?.incrementCounter('assignments_failed', { 
+            this.metricsService?.incrementCounter('assignments_failed', {
                 reason: 'assignment_error',
-                error: err.message 
+                error: err.message
             });
-            
+
             // Revert via state machine on failure
             if (this.taskStateMachine) {
                 const transitionErrors = this.taskStateMachine.transition(task, 'ready');
@@ -868,7 +868,7 @@ export class TaskQueue implements ITaskReader {
 
         // Snapshot original dependsOn list
         const original = task.dependsOn ? [...task.dependsOn] : [];
-        
+
         // Update Task.dependsOn in the task map (avoid duplicates)
         if (!task.dependsOn) {
             task.dependsOn = [];
@@ -879,17 +879,17 @@ export class TaskQueue implements ITaskReader {
 
         // Call dependency manager
         const success = this.dependencyManager?.addDependency(taskId, dependsOnTaskId) ?? false;
-        
+
         if (!success) {
             task.dependsOn = original; // revert
             return false;
         }
-        
+
         if (success) {
             // Re-validate dependencies and adjust state
             const allTasks = this.getTasks();
             const depErrors = this.dependencyManager?.validateDependencies(task, allTasks) ?? [];
-            
+
             if (depErrors.length > 0) {
                 // Transition to blocked if dependencies are invalid
                 if (this.taskStateMachine) {
@@ -946,17 +946,17 @@ export class TaskQueue implements ITaskReader {
         // Re-validate dependencies and adjust state
         const allTasks = this.getTasks();
         const depErrors = this.dependencyManager?.validateDependencies(task, allTasks) ?? [];
-        
+
         if (depErrors.length === 0 && task.status === 'blocked') {
             // Check if task can become ready
             const activeOrAssignedTasks = this.getActiveOrAssignedTasks();
             const conflicts = this.dependencyManager?.checkConflicts(task, activeOrAssignedTasks) ?? [];
-            
+
             if (conflicts.length === 0) {
                 // Clear conflict fields and transition to ready
                 task.conflictsWith = [];
                 task.blockedBy = [];
-                
+
                 if (this.taskStateMachine) {
                     const transitionErrors = this.taskStateMachine.transition(task, 'ready');
                     if (transitionErrors.length === 0 && this.priorityQueue) {
@@ -984,17 +984,17 @@ export class TaskQueue implements ITaskReader {
     /**
      * Gets task statistics
      */
-    getTaskStats(): { 
-        total: number; 
-        queued: number; 
-        ready: number; 
-        assigned: number; 
-        inProgress: number; 
-        completed: number; 
-        failed: number; 
+    getTaskStats(): {
+        total: number;
+        queued: number;
+        ready: number;
+        assigned: number;
+        inProgress: number;
+        completed: number;
+        failed: number;
         blocked: number;
         validated: number;
-    } {
+        } {
         const tasks = Array.from(this.tasks.values());
         return {
             total: tasks.length,
@@ -1017,13 +1017,13 @@ export class TaskQueue implements ITaskReader {
         if (!this.taskStateMachine || !this.priorityQueue) {
             return false;
         }
-        
+
         const transitionErrors = this.taskStateMachine.transition(task, 'ready');
         if (transitionErrors.length === 0) {
             this.priorityQueue.moveToReady(task);
             return true;
         }
-        
+
         this.loggingService?.warn(`Failed to make task ${task.id} ready:`, transitionErrors);
         return false;
     }
@@ -1038,23 +1038,23 @@ export class TaskQueue implements ITaskReader {
 
         const allTasks = this.getTasks();
         const newPriority = this.priorityQueue.computeEffectivePriority(task, allTasks);
-        
+
         // Get base priority for comparison
         const basePriority = task.numericPriority || priorityToNumeric(task.priority);
         const softDepAdjustment = newPriority - basePriority;
-        
+
         if (softDepAdjustment !== 0) {
             // Update the task's priority in the queue
             this.priorityQueue.updatePriority(task.id, newPriority);
             this.loggingService?.debug(`Task ${task.id} priority adjusted by ${softDepAdjustment} due to soft dependencies, new priority: ${newPriority}`);
-            
+
             // Publish priority updated event
             this.eventBus?.publish(DOMAIN_EVENTS.TASK_PRIORITY_UPDATED, {
                 taskId: task.id,
                 oldPriority: basePriority,
                 newPriority: newPriority
             });
-            
+
             // Publish event when soft dependencies are satisfied (positive adjustment)
             if (softDepAdjustment > 0) {
                 this.eventBus?.publish(DOMAIN_EVENTS.TASK_SOFT_DEPENDENCY_SATISFIED, {
@@ -1071,10 +1071,10 @@ export class TaskQueue implements ITaskReader {
      */
     private updateQueueMetrics(): void {
         if (!this.metricsService) return;
-        
+
         const tasks = this.getTasks();
         const stats = this.getTaskStats();
-        
+
         // Update queue depth metrics
         this.metricsService.setGauge('current_queue_depth', stats.queued + stats.ready);
         this.metricsService.setGauge('ready_tasks_count', stats.ready);

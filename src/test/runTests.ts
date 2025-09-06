@@ -5,7 +5,7 @@ async function main() {
     try {
         // The folder containing the Extension Manifest package.json
         const extensionDevelopmentPath = path.resolve(__dirname, '../../');
-        
+
         // The path to the extension test script
         const extensionTestsPath = path.resolve(__dirname, './functional/runFunctionalTests');
 

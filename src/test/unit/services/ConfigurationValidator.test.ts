@@ -425,7 +425,7 @@ describe('ConfigurationValidator', () => {
         it('should return validation errors', () => {
             // First validate something to generate errors
             validator.validateConfiguration({ maxAgents: 0 });
-            
+
             const errors = validator.getValidationErrors();
             expect(Array.isArray(errors)).toBe(true);
         });

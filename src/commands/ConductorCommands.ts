@@ -35,7 +35,7 @@ export class ConductorCommands implements ICommandHandler {
     private readonly loggingService: ILoggingService;
     private readonly context: vscode.ExtensionContext;
     private readonly container: IContainer;
-    
+
     private conductorChat?: ConductorChat;
     private conductorWebview?: ConductorChatWebview;
     private conductorTerminal?: ConductorTerminal | SuperSmartConductor | IntelligentConductor;
@@ -134,10 +134,10 @@ export class ConductorCommands implements ICommandHandler {
         }
 
         const preset = selected.value;
-        
+
         // Update team name based on selection
         this.currentTeamName = selected.label.replace(/\$\([^)]*\)\s*/g, ''); // Remove icon
-        
+
         // Update agent tree provider with new team name
         if (this.agentProvider && typeof this.agentProvider.setTeamName === 'function') {
             this.agentProvider.setTeamName(this.currentTeamName);
@@ -169,7 +169,7 @@ export class ConductorCommands implements ICommandHandler {
                 }
             }
 
-            const message = createdCount === teamAgents.length 
+            const message = createdCount === teamAgents.length
                 ? `Team "${this.currentTeamName}" created with ${createdCount} agents`
                 : `Team "${this.currentTeamName}" created with ${createdCount} of ${teamAgents.length} agents (${teamAgents.length - createdCount} failed)`;
             await this.notificationService.showInformation(message);
@@ -243,7 +243,7 @@ export class ConductorCommands implements ICommandHandler {
 
         // Auto-select team based on project type
         const projectConfig = projectType.value;
-        
+
         // Update current team name
         this.currentTeamName = projectConfig.teamName;
         if (this.agentProvider && typeof this.agentProvider.setTeamName === 'function') {
@@ -312,7 +312,7 @@ export class ConductorCommands implements ICommandHandler {
 
         // Select conductor based on team complexity
         let conductorType: 'basic' | 'intelligent' | 'supersmart' = 'basic';
-        
+
         if (agentCount >= 5) {
             // Large team - use SuperSmartConductor
             conductorType = 'supersmart';
@@ -328,7 +328,7 @@ export class ConductorCommands implements ICommandHandler {
         this.conductorTerminal = this.createConductor(conductorType);
 
         await this.conductorTerminal?.start();
-        
+
         await this.notificationService.showInformation(
             `${this.currentTeamName} conductor started (${conductorType} mode)`
         );
@@ -352,9 +352,9 @@ export class ConductorCommands implements ICommandHandler {
         try {
             const viewModel = this.container.resolve<IConductorViewModel>(SERVICE_TOKENS.ConductorViewModel);
             const loggingService = this.container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
-            
+
             ConductorPanel.createOrShow(this.context, viewModel, loggingService);
-            
+
             await this.notificationService.showInformation('Conductor Panel opened');
         } catch (error) {
             this.notificationService.showError('Failed to open Conductor Panel');

@@ -1,9 +1,9 @@
 import { MetricsCommands } from '../../../commands/MetricsCommands';
-import { 
-    IContainer, 
-    IMetricsService, 
-    INotificationService, 
-    IConfigurationService, 
+import {
+    IContainer,
+    IMetricsService,
+    INotificationService,
+    IConfigurationService,
     ICommandService,
     IEventBus,
     SERVICE_TOKENS
@@ -250,48 +250,48 @@ describe('MetricsCommands', () => {
     describe('Event-Driven Updates', () => {
         it('should refresh dashboard when counter event is received', () => {
             const refreshSpy = jest.spyOn(metricsCommands as any, 'refreshMetricsDashboard');
-            
+
             // Get the counter event handler
             const counterHandler = mockEventBus.subscribe.mock.calls
                 .find(call => call[0] === 'metrics.counter.incremented')?.[1];
-            
+
             expect(counterHandler).toBeDefined();
-            
+
             // Simulate event
             counterHandler?.();
-            
+
             // Should not refresh if no panel is open
             expect(refreshSpy).not.toHaveBeenCalled();
         });
 
         it('should refresh dashboard when gauge event is received', () => {
             const refreshSpy = jest.spyOn(metricsCommands as any, 'refreshMetricsDashboard');
-            
+
             // Get the gauge event handler
             const gaugeHandler = mockEventBus.subscribe.mock.calls
                 .find(call => call[0] === 'metrics.gauge.set')?.[1];
-            
+
             expect(gaugeHandler).toBeDefined();
-            
+
             // Simulate event
             gaugeHandler?.();
-            
+
             // Should not refresh if no panel is open
             expect(refreshSpy).not.toHaveBeenCalled();
         });
 
         it('should refresh dashboard when recorded event is received', () => {
             const refreshSpy = jest.spyOn(metricsCommands as any, 'refreshMetricsDashboard');
-            
+
             // Get the recorded event handler
             const recordedHandler = mockEventBus.subscribe.mock.calls
                 .find(call => call[0] === 'metrics.recorded')?.[1];
-            
+
             expect(recordedHandler).toBeDefined();
-            
+
             // Simulate event
             recordedHandler?.();
-            
+
             // Should not refresh if no panel is open
             expect(refreshSpy).not.toHaveBeenCalled();
         });

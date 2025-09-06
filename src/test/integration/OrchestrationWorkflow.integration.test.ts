@@ -1,9 +1,9 @@
 // Mock VS Code - removed to rely on mapper mock
 
 import { OrchestrationServer } from '../../orchestration/OrchestrationServer';
-import { 
-    ILoggingService, 
-    IEventBus, 
+import {
+    ILoggingService,
+    IEventBus,
     IErrorHandler,
     IConnectionPoolService,
     IMessageRouter,
@@ -186,11 +186,11 @@ describe('Orchestration Workflow Integration Tests', () => {
                     }
                     return true;
                 });
-                
-                const limitedMessages = filter?.limit ? 
+
+                const limitedMessages = filter?.limit ?
                     filteredMessages.slice(filter.offset || 0, (filter.offset || 0) + filter.limit) :
                     filteredMessages.slice(filter?.offset || 0);
-                
+
                 limitedMessages.forEach(msg => {
                     mockConnectionPool.sendToClient(target, msg);
                 });
@@ -307,7 +307,7 @@ describe('Orchestration Workflow Integration Tests', () => {
             const { duration } = await measureTime(async () => {
                 await orchestrationServer.start();
                 expect(orchestrationServer.getStatus().isRunning).toBe(true);
-                
+
                 await orchestrationServer.stop();
                 expect(orchestrationServer.getStatus().isRunning).toBe(false);
             });
@@ -321,7 +321,7 @@ describe('Orchestration Workflow Integration Tests', () => {
             for (let i = 0; i < 3; i++) {
                 await orchestrationServer.start();
                 expect(orchestrationServer.getStatus().isRunning).toBe(true);
-                
+
                 await orchestrationServer.stop();
                 expect(orchestrationServer.getStatus().isRunning).toBe(false);
             }
@@ -354,7 +354,7 @@ describe('Orchestration Workflow Integration Tests', () => {
 
             const agentWebSocket = new MockWebSocketClient('ws://localhost:7777');
             const handleConnection = (orchestrationServer as any).handleConnection.bind(orchestrationServer);
-            
+
             handleConnection(agentWebSocket, {
                 socket: { remoteAddress: '127.0.0.1' },
                 headers: { 'user-agent': 'nofx-agent/1.0.0' }
@@ -626,17 +626,17 @@ describe('Orchestration Workflow Integration Tests', () => {
                 });
 
                 const handleMessage = (orchestrationServer as any).handleMessage.bind(orchestrationServer);
-                
+
                 // Send 100 messages rapidly
                 const promises = [];
                 for (let i = 0; i < 100; i++) {
-                    const message = createMessage('client-1', 'server', MessageType.AGENT_QUERY, { 
-                        action: 'test', 
-                        index: i 
+                    const message = createMessage('client-1', 'server', MessageType.AGENT_QUERY, {
+                        action: 'test',
+                        index: i
                     });
                     promises.push(handleMessage('client-1', JSON.stringify(message)));
                 }
-                
+
                 await Promise.all(promises);
             });
 
@@ -650,10 +650,10 @@ describe('Orchestration Workflow Integration Tests', () => {
             const { duration } = await measureTime(async () => {
                 const clients = [];
                 const handleConnection = (orchestrationServer as any).handleConnection.bind(orchestrationServer);
-                
+
                 // Create 10 concurrent clients
                 for (let i = 0; i < 10; i++) {
-                    const client = new MockWebSocketClient(`ws://localhost:7777`);
+                    const client = new MockWebSocketClient('ws://localhost:7777');
                     handleConnection(client, {
                         socket: { remoteAddress: `127.0.0.${i + 1}` },
                         headers: { 'user-agent': `test-client-${i}` }
@@ -664,18 +664,18 @@ describe('Orchestration Workflow Integration Tests', () => {
                 // Each client sends 10 messages
                 const handleMessage = (orchestrationServer as any).handleMessage.bind(orchestrationServer);
                 const promises = [];
-                
+
                 for (let clientIndex = 0; clientIndex < 10; clientIndex++) {
                     for (let msgIndex = 0; msgIndex < 10; msgIndex++) {
-                        const message = createMessage(`client-${clientIndex}`, 'server', MessageType.AGENT_QUERY, { 
-                            action: 'test', 
+                        const message = createMessage(`client-${clientIndex}`, 'server', MessageType.AGENT_QUERY, {
+                            action: 'test',
                             client: clientIndex,
-                            message: msgIndex 
+                            message: msgIndex
                         });
                         promises.push(handleMessage(`client-${clientIndex}`, JSON.stringify(message)));
                     }
                 }
-                
+
                 await Promise.all(promises);
             });
 
@@ -700,7 +700,7 @@ describe('Orchestration Workflow Integration Tests', () => {
             });
 
             const handleMessage = (orchestrationServer as any).handleMessage.bind(orchestrationServer);
-            
+
             // Send message that will cause error
             const errorMessage = createMessage('client-1', 'server', MessageType.AGENT_QUERY, { action: 'error' });
             await handleMessage('client-1', JSON.stringify(errorMessage));

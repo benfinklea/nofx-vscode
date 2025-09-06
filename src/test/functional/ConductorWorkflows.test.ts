@@ -95,7 +95,7 @@ describe('Conductor Workflows', () => {
     describe('Quick Start', () => {
         test('should start quick start chat', async () => {
             const showWebviewSpy = jest.spyOn(vscode.window, 'createWebviewPanel');
-            
+
             await vscode.commands.executeCommand('nofx.quickStartChat');
 
             expect(showWebviewSpy).toHaveBeenCalled();
@@ -103,7 +103,7 @@ describe('Conductor Workflows', () => {
 
         test('should open conductor chat', async () => {
             const showWebviewSpy = jest.spyOn(vscode.window, 'createWebviewPanel');
-            
+
             await vscode.commands.executeCommand('nofx.openConductorChat');
 
             expect(showWebviewSpy).toHaveBeenCalled();
@@ -113,7 +113,7 @@ describe('Conductor Workflows', () => {
     describe('Conductor Selection', () => {
         test('should open simple conductor', async () => {
             const showWebviewSpy = jest.spyOn(vscode.window, 'createWebviewPanel');
-            
+
             await vscode.commands.executeCommand('nofx.openSimpleConductor');
 
             expect(showWebviewSpy).toHaveBeenCalled();
@@ -121,7 +121,7 @@ describe('Conductor Workflows', () => {
 
         test('should open conductor terminal', async () => {
             const createTerminalSpy = jest.spyOn(vscode.window, 'createTerminal');
-            
+
             await vscode.commands.executeCommand('nofx.openConductorTerminal');
 
             expect(createTerminalSpy).toHaveBeenCalled();
@@ -133,23 +133,23 @@ describe('Conductor Workflows', () => {
                 { id: 'agent1', name: 'Agent 1', type: 'frontend-specialist', status: 'idle' },
                 { id: 'agent2', name: 'Agent 2', type: 'backend-specialist', status: 'idle' }
             ];
-            
+
             agentManager.getActiveAgents = jest.fn().mockReturnValue(mockAgents);
-            
+
             // Stub Claude CLI path
             ExtensionTestHelpers.stubClaudeCliPath(container, '/mock/claude');
-            
+
             // Create test-double conductor instance
             const startSpy = jest.fn().mockResolvedValue(undefined);
             const testConductor = { start: startSpy } as any;
-            
+
             // Get the ConductorCommands instance and spy on createConductor method
             const conductorCommands = new ConductorCommands(container);
             const createConductorSpy = jest.spyOn(conductorCommands, 'createConductor' as any).mockReturnValue(testConductor);
-            
+
             // Spy on notification service to verify info message
             const notificationSpy = jest.spyOn(vscode.window, 'showInformationMessage');
-            
+
             // Mock the command execution to use our spied instance
             jest.spyOn(vscode.commands, 'executeCommand').mockImplementation(async (command) => {
                 if (command === 'nofx.openConductorTerminal') {
@@ -157,16 +157,16 @@ describe('Conductor Workflows', () => {
                 }
                 return undefined;
             });
-            
+
             // Execute the command that triggers conductor selection
             await vscode.commands.executeCommand('nofx.openConductorTerminal');
-            
+
             // Verify createConductor was called with 'basic' type
             expect(createConductorSpy).toHaveBeenCalledWith('basic');
-            
+
             // Verify start method is called on the instance
             expect(startSpy).toHaveBeenCalled();
-            
+
             // Verify notification shows basic mode
             expect(notificationSpy).toHaveBeenCalledWith(
                 expect.stringContaining('(basic mode)')
@@ -180,23 +180,23 @@ describe('Conductor Workflows', () => {
                 { id: 'agent2', name: 'Agent 2', type: 'backend-specialist', status: 'idle' },
                 { id: 'agent3', name: 'Agent 3', type: 'testing-specialist', status: 'idle' }
             ];
-            
+
             agentManager.getActiveAgents = jest.fn().mockReturnValue(mockAgents);
-            
+
             // Stub Claude CLI path
             ExtensionTestHelpers.stubClaudeCliPath(container, '/mock/claude');
-            
+
             // Create test-double conductor instance
             const startSpy = jest.fn().mockResolvedValue(undefined);
             const testConductor = { start: startSpy } as any;
-            
+
             // Get the ConductorCommands instance and spy on createConductor method
             const conductorCommands = new ConductorCommands(container);
             const createConductorSpy = jest.spyOn(conductorCommands, 'createConductor' as any).mockReturnValue(testConductor);
-            
+
             // Spy on notification service to verify info message
             const notificationSpy = jest.spyOn(vscode.window, 'showInformationMessage');
-            
+
             // Mock the command execution to use our spied instance
             jest.spyOn(vscode.commands, 'executeCommand').mockImplementation(async (command) => {
                 if (command === 'nofx.openConductorTerminal') {
@@ -204,16 +204,16 @@ describe('Conductor Workflows', () => {
                 }
                 return undefined;
             });
-            
+
             // Execute the command that triggers conductor selection
             await vscode.commands.executeCommand('nofx.openConductorTerminal');
-            
+
             // Verify createConductor was called with 'intelligent' type
             expect(createConductorSpy).toHaveBeenCalledWith('intelligent');
-            
+
             // Verify start method is called on the instance
             expect(startSpy).toHaveBeenCalled();
-            
+
             // Verify notification shows intelligent mode
             expect(notificationSpy).toHaveBeenCalledWith(
                 expect.stringContaining('(intelligent mode)')
@@ -228,23 +228,23 @@ describe('Conductor Workflows', () => {
                 type: 'general-purpose',
                 status: 'idle'
             }));
-            
+
             agentManager.getActiveAgents = jest.fn().mockReturnValue(mockAgents);
-            
+
             // Stub Claude CLI path
             ExtensionTestHelpers.stubClaudeCliPath(container, '/mock/claude');
-            
+
             // Create test-double conductor instance
             const startSpy = jest.fn().mockResolvedValue(undefined);
             const testConductor = { start: startSpy } as any;
-            
+
             // Get the ConductorCommands instance and spy on createConductor method
             const conductorCommands = new ConductorCommands(container);
             const createConductorSpy = jest.spyOn(conductorCommands, 'createConductor' as any).mockReturnValue(testConductor);
-            
+
             // Spy on notification service to verify info message
             const notificationSpy = jest.spyOn(vscode.window, 'showInformationMessage');
-            
+
             // Mock the command execution to use our spied instance
             jest.spyOn(vscode.commands, 'executeCommand').mockImplementation(async (command) => {
                 if (command === 'nofx.openConductorTerminal') {
@@ -252,16 +252,16 @@ describe('Conductor Workflows', () => {
                 }
                 return undefined;
             });
-            
+
             // Execute the command that triggers conductor selection
             await vscode.commands.executeCommand('nofx.openConductorTerminal');
-            
+
             // Verify createConductor was called with 'supersmart' type
             expect(createConductorSpy).toHaveBeenCalledWith('supersmart');
-            
+
             // Verify start method is called on the instance
             expect(startSpy).toHaveBeenCalled();
-            
+
             // Verify notification shows supersmart mode
             expect(notificationSpy).toHaveBeenCalledWith(
                 expect.stringContaining('(supersmart mode)')
@@ -272,11 +272,11 @@ describe('Conductor Workflows', () => {
             // Test ConductorTerminal system prompt
             const conductorTerminal = new ConductorTerminal(agentManager, {} as any);
             expect(conductorTerminal).toBeDefined();
-            
+
             // Test IntelligentConductor system prompt
             const intelligentConductor = new IntelligentConductor(agentManager, {} as any);
             expect(intelligentConductor).toBeDefined();
-            
+
             // Test SuperSmartConductor system prompt
             const superSmartConductor = new SuperSmartConductor(agentManager, {} as any);
             expect(superSmartConductor).toBeDefined();
@@ -285,10 +285,10 @@ describe('Conductor Workflows', () => {
         test('should handle Claude CLI path configuration', async () => {
             const configService = container.resolve<ConfigurationService>(SERVICE_TOKENS.ConfigurationService);
             const claudePath = configService.get('nofx.claudePath');
-            
+
             expect(claudePath).toBeDefined();
             expect(typeof claudePath).toBe('string');
-            
+
             // Test that conductors can access the Claude path
             const conductorTerminal = new ConductorTerminal(agentManager, {} as any);
             expect(conductorTerminal).toBeDefined();
@@ -301,27 +301,27 @@ describe('Conductor Workflows', () => {
                 { id: 'agent2', name: 'Agent 2', type: 'backend-specialist', status: 'idle' },
                 { id: 'agent3', name: 'Agent 3', type: 'testing-specialist', status: 'idle' }
             ];
-            
+
             agentManager.getActiveAgents = jest.fn().mockReturnValue(mockAgents);
-            
+
             // Stub Claude CLI path
             ExtensionTestHelpers.stubClaudeCliPath(container, '/mock/claude');
-            
+
             // Create test-double conductor instance that calls config service during start
             const configService = container.resolve<ConfigurationService>(SERVICE_TOKENS.ConfigurationService);
             const configGetSpy = jest.spyOn(configService, 'get');
-            
+
             const startSpy = jest.fn().mockImplementation(async () => {
                 // Simulate conductor accessing config during startup
                 configService.get('nofx.claudePath');
                 return undefined;
             });
             const testConductor = { start: startSpy } as any;
-            
+
             // Get the ConductorCommands instance and spy on createConductor method
             const conductorCommands = new ConductorCommands(container);
             const createConductorSpy = jest.spyOn(conductorCommands, 'createConductor' as any).mockReturnValue(testConductor);
-            
+
             // Mock the command execution to use our spied instance
             jest.spyOn(vscode.commands, 'executeCommand').mockImplementation(async (command) => {
                 if (command === 'nofx.openConductorTerminal') {
@@ -329,16 +329,16 @@ describe('Conductor Workflows', () => {
                 }
                 return undefined;
             });
-            
+
             // Execute the command
             await vscode.commands.executeCommand('nofx.openConductorTerminal');
-            
+
             // Verify createConductor was called with 'intelligent' type
             expect(createConductorSpy).toHaveBeenCalledWith('intelligent');
-            
+
             // Verify start method is called on the instance
             expect(startSpy).toHaveBeenCalled();
-            
+
             // Verify config consumption - the conductor should access the Claude path during startup
             expect(configGetSpy).toHaveBeenCalledWith('nofx.claudePath');
         });
@@ -361,20 +361,20 @@ describe('Conductor Workflows', () => {
                     type: 'general-purpose',
                     status: 'idle'
                 }));
-                
+
                 agentManager.getActiveAgents = jest.fn().mockReturnValue(mockAgents);
-                
+
                 // Stub Claude CLI path
                 ExtensionTestHelpers.stubClaudeCliPath(container, '/mock/claude');
-                
+
                 // Create test-double conductor instance
                 const startSpy = jest.fn().mockResolvedValue(undefined);
                 const testConductor = { start: startSpy } as any;
-                
+
                 // Get the ConductorCommands instance and spy on createConductor method
                 const conductorCommands = new ConductorCommands(container);
                 const createConductorSpy = jest.spyOn(conductorCommands, 'createConductor' as any).mockReturnValue(testConductor);
-                
+
                 // Mock the command execution to use our spied instance
                 jest.spyOn(vscode.commands, 'executeCommand').mockImplementation(async (command) => {
                     if (command === 'nofx.openConductorTerminal') {
@@ -382,13 +382,13 @@ describe('Conductor Workflows', () => {
                     }
                     return undefined;
                 });
-                
+
                 // Execute the command
                 await vscode.commands.executeCommand('nofx.openConductorTerminal');
-                
+
                 // Verify createConductor was called with expected type
                 expect(createConductorSpy).toHaveBeenCalledWith(testCase.expectedType);
-                
+
                 // Verify start method is called on the instance
                 expect(startSpy).toHaveBeenCalled();
             }
@@ -398,7 +398,7 @@ describe('Conductor Workflows', () => {
     describe('Conductor Panel', () => {
         test('should open conductor panel', async () => {
             const showWebviewSpy = jest.spyOn(vscode.window, 'createWebviewPanel');
-            
+
             await vscode.commands.executeCommand('nofx.openConductorPanel');
 
             expect(showWebviewSpy).toHaveBeenCalled();
@@ -410,7 +410,7 @@ describe('Conductor Workflows', () => {
             });
 
             const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
-            
+
             await vscode.commands.executeCommand('nofx.openConductorPanel');
 
             expect(errorSpy).toHaveBeenCalled();
@@ -420,7 +420,7 @@ describe('Conductor Workflows', () => {
     describe('Conductor Chat', () => {
         test('should create conductor chat webview', async () => {
             const showWebviewSpy = jest.spyOn(vscode.window, 'createWebviewPanel');
-            
+
             await vscode.commands.executeCommand('nofx.openConductorChat');
 
             expect(showWebviewSpy).toHaveBeenCalledWith(
@@ -439,7 +439,7 @@ describe('Conductor Workflows', () => {
                 dispose: jest.fn(),
                 onDidDispose: jest.fn()
             };
-            
+
             jest.spyOn(vscode.window, 'createWebviewPanel').mockReturnValue(mockWebview as any);
 
             await vscode.commands.executeCommand('nofx.openConductorChat');

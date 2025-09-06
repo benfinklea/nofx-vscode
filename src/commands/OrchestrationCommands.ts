@@ -29,7 +29,7 @@ export class OrchestrationCommands implements ICommandHandler {
     private readonly context: vscode.ExtensionContext;
     private readonly container: IContainer;
     private readonly messagePersistence: IMessagePersistenceService;
-    
+
     private orchestrationServer?: OrchestrationServer;
     private messageFlowDashboard?: MessageFlowDashboard;
     private conductorPanel?: EnhancedConductorPanel;
@@ -44,7 +44,7 @@ export class OrchestrationCommands implements ICommandHandler {
         this.loggingService = container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
         this.context = container.resolve<vscode.ExtensionContext>(SERVICE_TOKENS.ExtensionContext);
         this.messagePersistence = container.resolve<IMessagePersistenceService>(SERVICE_TOKENS.MessagePersistenceService);
-        
+
         // Resolve optional services
         this.orchestrationServer = container.resolveOptional<OrchestrationServer>(SERVICE_TOKENS.OrchestrationServer);
         this.messageFlowDashboard = container.resolveOptional<MessageFlowDashboard>(SERVICE_TOKENS.MessageFlowDashboard);
@@ -123,7 +123,7 @@ export class OrchestrationCommands implements ICommandHandler {
                 if (workspaceFolder) {
                     const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
                     await persistence.clearAll();
-                    
+
                     // Also clear .nofx directory if it exists
                     const nofxDir = path.join(workspaceFolder.uri.fsPath, '.nofx');
                     try {
@@ -172,7 +172,7 @@ export class OrchestrationCommands implements ICommandHandler {
         if (dirPath.endsWith('.nofx')) {
             const templatesPath = path.join(dirPath, 'templates');
             const hasTemplates = await fsPromises.access(templatesPath).then(() => true).catch(() => false);
-            
+
             if (hasTemplates) {
                 // Remove everything except templates
                 const items = await fsPromises.readdir(dirPath);
@@ -185,7 +185,7 @@ export class OrchestrationCommands implements ICommandHandler {
                 return; // Don't remove the directory itself
             }
         }
-        
+
         // For other directories or .nofx without templates, remove completely
         await fsPromises.rm(dirPath, { recursive: true, force: true });
     }

@@ -131,8 +131,8 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
             type: 'task',
             task,
             title: task.title,
-            collapsibleState: this.hasTaskDetails(task) ? 
-                vscode.TreeItemCollapsibleState.Collapsed : 
+            collapsibleState: this.hasTaskDetails(task) ?
+                vscode.TreeItemCollapsibleState.Collapsed :
                 vscode.TreeItemCollapsibleState.None
         }));
     }
@@ -198,11 +198,11 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
     }
 
     private hasTaskDetails(task: TaskDTO): boolean {
-        return !!(task.dependsOn?.length || 
-                 task.requiredCapabilities?.length || 
-                 task.tags?.length || 
-                 task.estimatedDuration || 
-                 task.blockingReason || 
+        return !!(task.dependsOn?.length ||
+                 task.requiredCapabilities?.length ||
+                 task.tags?.length ||
+                 task.estimatedDuration ||
+                 task.blockingReason ||
                  task.agentMatchScore !== undefined);
     }
 
@@ -214,7 +214,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
     getDragAndDropController(): vscode.TreeDragAndDropController<TaskItem> {
         // Capture taskQueue outside the returned controller to avoid 'this' binding issues
         const taskQueue = this.taskQueue;
-        
+
         return {
             dragMimeTypes: ['application/vnd.code.tree.taskTree'],
             dropMimeTypes: ['application/vnd.code.tree.taskTree'],
@@ -223,7 +223,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
                 const taskIds = source
                     .filter(item => item.type === 'task' && item.task)
                     .map(item => item.task!.id);
-                
+
                 if (taskIds.length > 0) {
                     dataTransfer.set('application/vnd.code.tree.taskTree', new vscode.DataTransferItem(taskIds));
                 }
@@ -247,7 +247,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
             }
         };
     }
-    
+
     dispose(): void {
         // Dispose all subscriptions
         while (this.disposables.length) {
@@ -256,7 +256,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
                 disposable.dispose();
             }
         }
-        
+
         // Dispose event emitter
         this._onDidChangeTreeData.dispose();
     }
@@ -275,7 +275,7 @@ class TaskItem extends vscode.TreeItem {
         collapsibleState: vscode.TreeItemCollapsibleState;
     }) {
         super(data.title, data.collapsibleState);
-        
+
         this.type = data.type;
         this.groupType = data.groupType;
         this.task = data.task;
@@ -294,22 +294,22 @@ class TaskItem extends vscode.TreeItem {
     private setupTaskItem(task: TaskDTO): void {
         this.tooltip = this.buildTooltip(task);
         this.description = this.buildDescription(task);
-        
+
         // Set icon based on status
         this.iconPath = new vscode.ThemeIcon(
             task.status === 'completed' ? 'pass' :
-            task.status === 'in-progress' ? 'sync~spin' :
-            task.status === 'assigned' ? 'arrow-right' :
-            task.status === 'failed' ? 'error' :
-            task.status === 'blocked' ? 'circle-slash' :
-            task.status === 'ready' ? 'play' :
-            task.status === 'validated' ? 'check' :
-            'circle-outline'
+                task.status === 'in-progress' ? 'sync~spin' :
+                    task.status === 'assigned' ? 'arrow-right' :
+                        task.status === 'failed' ? 'error' :
+                            task.status === 'blocked' ? 'circle-slash' :
+                                task.status === 'ready' ? 'play' :
+                                    task.status === 'validated' ? 'check' :
+                                        'circle-outline'
         );
-        
+
         // Set context value for context menu
         this.contextValue = 'task';
-        
+
         // Set color based on priority
         if (task.numericPriority >= 100) {
             this.resourceUri = vscode.Uri.parse(`task://high/${task.id}`);
@@ -324,68 +324,68 @@ class TaskItem extends vscode.TreeItem {
         let tooltip = `${task.title}\n\n${task.description}\n\n`;
         tooltip += `Status: ${task.status}\n`;
         tooltip += `Priority: ${formatPriority(task.numericPriority)}\n`;
-        
+
         if (task.assignedTo) {
             tooltip += `Assigned to: ${task.assignedTo}\n`;
         }
-        
+
         if (task.dependsOn && task.dependsOn.length > 0) {
             tooltip += `Depends on: ${task.dependsOn.join(', ')}\n`;
         }
-        
+
         if (task.requiredCapabilities && task.requiredCapabilities.length > 0) {
             tooltip += `Required capabilities: ${task.requiredCapabilities.join(', ')}\n`;
         }
-        
+
         if (task.tags && task.tags.length > 0) {
             tooltip += `Tags: ${task.tags.join(', ')}\n`;
         }
-        
+
         if (task.estimatedDuration) {
             tooltip += `Estimated duration: ${task.estimatedDuration} minutes\n`;
         }
-        
+
         if (task.blockingReason) {
             tooltip += `Blocking reason: ${task.blockingReason}\n`;
         }
-        
+
         if (task.agentMatchScore !== undefined) {
             tooltip += `Agent match score: ${(task.agentMatchScore * 100).toFixed(0)}%\n`;
         }
-        
+
         tooltip += `Created: ${task.createdAt.toLocaleString()}`;
-        
+
         if (task.completedAt) {
             tooltip += `\nCompleted: ${task.completedAt.toLocaleString()}`;
         }
-        
+
         return tooltip;
     }
 
     private buildDescription(task: TaskDTO): string {
         const parts: string[] = [];
-        
+
         // Priority indicator
         parts.push(formatPriority(task.numericPriority));
-        
+
         // Status
         parts.push(getStatusIcon(task.status));
-        
+
         // Assigned agent
         if (task.assignedTo) {
             parts.push(`👤 ${task.assignedTo}`);
         }
-        
+
         // Dependencies indicator
         if (task.dependsOn && task.dependsOn.length > 0) {
             parts.push(`📋 ${task.dependsOn.length} deps`);
         }
-        
+
         // Conflicts indicator
         if (task.conflictsWith && task.conflictsWith.length > 0) {
             parts.push(`⚠️ ${task.conflictsWith.length} conflicts`);
         }
-        
+
         return parts.join(' • ');
     }
 }

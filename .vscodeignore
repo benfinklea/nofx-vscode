@@ -18,6 +18,7 @@ webpack.config.js
 node_modules/.cache/**
 .DS_Store
 src/test/**
+out/test/**
 *.test.js
 *.test.ts
 *.integration.test.ts

@@ -1,7 +1,7 @@
 // Re-export task types from the agents module
-export { 
-    Task, 
-    TaskStatus, 
+export {
+    Task,
+    TaskStatus,
     TaskConfig,
     TaskValidationError,
     TaskDependency

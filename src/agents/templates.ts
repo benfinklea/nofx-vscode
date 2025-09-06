@@ -28,7 +28,7 @@ export const AGENT_TEMPLATES: { [key: string]: AgentTemplate } = {
         capabilities: ['React', 'TypeScript', 'CSS', 'Testing', 'UI/UX'],
         icon: '⚛️'
     },
-    
+
     'backend-node': {
         name: 'Node.js Backend Developer',
         type: 'backend',
@@ -42,7 +42,7 @@ export const AGENT_TEMPLATES: { [key: string]: AgentTemplate } = {
         capabilities: ['Node.js', 'APIs', 'Database', 'Auth', 'Performance'],
         icon: '🟢'
     },
-    
+
     'fullstack-next': {
         name: 'Next.js Full-Stack Developer',
         type: 'fullstack',
@@ -56,7 +56,7 @@ export const AGENT_TEMPLATES: { [key: string]: AgentTemplate } = {
         capabilities: ['Next.js', 'React', 'APIs', 'Database', 'DevOps'],
         icon: '▲'
     },
-    
+
     'mobile-react-native': {
         name: 'React Native Developer',
         type: 'mobile',
@@ -70,7 +70,7 @@ export const AGENT_TEMPLATES: { [key: string]: AgentTemplate } = {
         capabilities: ['React Native', 'iOS', 'Android', 'Mobile UI', 'Deployment'],
         icon: '📱'
     },
-    
+
     'devops-engineer': {
         name: 'DevOps Engineer',
         type: 'devops',
@@ -84,7 +84,7 @@ export const AGENT_TEMPLATES: { [key: string]: AgentTemplate } = {
         capabilities: ['Docker', 'Kubernetes', 'CI/CD', 'Cloud', 'IaC'],
         icon: '🚀'
     },
-    
+
     'qa-automation': {
         name: 'QA Automation Engineer',
         type: 'testing',
@@ -98,7 +98,7 @@ export const AGENT_TEMPLATES: { [key: string]: AgentTemplate } = {
         capabilities: ['E2E Testing', 'Unit Testing', 'Automation', 'Performance', 'QA'],
         icon: '🧪'
     },
-    
+
     'ai-ml-engineer': {
         name: 'AI/ML Engineer',
         type: 'ai',
@@ -112,7 +112,7 @@ export const AGENT_TEMPLATES: { [key: string]: AgentTemplate } = {
         capabilities: ['Python', 'ML', 'LLMs', 'Data Science', 'AI'],
         icon: '🤖'
     },
-    
+
     'database-architect': {
         name: 'Database Architect',
         type: 'database',
@@ -150,7 +150,7 @@ export const AGENT_GROUPS: { [key: string]: AgentGroupTemplate } = {
             AGENT_TEMPLATES['qa-automation']
         ]
     },
-    
+
     'backend-team': {
         name: 'Backend Team',
         description: 'API developer, Database architect, and DevOps',
@@ -160,7 +160,7 @@ export const AGENT_GROUPS: { [key: string]: AgentGroupTemplate } = {
             AGENT_TEMPLATES['devops-engineer']
         ]
     },
-    
+
     'fullstack-team': {
         name: 'Full-Stack Team',
         description: 'Next.js developer, Backend engineer, and QA',
@@ -170,7 +170,7 @@ export const AGENT_GROUPS: { [key: string]: AgentGroupTemplate } = {
             AGENT_TEMPLATES['qa-automation']
         ]
     },
-    
+
     'startup-team': {
         name: 'Startup Team',
         description: 'Versatile team for rapid development',
@@ -180,7 +180,7 @@ export const AGENT_GROUPS: { [key: string]: AgentGroupTemplate } = {
             AGENT_TEMPLATES['devops-engineer']
         ]
     },
-    
+
     'mobile-team': {
         name: 'Mobile Team',
         description: 'Mobile app development team',
@@ -190,7 +190,7 @@ export const AGENT_GROUPS: { [key: string]: AgentGroupTemplate } = {
             AGENT_TEMPLATES['qa-automation']
         ]
     },
-    
+
     'ai-team': {
         name: 'AI/ML Team',
         description: 'AI development and integration',
@@ -205,13 +205,13 @@ export const AGENT_GROUPS: { [key: string]: AgentGroupTemplate } = {
 // Helper function to get agent prompt
 export function getAgentPrompt(template: AgentTemplate, task?: any): string {
     let prompt = template.systemPrompt + '\n\n';
-    
+
     if (task) {
         prompt += `Current Task: ${task.title}\n`;
         prompt += `Description: ${task.description}\n\n`;
         prompt += `Please complete this task using your expertise in ${template.specialization}.\n`;
         prompt += `Focus on: ${template.capabilities.join(', ')}\n`;
     }
-    
+
     return prompt;
 }

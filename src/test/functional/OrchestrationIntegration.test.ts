@@ -46,18 +46,18 @@ describe('Orchestration Integration', () => {
 
         // Get a free port for testing
         port = await getPort();
-        
+
         // Create lightweight instances for testing
         const errorHandler = {
             handleError: jest.fn(),
             handleWarning: jest.fn(),
             handleInfo: jest.fn()
         };
-        
+
         const connectionPoolService = new ConnectionPoolService(loggingService, eventBus);
-        
+
         const messagePersistenceService = new MessagePersistenceService(loggingService, configService, eventBus);
-        
+
         const messageRouter = new MessageRouter(
             connectionPoolService,
             messagePersistenceService,
@@ -65,9 +65,9 @@ describe('Orchestration Integration', () => {
             eventBus,
             errorHandler
         );
-        
+
         const messageValidator = new MessageValidator(loggingService);
-        
+
         const metricsService = {
             incrementCounter: jest.fn(),
             recordGauge: jest.fn(),
@@ -77,7 +77,7 @@ describe('Orchestration Integration', () => {
             setEnabled: jest.fn(),
             isEnabled: jest.fn().mockReturnValue(true)
         };
-        
+
         orchestrationServer = new OrchestrationServer(
             port,
             loggingService,
@@ -106,7 +106,7 @@ describe('Orchestration Integration', () => {
     describe('Server Startup', () => {
         test('should start orchestration server successfully', async () => {
             await orchestrationServer.start();
-            
+
             const status = orchestrationServer.getStatus();
             expect(status.isRunning).toBe(true);
             expect(status.port).toBe(port);
@@ -115,18 +115,18 @@ describe('Orchestration Integration', () => {
         test('should handle server startup errors', async () => {
             // Start server on the same port twice to trigger EADDRINUSE
             await orchestrationServer.start();
-            
+
             // Create lightweight test dependencies for second server
             const errorHandler = {
                 handleError: jest.fn(),
                 handleWarning: jest.fn(),
                 handleInfo: jest.fn()
             };
-            
+
             const connectionPoolService = new ConnectionPoolService(loggingService, eventBus);
-            
+
             const messagePersistenceService = new MessagePersistenceService(loggingService, configService, eventBus);
-            
+
             const messageRouter = new MessageRouter(
                 connectionPoolService,
                 messagePersistenceService,
@@ -134,9 +134,9 @@ describe('Orchestration Integration', () => {
                 eventBus,
                 errorHandler
             );
-            
+
             const messageValidator = new MessageValidator(loggingService);
-            
+
             const metricsService = {
                 incrementCounter: jest.fn(),
                 recordGauge: jest.fn(),
@@ -146,7 +146,7 @@ describe('Orchestration Integration', () => {
                 setEnabled: jest.fn(),
                 isEnabled: jest.fn().mockReturnValue(true)
             };
-            
+
             const secondServer = new OrchestrationServer(
                 port,
                 loggingService,
@@ -165,7 +165,7 @@ describe('Orchestration Integration', () => {
         test('should stop orchestration server', async () => {
             await orchestrationServer.start();
             await orchestrationServer.stop();
-            
+
             const status = orchestrationServer.getStatus();
             expect(status.isRunning).toBe(false);
         });
@@ -211,7 +211,7 @@ describe('Orchestration Integration', () => {
     describe('WebSocket Routing', () => {
         test('should route messages to correct handlers', async () => {
             await orchestrationServer.start();
-            
+
             // Create lightweight test dependencies
             const connectionPoolService = new ConnectionPoolService(loggingService, eventBus);
             const messagePersistenceService = new MessagePersistenceService(loggingService, configService, eventBus, '/tmp/test-workspace');
@@ -220,7 +220,7 @@ describe('Orchestration Integration', () => {
                 handleWarning: jest.fn(),
                 handleInfo: jest.fn()
             };
-            
+
             const messageRouter = new MessageRouter(
                 connectionPoolService,
                 messagePersistenceService,
@@ -236,10 +236,10 @@ describe('Orchestration Integration', () => {
 
             // Mock the router to verify it receives the message
             const routeSpy = jest.spyOn(messageRouter, 'route');
-            
+
             // Simulate message routing
             await messageRouter.route(message);
-            
+
             expect(routeSpy).toHaveBeenCalledWith(message);
         });
 
@@ -252,7 +252,7 @@ describe('Orchestration Integration', () => {
                 handleWarning: jest.fn(),
                 handleInfo: jest.fn()
             };
-            
+
             const messageRouter = new MessageRouter(
                 connectionPoolService,
                 messagePersistenceService,
@@ -286,7 +286,7 @@ describe('Orchestration Integration', () => {
 
         test('should handle dashboard webview creation', async () => {
             const createWebviewSpy = jest.spyOn(vscode.window, 'createWebviewPanel');
-            
+
             await vscode.commands.executeCommand('nofx.openMessageFlow');
 
             expect(createWebviewSpy).toHaveBeenCalledWith(
@@ -324,7 +324,7 @@ describe('Orchestration Integration', () => {
     describe('Connection Management', () => {
         test('should handle WebSocket connections', async () => {
             await orchestrationServer.start();
-            
+
             const errorHandler = {
                 handleError: jest.fn(),
                 handleWarning: jest.fn(),
@@ -334,9 +334,9 @@ describe('Orchestration Integration', () => {
                 withRetry: jest.fn(),
                 dispose: jest.fn()
             };
-            
+
             const configService = new ConfigurationService();
-            
+
             const connectionPool = new ConnectionPoolService(
                 loggingService,
                 eventBus,
@@ -352,7 +352,7 @@ describe('Orchestration Integration', () => {
             };
 
             connectionPool.addConnection(mockConnection as any, 'test-client', {});
-            
+
             expect(connectionPool.getConnections().length).toBe(1);
         });
 
@@ -366,9 +366,9 @@ describe('Orchestration Integration', () => {
                 withRetry: jest.fn(),
                 dispose: jest.fn()
             };
-            
+
             const configService = new ConfigurationService();
-            
+
             const connectionPool = new ConnectionPoolService(
                 loggingService,
                 eventBus,
@@ -384,7 +384,7 @@ describe('Orchestration Integration', () => {
 
             connectionPool.addConnection(mockConnection as any, 'test-client', {});
             connectionPool.removeConnection('test-client');
-            
+
             expect(connectionPool.getConnections().length).toBe(0);
         });
     });
@@ -397,11 +397,11 @@ describe('Orchestration Integration', () => {
                 handleWarning: jest.fn(),
                 handleInfo: jest.fn()
             };
-            
+
             const connectionPoolService = new ConnectionPoolService(loggingService, eventBus);
-            
+
             const messagePersistenceService = new MessagePersistenceService(loggingService, configService, eventBus);
-            
+
             const messageRouter = new MessageRouter(
                 connectionPoolService,
                 messagePersistenceService,
@@ -409,9 +409,9 @@ describe('Orchestration Integration', () => {
                 eventBus,
                 errorHandler
             );
-            
+
             const messageValidator = new MessageValidator(loggingService);
-            
+
             const metricsService = {
                 incrementCounter: jest.fn(),
                 recordGauge: jest.fn(),
@@ -421,7 +421,7 @@ describe('Orchestration Integration', () => {
                 setEnabled: jest.fn(),
                 isEnabled: jest.fn().mockReturnValue(true)
             };
-            
+
             // Mock server to throw error on start
             const failingServer = new OrchestrationServer(
                 0, // Invalid port

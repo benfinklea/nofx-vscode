@@ -677,12 +677,12 @@ describe('Agent Lifecycle', () => {
     describe('Integration with AgentManager', () => {
         test('should track agent status transitions', async () => {
             const agent = await agentManager.spawnAgent(mockTemplates[0], 'Status Test');
-            
+
             expect(agent.status).toBe('idle');
 
             // Simulate status change
             await agentManager.updateAgentStatus(agent.id, 'working');
-            
+
             const updatedAgent = agentManager.getAgent(agent.id);
             expect(updatedAgent?.status).toBe('working');
 
@@ -740,13 +740,13 @@ describe('Agent Lifecycle', () => {
 
         test('should handle agent terminal lifecycle', async () => {
             const agent = await agentManager.spawnAgent(mockTemplates[0], 'Terminal Test');
-            
+
             expect(agent.terminal).toBeDefined();
-            
+
             const disposeSpy = jest.spyOn(agent.terminal, 'dispose');
-            
+
             await agentManager.removeAgent(agent.id);
-            
+
             expect(disposeSpy).toHaveBeenCalled();
         });
     });

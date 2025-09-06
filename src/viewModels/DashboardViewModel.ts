@@ -12,7 +12,7 @@ export class DashboardViewModel implements IDashboardViewModel {
     private loggingService: ILoggingService;
     private messagePersistence: IMessagePersistenceService;
     private connectionPool?: IConnectionPoolService;
-    
+
     // Dashboard-specific state
     private messageBuffer: OrchestratorMessage[] = [];
     private activeFilters: {
@@ -22,9 +22,9 @@ export class DashboardViewModel implements IDashboardViewModel {
         limit?: number;
         offset?: number;
     } = {
-        limit: 100,
-        offset: 0
-    };
+            limit: 100,
+            offset: 0
+        };
     private connectionStatus: Map<string, 'connected' | 'disconnected'> = new Map();
     private clientToLogical = new Map<string, string>();
     private statistics: {
@@ -33,12 +33,12 @@ export class DashboardViewModel implements IDashboardViewModel {
         averageResponseTime: number;
         activeConnections: number;
     } = {
-        totalMessages: 0,
-        successRate: 0,
-        averageResponseTime: 0,
-        activeConnections: 0
-    };
-    
+            totalMessages: 0,
+            successRate: 0,
+            averageResponseTime: 0,
+            activeConnections: 0
+        };
+
     // Event subscriptions
     private subscriptions: vscode.Disposable[] = [];
     private stateChangeCallbacks: ((state: DashboardViewState) => void)[] = [];
@@ -59,20 +59,20 @@ export class DashboardViewModel implements IDashboardViewModel {
         this.loggingService = loggingService;
         this.messagePersistence = messagePersistence;
         this.connectionPool = connectionPool;
-        
+
         this.initialize();
     }
 
     private initialize(): void {
         this.loggingService.info('DashboardViewModel: Initializing');
-        
+
         // Subscribe to orchestration events
         this.subscriptions.push(
             this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_RECEIVED, (data) => this.handleNewMessage(data.message)),
             this.eventBus.subscribe(ORCH_EVENTS.CLIENT_CONNECTED, (data) => this.updateConnectionStatus(data)),
-            this.eventBus.subscribe(ORCH_EVENTS.CLIENT_DISCONNECTED, (data) => { 
-                this.connectionStatus.set(data.clientId, 'disconnected'); 
-                this.publishStateChange(); 
+            this.eventBus.subscribe(ORCH_EVENTS.CLIENT_DISCONNECTED, (data) => {
+                this.connectionStatus.set(data.clientId, 'disconnected');
+                this.publishStateChange();
             }),
             this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_REGISTERED, (data) => this.handleLogicalIdRegistered(data)),
             this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_UNREGISTERED, (data) => this.handleLogicalIdUnregistered(data)),
@@ -80,7 +80,7 @@ export class DashboardViewModel implements IDashboardViewModel {
             this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_PERSISTED, () => this.handlePersistenceUpdate()),
             this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_STORAGE_CLEANUP, () => this.handlePersistenceUpdate())
         );
-        
+
         // Register dashboard callback with orchestration server
         this.orchestrationServer.setDashboardCallback((message) => {
             this.handleNewMessage(message);
@@ -96,9 +96,9 @@ export class DashboardViewModel implements IDashboardViewModel {
                 lastMessage: await this.getLastMessageForConnection(id)
             }))
         );
-        
+
         const messages = await this.getFilteredMessages();
-        
+
         return {
             connections,
             messages,
@@ -110,7 +110,7 @@ export class DashboardViewModel implements IDashboardViewModel {
     async handleCommand(command: string, data?: any): Promise<void> {
         try {
             this.loggingService.debug('DashboardViewModel: Handling command', { command, data });
-            
+
             switch (command as WebviewCommand) {
                 case WEBVIEW_COMMANDS.APPLY_FILTER:
                     this.applyFilter(data?.filter);
@@ -137,9 +137,9 @@ export class DashboardViewModel implements IDashboardViewModel {
 
     applyFilter(filter: any): void {
         this.loggingService.debug('DashboardViewModel: Applying filter', filter);
-        this.activeFilters = { 
+        this.activeFilters = {
             ...this.activeFilters,
-            ...filter 
+            ...filter
         };
         this.publishStateChange();
     }
@@ -152,33 +152,33 @@ export class DashboardViewModel implements IDashboardViewModel {
     async clearMessages(): Promise<void> {
         this.loggingService.info('DashboardViewModel: Clearing messages');
         this.messageBuffer = [];
-        
+
         try {
             await this.messagePersistence.clear();
         } catch (error) {
             this.loggingService.error('Failed to clear message persistence', error);
         }
-        
+
         this.publishStateChange();
     }
 
     async exportMessages(): Promise<void> {
         try {
             this.loggingService.info('DashboardViewModel: Exporting messages');
-            
+
             const history = await this.messagePersistence.getHistory();
             const connections = this.orchestrationServer.getConnectionSummaries();
-            
+
             const exportData = {
                 timestamp: new Date().toISOString(),
                 connections,
                 messages: history,
                 stats: await this.calculateMessageStats()
             };
-            
+
             const content = JSON.stringify(exportData, null, 2);
             const uri = vscode.Uri.parse(`untitled:nofx-messages-${Date.now()}.json`);
-            
+
             vscode.workspace.openTextDocument(uri).then(doc => {
                 vscode.window.showTextDocument(doc).then(editor => {
                     editor.edit(edit => {
@@ -195,12 +195,12 @@ export class DashboardViewModel implements IDashboardViewModel {
         // Use cached history for synchronous access
         const history = this.messageBuffer;
         const connections = this.connectionPool?.getAllConnections() || new Map();
-        
+
         // Calculate success rate (completed tasks / assigned tasks)
         const assigned = history.filter((m: OrchestratorMessage) => m.type === MessageType.ASSIGN_TASK).length;
         const completed = history.filter((m: OrchestratorMessage) => m.type === MessageType.TASK_COMPLETE).length;
         const successRate = assigned > 0 ? (completed / assigned) * 100 : 0;
-        
+
         // Count agent connections from metadata
         let agentCount = 0;
         connections.forEach((conn) => {
@@ -208,7 +208,7 @@ export class DashboardViewModel implements IDashboardViewModel {
                 agentCount++;
             }
         });
-        
+
         return {
             totalMessages: history.length,
             successRate,
@@ -227,10 +227,10 @@ export class DashboardViewModel implements IDashboardViewModel {
 
     subscribe(callback: (state: DashboardViewState) => void): vscode.Disposable {
         this.stateChangeCallbacks.push(callback);
-        
+
         // Immediately call with current state
         this.getDashboardState().then(callback);
-        
+
         return {
             dispose: () => {
                 const index = this.stateChangeCallbacks.indexOf(callback);
@@ -243,16 +243,16 @@ export class DashboardViewModel implements IDashboardViewModel {
 
     private handleNewMessage(message: OrchestratorMessage): void {
         this.messageBuffer.push(message);
-        
+
         // Limit buffer size
         if (this.messageBuffer.length > 100) {
             this.messageBuffer.shift();
         }
-        
+
         // Update connection status using normalized ID
         const normalizedId = this.normalizeId(message.from);
         this.connectionStatus.set(normalizedId, 'connected');
-        
+
         // Update statistics and publish state change
         this.updateStatistics().then(() => {
             this.throttledPublishStateChange();
@@ -301,7 +301,7 @@ export class DashboardViewModel implements IDashboardViewModel {
         const lastMessage = history
             .filter(m => m.from === connectionId || m.to === connectionId)
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
-        
+
         return lastMessage ? new Date(lastMessage.timestamp) : undefined;
     }
 
@@ -328,7 +328,7 @@ export class DashboardViewModel implements IDashboardViewModel {
 
             // Get messages from persistence with filters
             const history = await this.messagePersistence.getHistory(filter);
-            
+
             const messages = history.map(msg => ({
                 id: msg.id,
                 timestamp: new Date(msg.timestamp),
@@ -337,12 +337,12 @@ export class DashboardViewModel implements IDashboardViewModel {
                 source: msg.from,
                 target: msg.to
             }));
-            
+
             this.loggingService.debug('Retrieved filtered messages', {
                 filter,
                 messageCount: messages.length
             });
-            
+
             return messages;
         } catch (error) {
             this.loggingService.error('Failed to get filtered messages from persistence', error);
@@ -361,7 +361,7 @@ export class DashboardViewModel implements IDashboardViewModel {
     private async updateStatistics(): Promise<void> {
         const history = await this.messagePersistence.getHistory();
         const connections = this.connectionPool?.getAllConnections() || new Map();
-        
+
         // Count agent connections from metadata
         let agentCount = 0;
         connections.forEach((conn) => {
@@ -369,7 +369,7 @@ export class DashboardViewModel implements IDashboardViewModel {
                 agentCount++;
             }
         });
-        
+
         this.statistics = {
             totalMessages: history.length,
             successRate: await this.calculateSuccessRate(),
@@ -387,12 +387,12 @@ export class DashboardViewModel implements IDashboardViewModel {
         if (this.isPaused) {
             return;
         }
-        
+
         // Clear existing timer
         if (this.throttledUpdateTimer) {
             clearTimeout(this.throttledUpdateTimer);
         }
-        
+
         // Set new timer to publish state change after a short delay
         this.throttledUpdateTimer = setTimeout(() => {
             this.publishStateChange();
@@ -416,7 +416,7 @@ export class DashboardViewModel implements IDashboardViewModel {
 
     private async publishStateChange(): Promise<void> {
         const state = await this.getDashboardState();
-        
+
         // Notify direct subscribers
         this.stateChangeCallbacks.forEach(callback => {
             try {
@@ -429,19 +429,19 @@ export class DashboardViewModel implements IDashboardViewModel {
 
     dispose(): void {
         this.loggingService.info('DashboardViewModel: Disposing');
-        
+
         // Clear orchestration callback
         this.orchestrationServer.clearDashboardCallback();
-        
+
         // Clear throttled update timer
         if (this.throttledUpdateTimer) {
             clearTimeout(this.throttledUpdateTimer);
         }
-        
+
         // Dispose all subscriptions
         this.subscriptions.forEach(sub => sub.dispose());
         this.subscriptions = [];
-        
+
         // Clear callbacks
         this.stateChangeCallbacks = [];
     }

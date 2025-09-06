@@ -34,7 +34,7 @@ export class Container implements IContainer {
             factory,
             lifetime
         });
-        
+
         if (this.loggingService?.isLevelEnabled('debug')) {
             this.loggingService.debug(`Service registered: ${token.toString()} (${lifetime})`);
         }
@@ -48,7 +48,7 @@ export class Container implements IContainer {
             instance
         });
         this.singletonInstances.set(token, instance);
-        
+
         if (this.loggingService?.isLevelEnabled('debug')) {
             this.loggingService.debug(`Service instance registered: ${token.toString()}`);
         }
@@ -118,7 +118,7 @@ export class Container implements IContainer {
 
     async dispose(): Promise<void> {
         this.loggingService?.debug(`Disposing container with ${this.singletonInstances.size} singleton instances`);
-        
+
         // Dispose all singleton instances that implement IDisposable or IAsyncDisposable
         for (const [token, instance] of this.singletonInstances.entries()) {
             if (instance) {
@@ -150,7 +150,7 @@ export class Container implements IContainer {
         this.registrations.clear();
         this.singletonInstances.clear();
         this.resolutionStack.clear();
-        
+
         this.loggingService?.debug('Container disposal completed');
     }
 }

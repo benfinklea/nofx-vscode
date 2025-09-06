@@ -1,10 +1,10 @@
 import { TaskQueue } from '../../../tasks/TaskQueue';
 import { AgentManager } from '../../../agents/AgentManager';
-import { 
-    ILoggingService, 
-    IEventBus, 
-    IErrorHandler, 
-    INotificationService, 
+import {
+    ILoggingService,
+    IEventBus,
+    IErrorHandler,
+    INotificationService,
     IConfigurationService,
     ITaskStateMachine,
     IPriorityTaskQueue,
@@ -42,15 +42,15 @@ describe('TaskQueue', () => {
             warn: jest.fn(),
             error: jest.fn(),
             isLevelEnabled: jest.fn((level: any) => true),
-            getChannel: jest.fn((name: string) => ({ 
+            getChannel: jest.fn((name: string) => ({
                 name,
                 append: jest.fn(),
-                appendLine: jest.fn(), 
+                appendLine: jest.fn(),
                 replace: jest.fn(),
                 clear: jest.fn(),
-                show: jest.fn(), 
-                hide: jest.fn(), 
-                dispose: jest.fn() 
+                show: jest.fn(),
+                hide: jest.fn(),
+                dispose: jest.fn()
             })),
             time: jest.fn(),
             timeEnd: jest.fn(),
@@ -358,7 +358,7 @@ describe('TaskQueue', () => {
             const task = createMockTask({ status: 'ready' });
             const agent1 = createMockAgent({ id: 'agent-1', capabilities: ['frontend'] });
             const agent2 = createMockAgent({ id: 'agent-2', capabilities: ['backend'] });
-            
+
             mockPriorityQueue.dequeueReady.mockReturnValue(task);
             (agentManager as any).getIdleAgents.mockReturnValue([agent1, agent2]);
             mockCapabilityMatcher.rankAgents.mockReturnValue([
@@ -433,7 +433,7 @@ describe('TaskQueue', () => {
             const task1 = createMockTask({ id: 'task-1', status: 'pending' });
             const task2 = createMockTask({ id: 'task-2', status: 'in-progress' });
             const task3 = createMockTask({ id: 'task-3', status: 'completed' });
-            
+
             jest.spyOn(taskQueue, 'getTasks').mockReturnValue([task1, task2, task3]);
         });
 
@@ -529,7 +529,7 @@ describe('TaskQueue', () => {
                 createMockTask({ id: 'dependent-1' }),
                 createMockTask({ id: 'dependent-2' })
             ];
-            jest.spyOn(taskQueue, 'getTask').mockImplementation((id) => 
+            jest.spyOn(taskQueue, 'getTask').mockImplementation((id) =>
                 tasks.find(t => t.id === id)
             );
 

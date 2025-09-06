@@ -42,7 +42,7 @@ export class ErrorHandler implements IErrorHandler {
 
     private getErrorMessage(error: Error, context?: string): string {
         let message = error.message || 'An unknown error occurred';
-        
+
         if (context) {
             message = `${context}: ${message}`;
         }
@@ -61,7 +61,7 @@ export class ErrorHandler implements IErrorHandler {
 
     private getNotificationMessage(error: Error, context?: string, severity?: ErrorSeverity): string {
         const baseMessage = this.getErrorMessage(error, context);
-        
+
         switch (severity) {
             case 'high':
                 return `Critical Error: ${baseMessage}`;
@@ -92,7 +92,7 @@ export class ErrorHandler implements IErrorHandler {
         // Show notification based on severity and frequency
         if (this.shouldShowNotification(context || 'unknown', severity)) {
             const notificationMessage = this.getNotificationMessage(error, context, severity);
-            
+
             // Use appropriate notification method based on severity
             switch (severity) {
                 case 'high':
@@ -129,26 +129,26 @@ export class ErrorHandler implements IErrorHandler {
     }
 
     async withRetry<T>(
-        operation: () => Promise<T>, 
-        maxRetries: number = 3, 
+        operation: () => Promise<T>,
+        maxRetries: number = 3,
         context?: string
     ): Promise<T> {
         let lastError: Error | undefined;
-        
+
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 return await operation();
             } catch (error) {
                 lastError = error instanceof Error ? error : new Error(String(error));
-                
+
                 if (attempt < maxRetries) {
                     const retryMessage = `Attempt ${attempt}/${maxRetries} failed, retrying...`;
-                    this.loggingService.warn(retryMessage, { 
-                        context, 
+                    this.loggingService.warn(retryMessage, {
+                        context,
                         error: lastError.message,
-                        attempt 
+                        attempt
                     });
-                    
+
                     // Exponential backoff: wait 1s, 2s, 4s, etc.
                     const delay = Math.pow(2, attempt - 1) * 1000;
                     await new Promise(resolve => setTimeout(resolve, delay));
@@ -161,7 +161,7 @@ export class ErrorHandler implements IErrorHandler {
                 }
             }
         }
-        
+
         // If we get here, all retries failed
         this.handleError(lastError!, context, 'high');
         throw lastError!;
@@ -204,12 +204,12 @@ export class ErrorHandler implements IErrorHandler {
     // Get error statistics for debugging
     getErrorStats(): { context: string; count: number; lastTime: number }[] {
         const stats: { context: string; count: number; lastTime: number }[] = [];
-        
+
         for (const [context, count] of this.errorCounts.entries()) {
             const lastTime = this.lastErrorTimes.get(context) || 0;
             stats.push({ context, count, lastTime });
         }
-        
+
         return stats;
     }
 

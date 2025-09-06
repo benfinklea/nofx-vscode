@@ -9,13 +9,13 @@ export const DOMAIN_EVENTS = {
     AGENT_CREATED: 'agent.created',
     AGENT_REMOVED: 'agent.removed',
     AGENT_STATUS_CHANGED: 'agent.status.changed',
-    
+
     // Agent lifecycle events
     AGENT_LIFECYCLE_SPAWNING: 'agent.lifecycle.spawning',
     AGENT_LIFECYCLE_SPAWNED: 'agent.lifecycle.spawned',
     AGENT_LIFECYCLE_REMOVING: 'agent.lifecycle.removing',
     AGENT_LIFECYCLE_REMOVED: 'agent.lifecycle.removed',
-    
+
     // Task events
     TASK_CREATED: 'task.created',
     TASK_ASSIGNED: 'task.assigned',
@@ -36,25 +36,25 @@ export const DOMAIN_EVENTS = {
     TASK_CONFLICT_RESOLVED: 'task.conflict.resolved',
     TASK_CONFLICT_DECISION: 'task.conflict.decision',
     TASK_MATCH_SCORE: 'task.match.score',
-    
+
     // Theme events
     THEME_CHANGED: 'theme.changed',
-    
+
     // Orchestration events
     MESSAGE_RECEIVED: 'message.received',
     CONNECTION_ESTABLISHED: 'connection.established',
     CONNECTION_LOST: 'connection.lost',
-    
+
     // Worktree events
     WORKTREE_CREATED: 'worktree.created',
     WORKTREE_REMOVED: 'worktree.removed',
     WORKTREE_MERGED: 'worktree.merged',
-    
+
     // Terminal events
     TERMINAL_CREATED: 'terminal.created',
     TERMINAL_CLOSED: 'terminal.closed',
     TERMINAL_DISPOSED: 'terminal.disposed',
-    
+
     // Agent task events
     AGENT_TASK_ASSIGNED: 'agent.task.assigned',
     AGENT_TASK_COMPLETED: 'agent.task.completed',
@@ -104,7 +104,7 @@ export const ORCH_EVENTS = {
     // Message routing events
     MESSAGE_ROUTED: 'orchestration.message.routed',
     // Message validation events
-    MESSAGE_VALIDATION_FAILED: 'orchestration.message.validation.failed',
+    MESSAGE_VALIDATION_FAILED: 'orchestration.message.validation.failed'
 } as const;
 
 // UI events - user interface events
@@ -113,20 +113,20 @@ export const UI_EVENTS = {
     UI_STATE_CHANGED: 'ui.state.changed',
     DASHBOARD_STATE_CHANGED: 'dashboard.state.changed',
     TREE_STATE_CHANGED: 'tree.state.changed',
-    
+
     // View events
     VIEW_OPENED: 'view.opened',
     VIEW_CLOSED: 'view.closed',
     VIEW_FOCUSED: 'view.focused',
-    
+
     // Panel events
     PANEL_CREATED: 'panel.created',
     PANEL_DISPOSED: 'panel.disposed',
-    
+
     // Webview events
     WEBVIEW_MESSAGE_RECEIVED: 'webview.message.received',
     WEBVIEW_MESSAGE_SENT: 'webview.message.sent',
-    
+
     // Tree view events
     TREE_ITEM_SELECTED: 'tree.item.selected',
     TREE_ITEM_EXPANDED: 'tree.item.expanded',
