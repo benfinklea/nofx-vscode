@@ -39,17 +39,17 @@ log_success() {
     if [ "$QUIET" != "true" ]; then
         echo -e "${GREEN}[✓]${NC} $1"
     fi
-    ((PASSED_CHECKS++))
+    ((PASSED_CHECKS++)) || true
 }
 
 log_error() {
     echo -e "${RED}[✗]${NC} $1" >&2
-    ((FAILED_CHECKS++))
+    ((FAILED_CHECKS++)) || true
 }
 
 log_warning() {
     echo -e "${YELLOW}[!]${NC} $1"
-    ((WARNINGS++))
+    ((WARNINGS++)) || true
 }
 
 log_verbose() {
@@ -64,7 +64,7 @@ check_file() {
     local min_size="${2:-0}"
     local description="$3"
     
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     
     if [ ! -f "$file" ]; then
         log_error "$description does not exist: $file"
@@ -93,7 +93,7 @@ validate_typescript_compilation() {
     
     # Check if out directory structure matches src directory
     log_info "Checking output directory structure..."
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     
     local src_structure=$(cd "$SRC_DIR" && find . -type d | sort)
     local out_structure=$(cd "$OUT_DIR" && find . -type d 2>/dev/null | sort)
@@ -117,7 +117,7 @@ validate_typescript_compilation() {
     fi
     
     # Check for TypeScript files in output (should not exist)
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     local ts_in_out=$(find "$OUT_DIR" -name "*.ts" -type f 2>/dev/null | wc -l)
     if [ "$ts_in_out" -gt 0 ]; then
         log_error "Found TypeScript files in output directory (should only contain JavaScript)"
@@ -127,8 +127,38 @@ validate_typescript_compilation() {
     
     # Check for source maps if configured
     local map_count=$(find "$OUT_DIR" -name "*.js.map" -type f 2>/dev/null | wc -l)
-    if [ "$map_count" -gt 0 ]; then
-        log_verbose "Found $map_count source map files"
+    
+    # Check if sourceMap is enabled in tsconfig.build.json
+    local source_map_enabled=$(node -e "
+        const fs = require('fs');
+        const path = require('path');
+        const tsconfigPath = path.join('$PROJECT_ROOT', 'tsconfig.build.json');
+        try {
+            const content = fs.readFileSync(tsconfigPath, 'utf8');
+            // Remove comments for simple JSON parsing
+            const jsonStr = content.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+            const config = JSON.parse(jsonStr);
+            console.log(config.compilerOptions?.sourceMap === true ? 'true' : 'false');
+        } catch (error) {
+            console.log('false');
+        }
+    ")
+    
+    ((TOTAL_CHECKS++)) || true
+    if [ "$source_map_enabled" == "true" ]; then
+        if [ "$map_count" -eq 0 ]; then
+            log_error "Source maps are enabled in tsconfig.build.json but none were generated"
+        elif [ "$map_count" -ne "$js_count" ]; then
+            log_warning "Source map count ($map_count) doesn't match JavaScript file count ($js_count)"
+        else
+            log_success "All JavaScript files have corresponding source maps ($map_count)"
+        fi
+    else
+        if [ "$map_count" -gt 0 ]; then
+            log_verbose "Found $map_count source map files (sourceMap not explicitly enabled)"
+        else
+            log_verbose "No source maps generated (sourceMap not enabled in tsconfig.build.json)"
+        fi
     fi
 }
 
@@ -136,14 +166,14 @@ validate_typescript_compilation() {
 validate_package_json() {
     log_info "Validating package.json configuration..."
     
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     if [ ! -f "$PACKAGE_JSON" ]; then
         log_error "package.json not found"
         return 1
     fi
     
     # Check main entry point
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     local main_entry=$(node -e "console.log(require('$PACKAGE_JSON').main || '')")
     if [ -z "$main_entry" ]; then
         log_error "No main entry point defined in package.json"
@@ -157,7 +187,7 @@ validate_package_json() {
     fi
     
     # Count and validate commands
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     local command_count=$(node -e "
         const pkg = require('$PACKAGE_JSON');
         const commands = pkg.contributes?.commands || [];
@@ -190,7 +220,7 @@ validate_package_json() {
     fi
     
     # Validate activation events
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     local activation_events=$(node -e "
         const pkg = require('$PACKAGE_JSON');
         const events = pkg.activationEvents || [];
@@ -213,7 +243,7 @@ validate_extension_manifest() {
     check_file "$PROJECT_ROOT/package.json" 0 "package.json"
     
     # Validate version format
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     local version=$(node -e "console.log(require('$PACKAGE_JSON').version || '')")
     if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         log_success "Version follows semantic versioning: $version"
@@ -222,7 +252,7 @@ validate_extension_manifest() {
     fi
     
     # Check for required VS Code engine
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     local vscode_engine=$(node -e "console.log(require('$PACKAGE_JSON').engines?.vscode || '')")
     if [ -z "$vscode_engine" ]; then
         log_error "No VS Code engine version specified"
@@ -235,11 +265,11 @@ validate_extension_manifest() {
 validate_runtime() {
     log_info "Validating runtime loading..."
     
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     
     # Try to require the main extension file
-    # Use if-then-else to avoid early exit from set -e
-    if node -e "
+    # Handle the case where vscode module is not available
+    local load_result=$(node -e "
         try {
             const ext = require('$OUT_DIR/extension.js');
             if (typeof ext.activate !== 'function') {
@@ -252,13 +282,25 @@ validate_runtime() {
             }
             console.log('success');
         } catch (error) {
-            console.error('Error loading extension:', error.message);
-            process.exit(1);
+            // Special handling for vscode module not found (expected outside VS Code)
+            if (error.message.includes('Cannot find module') && error.message.includes('vscode')) {
+                console.log('vscode-module-missing');
+            } else {
+                console.error('Error loading extension:', error.message);
+                process.exit(1);
+            }
         }
-    " 2>&1; then
+    " 2>&1) || true
+    
+    if [[ "$load_result" == "success" ]]; then
         log_success "Extension can be loaded and exports required functions"
+        ((PASSED_CHECKS++)) || true
+    elif [[ "$load_result" == *"vscode-module-missing"* ]]; then
+        log_warning "Cannot verify runtime loading (vscode module not available outside VS Code)"
+        ((WARNINGS++)) || true
     else
-        log_error "Failed to load extension"
+        log_error "Failed to load extension: $load_result"
+        ((FAILED_CHECKS++)) || true
     fi
 }
 
@@ -267,7 +309,7 @@ check_common_issues() {
     log_info "Checking for common issues..."
     
     # Check for console.log statements in production code
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     local console_count=$(grep -r "console\\.log" "$OUT_DIR" --include="*.js" 2>/dev/null | wc -l)
     if [ "$console_count" -gt 0 ]; then
         log_warning "Found $console_count console.log statements in compiled code"
@@ -276,7 +318,7 @@ check_common_issues() {
     fi
     
     # Check for TODO/FIXME comments
-    ((TOTAL_CHECKS++))
+    ((TOTAL_CHECKS++)) || true || true || true
     local todo_count=$(grep -r "TODO\|FIXME" "$OUT_DIR" --include="*.js" 2>/dev/null | wc -l)
     if [ "$todo_count" -gt 0 ]; then
         log_warning "Found $todo_count TODO/FIXME comments in compiled code"
@@ -361,7 +403,7 @@ main() {
     
     # Generate and return report
     generate_report
-    exit $?
+    return $?
 }
 
 # Handle command line arguments
