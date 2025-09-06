@@ -10,12 +10,13 @@
 - **🔄 Parallel Execution** - Multiple agents work simultaneously
 - **📊 Real-time Monitoring** - See what each agent is doing
 - **🔗 GitHub Integration** - Agents can create branches and PRs
+- **🧠 Smart Task Prioritization** - Tasks automatically boost priority of their dependencies
 
 ## 📦 Installation
 
 ### Prerequisites
 1. **VS Code** 1.85.0 or higher
-2. **Claude Code CLI** installed:
+2. **Claude Code CLI** (optional for building/testing; required for agent features):
    ```bash
    npm install -g @anthropic-ai/claude-code
    ```
@@ -89,6 +90,60 @@ Description: "Add GET/PUT endpoints for user profile at /api/user/profile"
 
 // All three work simultaneously!
 ```
+
+### Example 4: Smart Task Prioritization
+```typescript
+// High priority deployment task
+const deployTask = {
+  id: "deploy-to-production",
+  priority: 100,
+  prefers: ["integration-test"] // Boosts integration test priority
+};
+
+// Low priority test task gets automatically boosted
+const testTask = {
+  id: "integration-test", 
+  priority: 10 // Will be boosted to 15 when deploy task is queued
+};
+
+// When integration test completes, deploy task gets priority boost!
+```
+
+## 🧠 Smart Task Prioritization
+
+NofX includes intelligent dependency-aware prioritization that automatically boosts task priorities based on soft dependencies.
+
+### How It Works
+
+- **Soft Dependencies**: Use the `prefers` field to specify which tasks should be prioritized
+- **Automatic Boosting**: When a preferred task completes, dependent tasks get priority boosts
+- **Smart Ordering**: High-priority tasks can influence the execution order of their dependencies
+
+### Example Scenario
+
+```typescript
+// Low priority integration test
+{
+  id: "integration-test",
+  priority: 10,
+  command: "npm test"
+}
+
+// High priority deployment that needs the test
+{
+  id: "deploy-to-production",
+  priority: 100,
+  prefers: ["integration-test"], // Boosts test priority
+  command: "npm run deploy"
+}
+```
+
+**What happens:**
+1. Integration test runs first (lowest priority)
+2. When test completes, deploy task gets priority boost (100 → 105)
+3. Deploy task moves to front of queue automatically
+
+For detailed configuration and advanced usage, see [DEPENDENCY_PRIORITIZATION.md](DEPENDENCY_PRIORITIZATION.md).
 
 ## ⚙️ Configuration
 
@@ -165,6 +220,382 @@ Best for: README files, API docs, code comments
 ### General Purpose
 Best for: Any task, refactoring, bug fixes
 
+## 🛠️ Development Setup
+
+Setting up the development environment for NofX extension development:
+
+### Prerequisites
+- **Node.js 18+** - Required for TypeScript and build tools
+- **TypeScript** - `npm install -g typescript`
+- **VS Code or Cursor** - Development and testing environment
+- **Git** - Version control and Git hooks
+- **Claude CLI** (optional) - For building and manual testing; required for agent functionality
+
+### Quick Start Development
+```bash
+# Clone the repository
+git clone https://github.com/nofx/nofx-vscode.git
+cd nofx-vscode
+
+# Install dependencies and set up hooks
+npm install
+npm run dev:setup
+
+# Build the extension
+npm run build
+
+# Or use the automated build script
+./build.sh                    # Build and package only
+./build.sh --install-cursor   # Also install to Cursor (macOS)
+
+# Start development mode with file watching
+npm run watch
+```
+
+### Development Environment Configuration
+```json
+// .vscode/settings.json
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "eslint.enable": true,
+  "editor.formatOnSave": true
+}
+```
+
+## 🏗️ Building the Extension
+
+Comprehensive build instructions for different scenarios:
+
+### Quick Build
+```bash
+# Build and package only (default)
+./build.sh
+
+# Build, package, and install to Cursor (macOS only)
+./build.sh --install-cursor
+
+# View available options
+./build.sh --help
+
+# Or manual build
+npm run build
+```
+
+### Development Builds
+```bash
+# Compile TypeScript only
+npm run compile
+
+# Watch mode for development
+npm run watch
+
+# Clean build (removes artifacts first)
+npm run build:clean
+
+# Validated build (with comprehensive checks)
+npm run build:validate
+
+# CI-ready build (full validation and testing)
+npm run build:ci
+```
+
+### Build Scripts Overview
+- `npm run compile` - TypeScript compilation only
+- `npm run build` - Complete build with VSIX packaging
+- `npm run build:clean` - Clean build from scratch
+- `npm run build:validate` - Build with validation checks
+- `npm run watch` - Development mode with auto-rebuild
+
+### VSIX Packaging
+```bash
+# Package extension with dependencies
+npx vsce package
+
+# Install in VS Code
+code --install-extension nofx-0.1.0.vsix --force
+
+# Install in Cursor
+cursor --install-extension nofx-0.1.0.vsix --force
+```
+
+## 🧪 Testing
+
+Comprehensive testing workflow for quality assurance:
+
+### Test Suite Overview
+- **Unit Tests** - Service classes and utilities
+- **Integration Tests** - Service interactions and workflows
+- **Functional Tests** - Extension commands and UI
+- **E2E Tests** - Complete user workflows
+- **Smoke Tests** - Quick validation checks
+
+### Running Tests
+```bash
+# Run all tests
+npm run test:all
+
+# Specific test suites
+npm run test:unit          # Fast unit tests
+npm run test:integration   # Service integration tests
+npm run test:functional    # Extension functionality
+npm run test:e2e           # End-to-end tests
+npm run test:smoke         # Quick smoke tests
+
+# Test with coverage
+npm run test:coverage
+
+# Watch mode for development
+npm run test:watch
+
+# CI environment testing
+npm run test:ci
+```
+
+### Manual Testing
+```bash
+# Run manual testing checklist
+npm run test:manual
+
+# Build validation tests
+npm run test:build
+```
+
+### Test Coverage Requirements
+- Minimum 80% code coverage
+- All new features must include tests
+- Bug fixes must include regression tests
+
+## 🔧 Development Workflow
+
+Best practices for NofX extension development:
+
+### Git Hooks and Validation
+```bash
+# Set up Git hooks (pre-commit, pre-push)
+npm run hooks:install
+
+# Verify hooks are working
+npm run hooks:verify
+
+# Run pre-commit validation manually
+npm run hooks:precommit
+
+# Run pre-push validation manually
+npm run hooks:prepush
+```
+
+### Development Scripts
+```bash
+# Validate code without building
+npm run dev:validate
+
+# Clean development artifacts (removes build outputs only)
+npm run dev:clean
+
+# Full reset (removes everything including node_modules)
+npm run dev:reset
+
+# Full development setup
+npm run dev:setup
+```
+
+### Quality Assurance
+```bash
+# Run full QA suite
+npm run qa:full
+
+# Quick QA checks
+npm run qa:quick
+
+# Validate all components
+npm run validate:all
+npm run validate:commands
+npm run validate:services
+npm run validate:build
+```
+
+### Code Quality
+```bash
+# Run linter
+npm run lint
+
+# Fix linting issues
+npm run lint:fix
+
+# Format code
+npm run format
+```
+
+## 🐛 Debugging & Troubleshooting
+
+### Extension Development Debugging
+1. Open project in VS Code: `code .`
+2. Press `F5` to launch Extension Development Host
+3. Set breakpoints in TypeScript source files
+4. Open Output panel for debugging information
+
+### Output Channels
+Monitor these output channels for debugging:
+- **NofX Extension** - General extension logs
+- **NofX Orchestration** - WebSocket server and messaging
+- **NofX Conductor** - Conductor process logs
+- **NofX Metrics** - Performance and usage metrics
+
+### Common Issues and Solutions
+
+#### Missing `out/extension.js`
+```bash
+# This is the most common issue - the extension needs to be compiled first
+npm run compile
+# Then verify the file exists
+ls out/extension.js
+```
+
+#### TypeScript Compilation Errors
+```bash
+# Check for TypeScript errors
+npx tsc --noEmit
+# Clean and rebuild
+npm run build:clean
+```
+
+#### Extension Won't Install
+```bash
+# Completely remove old versions
+rm -rf ~/.vscode/extensions/nofx.nofx-*
+# Force install
+code --install-extension nofx-0.1.0.vsix --force
+# Restart VS Code/Cursor
+```
+
+#### Command Registration Issues
+```bash
+# Validate commands are properly registered
+npm run validate:commands
+# Check package.json matches implementation
+```
+
+#### Service Container Errors
+```bash
+# Validate service container setup
+npm run validate:services
+# Check for circular dependencies
+```
+
+#### WebSocket Connection Issues
+- Check port availability (uses dynamic port)
+- Verify Output → NofX Orchestration for server logs
+- Check firewall settings
+- Restart extension
+
+#### Build Failures
+```bash
+# Try cleaning build artifacts first
+npm run dev:clean
+npm run build:validate
+
+# If issues persist, do a full reset
+npm run dev:reset
+npm run build:validate
+```
+
+### Performance Debugging
+- Use VS Code's built-in performance profiler
+- Monitor memory usage in Task Manager
+- Check for memory leaks with heap snapshots
+- Profile extension activation time
+
+### Debug Commands
+The extension includes special debug commands:
+- `nofx.debug.verifyCommands` - Validate all command registrations
+- Check Output channels for detailed logs
+
+## 📁 Project Structure
+
+Understanding the NofX extension architecture:
+
+```
+nofx-vscode/
+├── src/                      # Source code
+│   ├── agents/              # Agent management
+│   ├── commands/            # Command implementations
+│   ├── conductor/           # Conductor implementations
+│   ├── dashboard/           # Dashboard components
+│   ├── orchestration/       # WebSocket server
+│   ├── panels/              # Webview panels
+│   ├── persistence/         # State persistence
+│   ├── services/            # Core services
+│   ├── tasks/               # Task management
+│   ├── templates/           # Templates
+│   ├── test/                # Test suites
+│   │   ├── unit/           # Unit tests
+│   │   ├── integration/    # Integration tests
+│   │   └── functional/     # Functional tests
+│   ├── types/               # TypeScript types
+│   ├── ui/                  # UI components
+│   ├── views/               # Tree view providers
+│   ├── worktrees/           # Git worktree management
+│   └── extension.ts         # Main entry point
+├── out/                     # Compiled JavaScript (generated)
+├── webview/                 # Webview assets
+├── scripts/                 # Build and utility scripts
+├── .vscode/                 # VS Code configuration
+├── .husky/                  # Git hooks
+├── package.json             # Extension manifest
+├── tsconfig.json            # TypeScript config
+├── jest.config.js           # Jest test config
+└── build.sh                 # Build automation script
+```
+
+### Key Files
+- `src/extension.ts` - Main extension entry point
+- `package.json` - Extension manifest and commands
+- `tsconfig.json` - TypeScript compilation settings
+- `build.sh` - Automated build script (use --install-cursor for optional install)
+
+## 🚀 Deployment
+
+### Creating a Release Build
+```bash
+# Full release build with validation
+npm run build:ci
+
+# Package for distribution
+npx vsce package
+
+# Verify package contents
+npx vsce ls
+```
+
+### Installation Methods
+```bash
+# Command line installation
+code --install-extension nofx-0.1.0.vsix
+
+# Manual installation
+1. Open VS Code
+2. Go to Extensions view (Cmd+Shift+X)
+3. Click "..." menu → "Install from VSIX..."
+4. Select the .vsix file
+```
+
+### Version Management
+```json
+// Update version in package.json
+{
+  "version": "0.1.0"
+}
+```
+
+### Publishing to Marketplace
+```bash
+# Login to publisher account
+npx vsce login <publisher>
+
+# Publish to marketplace
+npx vsce publish
+```
+
 ## 🚨 Troubleshooting
 
 ### "Claude Code not found"
@@ -205,6 +636,8 @@ Contributions welcome! This is an open-source project.
 3. Commit your changes
 4. Push to the branch
 5. Open a Pull Request
+
+For detailed contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 📄 License
 
