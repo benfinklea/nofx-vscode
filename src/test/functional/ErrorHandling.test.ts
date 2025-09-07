@@ -13,7 +13,9 @@ import { ConfigurationService } from '../../services/ConfigurationService';
 import { AgentManager } from '../../agents/AgentManager';
 import { TaskQueue } from '../../tasks/TaskQueue';
 import { OrchestrationServer } from '../../orchestration/OrchestrationServer';
-import { setupExtension, teardownExtension, setupMockWorkspace, clearMockWorkspace } from './setup';
+import { setupMockWorkspace, clearMockWorkspace } from './setup';
+import { TestHarness } from './testHarness';
+import { createTestOrchestrationServer } from './testHelpers';
 
 /**
  * Comprehensive tests for error handling throughout the extension
@@ -27,15 +29,16 @@ describe('Error Handling', () => {
     let loggingService: LoggingService;
 
     beforeAll(async () => {
-        // Setup and activate extension
-        context = await setupExtension();
+        // Setup and activate extension using TestHarness
+        const { container: c, context: ctx } = await TestHarness.initialize();
+        container = c;
+        context = ctx;
         setupMockWorkspace();
     });
 
     beforeEach(() => {
-        // Get container instance but don't reset to preserve command registrations
-        container = Container.getInstance();
-        // container.reset(); // Removed to preserve command bindings
+        // Reset container state between tests but preserve command registrations
+        TestHarness.resetContainer();
 
         // Mock workspace configuration
         const mockConfig = {
@@ -105,7 +108,7 @@ describe('Error Handling', () => {
 
     afterAll(async () => {
         clearMockWorkspace();
-        await teardownExtension();
+        await TestHarness.dispose();
     });
 
     describe('Configuration Validation', () => {
@@ -245,7 +248,7 @@ describe('Error Handling', () => {
             });
 
             // Now try to start OrchestrationServer on the same port
-            const orchestrationServer = new OrchestrationServer(port, loggingService, eventBus);
+            const orchestrationServer = createTestOrchestrationServer(port, loggingService, eventBus, errorHandler);
 
             try {
                 await orchestrationServer.start();

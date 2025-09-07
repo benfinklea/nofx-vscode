@@ -3,6 +3,7 @@ import * as path from 'path';
 import { AgentManager } from '../agents/AgentManager';
 import { TaskQueue } from '../tasks/TaskQueue';
 import { Agent } from '../agents/types';
+import { OUTPUT_CHANNELS } from '../constants/outputChannels';
 import {
     CodebaseAnalyzer,
     CodeComponent,
@@ -21,7 +22,7 @@ export class SuperSmartConductor {
     private terminal: vscode.Terminal | undefined;
     private outputChannel: vscode.OutputChannel;
     private claudePath: string;
-    private codebaseAnalyzer: CodebaseAnalyzer;
+    private codebaseAnalyzer: any;
     private context: vscode.ExtensionContext | undefined;
 
     // VP-level intelligence data structures
@@ -35,7 +36,7 @@ export class SuperSmartConductor {
         this.taskQueue = taskQueue;
         this.context = context;
         this.claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
-        this.outputChannel = vscode.window.createOutputChannel('NofX VP Brain 🧠');
+        this.outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNELS.VP_BRAIN);
         this.codebaseAnalyzer = new CodebaseAnalyzer(this.outputChannel);
     }
 
@@ -427,8 +428,8 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
         // Check for circular dependencies using the analyzer
         const circularDeps = this.codebaseAnalyzer.findCircularDependencies();
         if (circularDeps.length > 0) {
-            const highSeverity = circularDeps.filter(c => c.severity === 'high');
-            const mediumSeverity = circularDeps.filter(c => c.severity === 'medium');
+            const highSeverity = circularDeps.filter((c: any) => c.severity === 'high');
+            const mediumSeverity = circularDeps.filter((c: any) => c.severity === 'medium');
 
             if (highSeverity.length > 0) {
                 suggestions.push(`🔴 Critical: ${highSeverity.length} high-severity circular dependencies detected. Immediate refactoring needed.`);
@@ -442,7 +443,7 @@ You are proactive, strategic, and always thinking about the bigger picture.`;
         const highComplexity = this.codebaseAnalyzer.findComplexComponents(20);
         if (highComplexity.length > 0) {
             const topComplex = highComplexity.slice(0, 3);
-            suggestions.push(`📊 High complexity in ${highComplexity.length} files. Top offenders: ${topComplex.map(p => path.basename(p)).join(', ')}`);
+            suggestions.push(`📊 High complexity in ${highComplexity.length} files. Top offenders: ${topComplex.map((p: any) => path.basename(p)).join(', ')}`);
         }
 
         // Check for missing tests using the analyzer

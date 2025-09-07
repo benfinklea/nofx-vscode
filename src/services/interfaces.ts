@@ -55,6 +55,7 @@ export interface IConfigurationService {
     isAutoAssignTasks(): boolean;
     isUseWorktrees(): boolean;
     isShowAgentTerminalOnSpawn(): boolean;
+    isClaudeSkipPermissions(): boolean;
     getTemplatesPath(): string;
     isPersistAgents(): boolean;
     getLogLevel(): string;
@@ -94,6 +95,7 @@ export interface ILoggingService {
 
     // Configuration-aware logging
     isLevelEnabled(level: LogLevel): boolean;
+    setConfigurationService?(configService: IConfigurationService): void;
 
     // Channel management
     getChannel(name: string): vscode.OutputChannel;
@@ -146,6 +148,7 @@ export interface ICommandService {
     registerTextEditorCommand(commandId: string, handler: (textEditor: vscode.TextEditor, edit: vscode.TextEditorEdit, ...args: any[]) => void, thisArg?: any): vscode.Disposable;
     execute(commandId: string, ...args: any[]): Promise<any>;
     getCommands(filterInternal?: boolean): Promise<string[]>;
+    getRegisteredCommands(): string[];
     hasCommand(commandId: string): boolean;
     unregister(commandId: string): void;
     dispose(): void;
@@ -259,6 +262,7 @@ export const CONFIG_KEYS = {
     AUTO_OPEN_DASHBOARD: 'autoOpenDashboard', // Auto-open MessageFlowDashboard on activation
     USE_WORKTREES: 'useWorktrees',     // Use Git worktrees for agents
     SHOW_AGENT_TERMINAL_ON_SPAWN: 'showAgentTerminalOnSpawn', // Show agent terminal when spawned
+    CLAUDE_SKIP_PERMISSIONS: 'claudeSkipPermissions', // Add --dangerously-skip-permissions flag
     // Future/internal use (not in package.json yet)
     TEMPLATES_PATH: 'templatesPath',   // (future) Custom templates path
     PERSIST_AGENTS: 'persistAgents',   // (future) Persist agent state

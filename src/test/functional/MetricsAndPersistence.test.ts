@@ -20,6 +20,7 @@ import { __getContainerForTests } from '../../extension';
 
 /**
  * Comprehensive tests for metrics collection and data persistence
+ * Note: These tests require real filesystem access. Set MOCK_FS=false or use memfs.
  */
 describe('Metrics and Persistence', () => {
     let container: IContainer;

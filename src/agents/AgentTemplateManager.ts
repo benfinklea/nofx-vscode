@@ -33,6 +33,7 @@ export interface AgentTemplate {
 }
 
 export class AgentTemplateManager {
+    private builtInTemplatesDir: string;
     private templatesDir: string;
     private customTemplatesDir: string;
     private templates: Map<string, AgentTemplate> = new Map();
@@ -41,6 +42,10 @@ export class AgentTemplateManager {
     public readonly onTemplateChange = this._onTemplateChange.event;
 
     constructor(workspaceRoot: string) {
+        // Built-in templates packaged with the extension
+        this.builtInTemplatesDir = path.join(__dirname, 'templates');
+        
+        // Runtime templates directory (for user customization)
         this.templatesDir = path.join(workspaceRoot, '.nofx', 'templates');
         this.customTemplatesDir = path.join(this.templatesDir, 'custom');
 
@@ -50,9 +55,10 @@ export class AgentTemplateManager {
     }
 
     private ensureDirectories() {
+        // Create runtime directories for user customization
         if (!fs.existsSync(this.templatesDir)) {
             fs.mkdirSync(this.templatesDir, { recursive: true });
-            this.createDefaultTemplates();
+            // No need to create default templates - we have built-in ones
         }
         if (!fs.existsSync(this.customTemplatesDir)) {
             fs.mkdirSync(this.customTemplatesDir, { recursive: true });
@@ -140,21 +146,40 @@ export class AgentTemplateManager {
     private loadTemplates() {
         this.templates.clear();
 
-        // Load built-in templates
-        const templateFiles = fs.readdirSync(this.templatesDir)
-            .filter(file => file.endsWith('.json'));
+        // First, load built-in templates from the extension
+        if (fs.existsSync(this.builtInTemplatesDir)) {
+            const builtInFiles = fs.readdirSync(this.builtInTemplatesDir)
+                .filter(file => file.endsWith('.json'));
 
-        for (const file of templateFiles) {
-            try {
-                const content = fs.readFileSync(path.join(this.templatesDir, file), 'utf-8');
-                const template = JSON.parse(content) as AgentTemplate;
-                this.templates.set(template.id, template);
-            } catch (error) {
-                console.error(`Failed to load template ${file}:`, error);
+            for (const file of builtInFiles) {
+                try {
+                    const content = fs.readFileSync(path.join(this.builtInTemplatesDir, file), 'utf-8');
+                    const template = JSON.parse(content) as AgentTemplate;
+                    this.templates.set(template.id, template);
+                } catch (error) {
+                    console.error(`Failed to load built-in template ${file}:`, error);
+                }
             }
         }
 
-        // Load custom templates
+        // Then load user templates from .nofx/templates (these can override built-in)
+        if (fs.existsSync(this.templatesDir)) {
+            const templateFiles = fs.readdirSync(this.templatesDir)
+                .filter(file => file.endsWith('.json'));
+
+            for (const file of templateFiles) {
+                try {
+                    const content = fs.readFileSync(path.join(this.templatesDir, file), 'utf-8');
+                    const template = JSON.parse(content) as AgentTemplate;
+                    // User templates override built-in templates with same ID
+                    this.templates.set(template.id, template);
+                } catch (error) {
+                    console.error(`Failed to load user template ${file}:`, error);
+                }
+            }
+        }
+
+        // Finally, load custom templates (with custom- prefix)
         if (fs.existsSync(this.customTemplatesDir)) {
             const customFiles = fs.readdirSync(this.customTemplatesDir)
                 .filter(file => file.endsWith('.json'));

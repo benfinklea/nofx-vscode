@@ -40,10 +40,14 @@ npm run build
 ### 4. Install for Testing
 ```bash
 # Install in VS Code
-code --install-extension nofx-0.1.0.vsix --force
+# Install the latest VSIX
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+code --install-extension "$VSIX" --force
 
 # Or in Cursor
-cursor --install-extension nofx-0.1.0.vsix --force
+# For Cursor users
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+cursor --install-extension "$VSIX" --force
 ```
 
 ### 5. Start Development
@@ -127,8 +131,8 @@ npx vsce ls
 # 3. Check all commands are registered
 node scripts/validate-commands.js
 
-# 4. Verify service container
-node scripts/validate-services.js
+# 4. Verify service container (via Jest tests)
+npm run validate:services  # Runs test:services
 ```
 
 ### Package Creation with VSCE
@@ -144,7 +148,7 @@ npx vsce package --no-dependencies  # ❌ Don't use
 
 #### Package Contents
 ```
-nofx-0.1.0.vsix
+nofx-<version>.vsix
 ├── extension/
 │   ├── out/           # Compiled JavaScript
 │   ├── node_modules/  # Dependencies
@@ -404,13 +408,14 @@ npm run test:coverage
 ### Development Scripts
 
 ```json
-// package.json scripts
+// package.json scripts (canonical list)
+// For the complete list of scripts, see package.json or run: npm run print:commands
 {
   "scripts": {
-    "watch": "tsc -watch -p tsconfig.build.json",
-    "dev:validate": "npm run lint && npm run test:unit",
+    "watch": "tsc -watch -p ./tsconfig.build.json",
+    "dev:validate": "npm run compile && npm run validate:build --quiet",
     "dev:clean": "rimraf out coverage nofx-*.vsix",
-    "dev:setup": "npm install && npm run hooks:install",
+    "dev:setup": "./scripts/install-hooks.sh",
     "dev:reset": "rimraf out coverage node_modules nofx-*.vsix && npm install && npm run compile"
   }
 }

@@ -161,22 +161,27 @@ class MessageItem extends TreeItem {
 // Agent item
 class AgentItem extends TreeItem {
     constructor(public readonly agent: any) {
+        // Call super first
         super(`  ${agent.name}`, vscode.TreeItemCollapsibleState.None);
+        
+        // Then update label with activity status indicator
+        const statusIndicator = this.getActivityStatusIndicator(agent.activityStatus);
+        this.label = `  ${statusIndicator} ${agent.name}`;
 
-        this.tooltip = `${agent.name} (${agent.type})`;
+        // Enhanced tooltip with activity status
+        const activityStatusText = this.getActivityStatusText(agent.activityStatus);
+        this.tooltip = `${agent.name} (${agent.type})\nStatus: ${activityStatusText}`;
 
         // Normalize agent status for consistent display
+        console.log(`[NofX Debug] Agent ${agent.name} raw status: ${agent.status}, activity: ${agent.activityStatus}`);
         const normalizedStatus = normalizeAgentStatus(agent.status);
-        this.description = normalizedStatus === 'working'
-            ? `Working on: ${agent.currentTask?.title}`
-            : normalizedStatus;
+        console.log(`[NofX Debug] Agent ${agent.name} normalized status: ${normalizedStatus}`);
+        
+        // Enhanced description based on both operational and activity status
+        this.description = this.getAgentDescription(normalizedStatus, agent.activityStatus, agent.currentTask);
 
-        // Set icon based on normalized status
-        this.iconPath = new vscode.ThemeIcon(
-            normalizedStatus === 'working' ? 'debug-start' :
-                normalizedStatus === 'idle' ? 'check' :
-                    normalizedStatus === 'error' ? 'error' : 'circle-outline'
-        );
+        // Set icon based on activity status (priority) or operational status
+        this.iconPath = this.getAgentIcon(agent.activityStatus || normalizedStatus);
 
         // Set context value for context menu
         this.contextValue = 'agent';
@@ -187,6 +192,71 @@ class AgentItem extends TreeItem {
             title: 'Focus Agent Terminal',
             arguments: [agent.id]
         };
+    }
+    
+    private getActivityStatusIndicator(activityStatus?: string): string {
+        const indicators: { [key: string]: string } = {
+            'active': '🟢',      // Currently working (output detected)
+            'waiting': '🟡',     // Awaiting user input/permission
+            'thinking': '🔵',    // No output but recently active
+            'inactive': '🟠',    // No activity for 30+ seconds
+            'stuck': '🔴',       // Needs immediate attention (2+ minutes)
+            'permission': '⚠️',  // Claude asking for permission
+            'completed': '✅',   // Task completed
+            'error': '❌'        // Error detected
+        };
+        return indicators[activityStatus || ''] || '';
+    }
+    
+    private getActivityStatusText(activityStatus?: string): string {
+        const statusTexts: { [key: string]: string } = {
+            'active': 'Active - Currently working',
+            'waiting': 'Waiting - Awaiting user input',
+            'thinking': 'Thinking - Processing',
+            'inactive': 'Inactive - No activity for 30+ seconds',
+            'stuck': 'Stuck - Needs immediate attention',
+            'permission': 'Permission Required',
+            'completed': 'Task Completed',
+            'error': 'Error Detected'
+        };
+        return statusTexts[activityStatus || ''] || 'Unknown';
+    }
+    
+    private getAgentDescription(normalizedStatus: string, activityStatus?: string, currentTask?: any): string {
+        // Priority: Show activity status if critical, otherwise operational status
+        if (activityStatus === 'stuck' || activityStatus === 'error' || activityStatus === 'permission') {
+            return this.getActivityStatusText(activityStatus);
+        }
+        
+        if (normalizedStatus === 'working' && currentTask) {
+            return `Working on: ${currentTask.title}`;
+        }
+        
+        if (activityStatus === 'inactive' || activityStatus === 'waiting') {
+            return this.getActivityStatusText(activityStatus);
+        }
+        
+        return normalizedStatus === 'offline' ? 'Offline' : 
+               normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+    }
+    
+    private getAgentIcon(status: string): vscode.ThemeIcon {
+        // Map activity statuses to appropriate theme icons
+        const iconMap: { [key: string]: string } = {
+            'active': 'debug-start',
+            'working': 'debug-start',
+            'waiting': 'watch',
+            'thinking': 'loading~spin',
+            'inactive': 'warning',
+            'stuck': 'error',
+            'permission': 'shield',
+            'completed': 'pass',
+            'error': 'error',
+            'idle': 'check',
+            'offline': 'circle-outline'
+        };
+        
+        return new vscode.ThemeIcon(iconMap[status] || 'circle-outline');
     }
 }
 

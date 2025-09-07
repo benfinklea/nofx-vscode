@@ -10,7 +10,8 @@ import { ConfigurationService } from '../../services/ConfigurationService';
 import { LoggingService } from '../../services/LoggingService';
 import { Agent, AgentTemplate } from '../../types/agent';
 import { AgentPersistence } from '../../persistence/AgentPersistence';
-import { setupExtension, teardownExtension, setupMockWorkspace, clearMockWorkspace } from './setup';
+import { setupMockWorkspace, clearMockWorkspace } from './setup';
+import { TestHarness } from './testHarness';
 
 /**
  * Comprehensive tests for agent lifecycle management based on AgentCommands.ts and AgentManager.ts
@@ -108,15 +109,16 @@ describe('Agent Lifecycle', () => {
     ];
 
     beforeAll(async () => {
-        // Setup and activate extension
-        context = await setupExtension();
+        // Setup and activate extension using TestHarness
+        const { container: c, context: ctx } = await TestHarness.initialize();
+        container = c;
+        context = ctx;
         setupMockWorkspace();
     });
 
     beforeEach(async () => {
-        // Get container instance but don't reset to preserve command registrations
-        container = Container.getInstance();
-        // container.reset(); // Removed to preserve command bindings
+        // Reset container state between tests but preserve command registrations
+        TestHarness.resetContainer();
 
         // Initialize services
         const configService = new ConfigurationService();
@@ -162,7 +164,7 @@ describe('Agent Lifecycle', () => {
 
     afterAll(async () => {
         clearMockWorkspace();
-        await teardownExtension();
+        await TestHarness.dispose();
     });
 
     describe('Agent Creation', () => {
@@ -208,7 +210,7 @@ describe('Agent Lifecycle', () => {
             );
 
             // Verify agent was created
-            const agents = agentManager.getAgents();
+            const agents = agentManager.getActiveAgents();
             expect(agents).toHaveLength(1);
             expect(agents[0].name).toBe('UI Expert');
             expect(agents[0].type).toBe('frontend-specialist');
@@ -229,7 +231,7 @@ describe('Agent Lifecycle', () => {
             expect(quickPickSpy).toHaveBeenCalledTimes(2);
 
             // Verify multiple agents were created
-            const agents = agentManager.getAgents();
+            const agents = agentManager.getActiveAgents();
             expect(agents).toHaveLength(3);
             expect(agents.map(a => a.type)).toContain('frontend-specialist');
             expect(agents.map(a => a.type)).toContain('backend-specialist');
@@ -249,7 +251,7 @@ describe('Agent Lifecycle', () => {
 
             await vscode.commands.executeCommand('nofx.addAgent');
 
-            const agents = agentManager.getAgents();
+            const agents = agentManager.getActiveAgents();
             expect(agents).toHaveLength(1);
             expect(agents[0].name).toBe('Backend Specialist'); // Should use template name as default
         });
@@ -301,7 +303,31 @@ describe('Agent Lifecycle', () => {
 
         beforeEach(async () => {
             // Create a test agent
-            testAgent = await agentManager.spawnAgent(mockTemplates[0], 'Test Agent');
+            const template = mockTemplates[0];
+            const config = {
+                name: 'Test Agent',
+                type: template.id,
+                template: template
+            };
+
+            // Set up dependencies for AgentManager if needed
+            const agentLifecycleManager = container.resolveOptional(SERVICE_TOKENS.AgentLifecycleManager);
+            const terminalManager = container.resolveOptional(SERVICE_TOKENS.TerminalManager);
+            const worktreeService = container.resolveOptional(SERVICE_TOKENS.WorktreeService);
+            const configService = container.resolveOptional(SERVICE_TOKENS.ConfigurationService);
+            const notificationService = container.resolveOptional(SERVICE_TOKENS.NotificationService);
+
+            if (agentLifecycleManager && terminalManager && worktreeService && configService && notificationService) {
+                agentManager.setDependencies(
+                    agentLifecycleManager,
+                    terminalManager,
+                    worktreeService,
+                    configService,
+                    notificationService
+                );
+            }
+
+            testAgent = await agentManager.spawnAgent(config);
         });
 
         test('should edit agent name', async () => {
@@ -332,7 +358,7 @@ describe('Agent Lifecycle', () => {
                 })
             );
 
-            const agents = agentManager.getAgents();
+            const agents = agentManager.getActiveAgents();
             expect(agents[0].name).toBe('Renamed Agent');
         });
 
@@ -349,7 +375,7 @@ describe('Agent Lifecycle', () => {
 
             await vscode.commands.executeCommand('nofx.editAgent');
 
-            const agents = agentManager.getAgents();
+            const agents = agentManager.getActiveAgents();
             expect(agents[0].type).toBe('backend-specialist');
             // Note: capabilities are now stored in the template, not directly on the agent
         });
@@ -389,7 +415,7 @@ describe('Agent Lifecycle', () => {
                 expect.any(Object)
             );
 
-            const agents = agentManager.getAgents();
+            const agents = agentManager.getActiveAgents();
             expect(agents[0].name).toBe('Direct Edit');
         });
 
@@ -411,9 +437,9 @@ describe('Agent Lifecycle', () => {
         beforeEach(async () => {
             // Create multiple test agents
             testAgents = [
-                await agentManager.spawnAgent(mockTemplates[0], 'Frontend Dev'),
-                await agentManager.spawnAgent(mockTemplates[1], 'Backend Dev'),
-                await agentManager.spawnAgent(mockTemplates[2], 'Full-Stack Dev')
+                await agentManager.spawnAgent({ name: 'Frontend Dev', type: mockTemplates[0].id, template: mockTemplates[0] }),
+                await agentManager.spawnAgent({ name: 'Backend Dev', type: mockTemplates[1].id, template: mockTemplates[1] }),
+                await agentManager.spawnAgent({ name: 'Full-Stack Dev', type: mockTemplates[2].id, template: mockTemplates[2] })
             ];
         });
 
@@ -444,7 +470,7 @@ describe('Agent Lifecycle', () => {
                 'No'
             );
 
-            const agents = agentManager.getAgents();
+            const agents = agentManager.getActiveAgents();
             expect(agents).toHaveLength(2);
             expect(agents.find(a => a.id === testAgents[0].id)).toBeUndefined();
         });
@@ -459,7 +485,7 @@ describe('Agent Lifecycle', () => {
 
             await vscode.commands.executeCommand('nofx.deleteAgent');
 
-            const agents = agentManager.getAgents();
+            const agents = agentManager.getActiveAgents();
             expect(agents).toHaveLength(3); // No agents deleted
         });
 
@@ -470,7 +496,7 @@ describe('Agent Lifecycle', () => {
 
             expect(warningMessageSpy).toHaveBeenCalled();
 
-            const agents = agentManager.getAgents();
+            const agents = agentManager.getActiveAgents();
             expect(agents).toHaveLength(2);
             expect(agents.find(a => a.id === testAgents[2].id)).toBeUndefined();
         });
@@ -514,8 +540,8 @@ describe('Agent Lifecycle', () => {
 
         beforeEach(async () => {
             testAgents = [
-                await agentManager.spawnAgent(mockTemplates[0], 'Agent 1'),
-                await agentManager.spawnAgent(mockTemplates[1], 'Agent 2')
+                await agentManager.spawnAgent({ name: 'Agent 1', type: mockTemplates[0].id, template: mockTemplates[0] }),
+                await agentManager.spawnAgent({ name: 'Agent 2', type: mockTemplates[1].id, template: mockTemplates[1] })
             ];
         });
 
@@ -566,7 +592,7 @@ describe('Agent Lifecycle', () => {
 
         test('should handle missing terminal gracefully', async () => {
             // Mock agent without terminal
-            const agentWithoutTerminal = await agentManager.spawnAgent(mockTemplates[2], 'No Terminal');
+            const agentWithoutTerminal = await agentManager.spawnAgent({ name: 'No Terminal', type: mockTemplates[2].id, template: mockTemplates[2] });
             agentWithoutTerminal.terminal = undefined as any;
 
             jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue({
@@ -620,7 +646,7 @@ describe('Agent Lifecycle', () => {
 
             expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('Restored'));
 
-            const agents = agentManager.getAgents();
+            const agents = agentManager.getActiveAgents();
             expect(agents).toHaveLength(2);
             expect(agents[0].name).toBe('Restored Frontend');
             expect(agents[1].name).toBe('Restored Backend');
@@ -676,25 +702,33 @@ describe('Agent Lifecycle', () => {
 
     describe('Integration with AgentManager', () => {
         test('should track agent status transitions', async () => {
-            const agent = await agentManager.spawnAgent(mockTemplates[0], 'Status Test');
+            const config = {
+                name: 'Status Test',
+                type: mockTemplates[0].id,
+                template: mockTemplates[0]
+            };
+            const agent = await agentManager.spawnAgent(config);
 
             expect(agent.status).toBe('idle');
 
             // Simulate status change
-            await agentManager.updateAgentStatus(agent.id, 'working');
+            // AgentManager doesn't have updateAgentStatus - update agent object instead
+            agent.status = 'working';
+            agentManager.updateAgent(agent);
 
             const updatedAgent = agentManager.getAgent(agent.id);
             expect(updatedAgent?.status).toBe('working');
 
             // Test error status
-            await agentManager.updateAgentStatus(agent.id, 'error');
+            agent.status = 'error';
+            agentManager.updateAgent(agent);
             expect(agentManager.getAgent(agent.id)?.status).toBe('error');
         });
 
         test('should persist agents on creation', async () => {
             const saveSpy = jest.spyOn(agentPersistence, 'saveAgents');
 
-            await agentManager.spawnAgent(mockTemplates[0], 'Persist Test');
+            await agentManager.spawnAgent({ name: 'Persist Test', type: mockTemplates[0].id, template: mockTemplates[0] });
 
             expect(saveSpy).toHaveBeenCalledWith(
                 expect.arrayContaining([
@@ -705,15 +739,15 @@ describe('Agent Lifecycle', () => {
 
         test('should handle concurrent agent operations', async () => {
             const promises = [
-                agentManager.spawnAgent(mockTemplates[0], 'Concurrent 1'),
-                agentManager.spawnAgent(mockTemplates[1], 'Concurrent 2'),
-                agentManager.spawnAgent(mockTemplates[2], 'Concurrent 3')
+                agentManager.spawnAgent({ name: 'Concurrent 1', type: mockTemplates[0].id, template: mockTemplates[0] }),
+                agentManager.spawnAgent({ name: 'Concurrent 2', type: mockTemplates[1].id, template: mockTemplates[1] }),
+                agentManager.spawnAgent({ name: 'Concurrent 3', type: mockTemplates[2].id, template: mockTemplates[2] })
             ];
 
             const agents = await Promise.all(promises);
 
             expect(agents).toHaveLength(3);
-            expect(agentManager.getAgents()).toHaveLength(3);
+            expect(agentManager.getActiveAgents()).toHaveLength(3);
 
             // All agents should have unique IDs
             const ids = agents.map(a => a.id);
@@ -739,7 +773,7 @@ describe('Agent Lifecycle', () => {
         });
 
         test('should handle agent terminal lifecycle', async () => {
-            const agent = await agentManager.spawnAgent(mockTemplates[0], 'Terminal Test');
+            const agent = await agentManager.spawnAgent({ name: 'Terminal Test', type: mockTemplates[0].id, template: mockTemplates[0] });
 
             expect(agent.terminal).toBeDefined();
 

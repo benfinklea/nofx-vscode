@@ -48,13 +48,20 @@ export class TerminalManager implements ITerminalManager {
     }
 
     createTerminal(agentId: string, agentConfig: any): vscode.Terminal {
-        // Use provided terminal icon or fallback to type-based icon
-        const terminalIcon = agentConfig.terminalIcon ?? (agentConfig.type === 'conductor' ? 'terminal' : 'robot');
+        // Use terminal icon from template, config, or fallback
+        const terminalIcon = agentConfig.template?.terminalIcon ?? 
+                            agentConfig.terminalIcon ?? 
+                            (agentConfig.type === 'conductor' ? 'terminal' : 'robot');
 
-        // Create a dedicated terminal for this agent
+        // Get the user's default shell or use bash as fallback
+        const shellPath = vscode.env.shell || '/bin/bash';
+
+        // Create a dedicated terminal for this agent with explicit shell
         const terminal = vscode.window.createTerminal({
             name: `${agentConfig.template?.icon || '🤖'} ${agentConfig.name}`,
             iconPath: new vscode.ThemeIcon(terminalIcon),
+            shellPath: shellPath,
+            shellArgs: [],  // Empty array for default shell args
             env: {
                 NOFX_AGENT_ID: agentId,
                 NOFX_AGENT_TYPE: agentConfig.type,
@@ -94,11 +101,35 @@ export class TerminalManager implements ITerminalManager {
 
     async initializeAgentTerminal(agent: any, workingDirectory?: string): Promise<void> {
         const terminal = this.terminals.get(agent.id);
-        if (!terminal) return;
+        if (!terminal) {
+            this.loggingService?.error(`No terminal found for agent ${agent.id}`);
+            return;
+        }
+
+        // Show and focus the terminal to ensure it's active and receives commands
+        terminal.show(true); // true = preserveFocus, keeps focus on the terminal
+
+        // IMPORTANT: Wait for terminal shell to be ready before sending commands
+        // This prevents the blank terminal issue
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Verify terminal is still active
+        if (vscode.window.activeTerminal !== terminal) {
+            this.loggingService?.warn(`Terminal for agent ${agent.id} is not active, attempting to refocus`);
+            terminal.show(true);
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // Send an initial newline to ensure the shell is responsive
+        terminal.sendText('');
+
+        // Small additional delay
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Set up the agent's working environment
         if (workingDirectory) {
             terminal.sendText(`cd "${workingDirectory}"`);
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
 
         // Show agent info
@@ -110,25 +141,46 @@ export class TerminalManager implements ITerminalManager {
         // Start Claude with --append-system-prompt flag
         const claudePath = this.configService.getClaudePath();
 
+        // Check if we should add the --dangerously-skip-permissions flag
+        const skipPermissions = this.configService.isClaudeSkipPermissions();
+        const permissionsFlag = skipPermissions ? '--dangerously-skip-permissions ' : '';
+
         if (agent.template && agent.template.systemPrompt) {
             this.loggingService?.debug(`Starting ${agent.name} with system prompt`);
-            // Combine the template prompt with team instructions
-            const fullPrompt = agent.template.systemPrompt + '\n\nYou are part of a NofX.dev coding team. Please wait for further instructions. Don\'t do anything yet. Just wait.';
-            // Handle platform-specific quoting
-            const quotedPrompt = this.quotePromptForShell(fullPrompt);
-            // Start Claude with the system prompt - quote the claudePath
-            terminal.sendText(`"${claudePath}" --append-system-prompt ${quotedPrompt}`);
+
+            // For complex agents with templates, use a simplified prompt
+            // The full prompt is too long for terminal.sendText() to handle reliably
+            // Clean up the type name (remove hyphens, make it readable)
+            const cleanType = agent.type.replace(/-/g, ' ').replace(/specialist/g, 'expert');
+            const simplePrompt = `You are ${agent.name}. You are an expert in ${cleanType}. You are part of a NofX.dev coding team. Please wait for instructions.`;
+
+            // Escape the prompt for shell
+            const escapedPrompt = this.quotePromptForShell(simplePrompt);
+
+            // Log the full command for debugging
+            this.loggingService?.info(`Starting agent: ${agent.name} (${agent.type})`);
+            this.loggingService?.debug(`Claude command: ${claudePath} ${permissionsFlag}--append-system-prompt ${escapedPrompt}`);
+
+            // Show what we're about to execute
+            terminal.sendText(`echo "Executing: claude ${permissionsFlag}--append-system-prompt '...'"`);
+
+            // Send the command with optional permissions flag
+            terminal.sendText(`${claudePath} ${permissionsFlag}--append-system-prompt ${escapedPrompt}`);
         } else {
             // No template, just basic prompt
             const basicPrompt = 'You are a general purpose agent, part of a NofX.dev coding team. Please wait for instructions.';
+            // For simple prompts without newlines, we can use direct quoting
             const quotedPrompt = this.quotePromptForShell(basicPrompt);
-            terminal.sendText(`"${claudePath}" --append-system-prompt ${quotedPrompt}`);
+            terminal.sendText(`${claudePath} ${permissionsFlag}--append-system-prompt ${quotedPrompt}`);
         }
 
-        // Show terminal if configured to do so
+        // Show terminal if configured to do so (already shown above, but may need to focus)
         if (this.configService.isShowAgentTerminalOnSpawn()) {
             terminal.show();
         }
+
+        // Log successful initialization
+        this.loggingService?.info(`Terminal initialized for agent ${agent.name} (${agent.id})`);
     }
 
     createEphemeralTerminal(name: string): vscode.Terminal {

@@ -10,7 +10,25 @@ jest.mock('vscode', () => ({
         getConfiguration: jest.fn()
     },
     ExtensionContext: {},
-    Disposable: { from: jest.fn() }
+    Disposable: { from: jest.fn() },
+    Uri: {
+        file: (path: string) => ({ fsPath: path, path, scheme: 'file' })
+    },
+    ExtensionMode: {
+        Production: 1,
+        Development: 2,
+        Test: 3
+    },
+    ExtensionKind: {
+        UI: 1,
+        Workspace: 2
+    },
+    EventEmitter: class MockEventEmitter {
+        public event = jest.fn();
+        public fire = jest.fn();
+        public dispose = jest.fn();
+        constructor() {}
+    }
 }), { virtual: true });
 
 import * as vscode from 'vscode';
@@ -121,6 +139,7 @@ describe('AgentManager', () => {
             isAutoAssignTasks: jest.fn(() => true),
             isUseWorktrees: jest.fn(() => true),
             isShowAgentTerminalOnSpawn: jest.fn(() => true),
+            isClaudeSkipPermissions: jest.fn(() => false),
             getTemplatesPath: jest.fn(() => '.nofx/templates'),
             isPersistAgents: jest.fn(() => true),
             getLogLevel: jest.fn(() => 'info'),

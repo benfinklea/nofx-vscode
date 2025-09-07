@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { OUTPUT_CHANNELS } from '../constants/outputChannels';
 import {
     ICommandHandler,
     IContainer,
@@ -134,7 +135,7 @@ EOF`;
             const missingCommands = expectedCommands.filter((cmd: string) => !registeredSet.has(cmd));
 
             // Log results
-            const outputChannel = vscode.window.createOutputChannel('NofX Command Verification');
+            const outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNELS.COMMAND_VERIFICATION);
             outputChannel.show();
             outputChannel.appendLine('=== NofX Command Verification ===');
             outputChannel.appendLine(`Total expected commands: ${expectedCommands.length}`);

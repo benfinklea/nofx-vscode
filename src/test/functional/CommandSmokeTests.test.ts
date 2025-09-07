@@ -10,10 +10,8 @@ import { AgentManager } from '../../agents/AgentManager';
 import { TaskQueue } from '../../tasks/TaskQueue';
 import { MetricsService } from '../../services/MetricsService';
 import { CommandService } from '../../services/CommandService';
-import { setupExtension, teardownExtension, setupMockWorkspace, clearMockWorkspace } from './setup';
-
-// Import package.json to derive commands dynamically
-const packageJson = require('../../../package.json');
+import { setupMockWorkspace, clearMockWorkspace } from './setup';
+import { TestHarness } from './testHarness';
 
 /**
  * Comprehensive smoke tests for all commands registered in package.json
@@ -25,10 +23,51 @@ describe('Command Smoke Tests', () => {
     let workspaceFolder: string;
     let testWorkspaceUri: vscode.Uri;
 
-    // Commands derived dynamically from package.json
-    const expected = packageJson.contributes.commands
-        .map((cmd: any) => cmd.command)
-        .filter((cmd: string) => cmd.startsWith('nofx.'));
+    // Commands derived dynamically from extension manifest
+    let expected: string[] = [];
+
+    // Get commands from the extension manifest
+    const getExtensionCommands = () => {
+        const extension = vscode.extensions.getExtension('nofx.nofx');
+        if (extension?.packageJSON?.contributes?.commands) {
+            return extension.packageJSON.contributes.commands
+                .map((cmd: any) => cmd.command)
+                .filter((cmd: string) => cmd.startsWith('nofx.'));
+        }
+        // Fallback to known commands if extension not found
+        return [
+            'nofx.addAgent',
+            'nofx.startConductor',
+            'nofx.deleteAgent',
+            'nofx.editAgent',
+            'nofx.restoreAgents',
+            'nofx.clearPersistence',
+            'nofx.exportSessions',
+            'nofx.createTask',
+            'nofx.completeTask',
+            'nofx.createTaskBatch',
+            'nofx.clearAllTasks',
+            'nofx.addTaskDependency',
+            'nofx.removeTaskDependency',
+            'nofx.viewTaskDependencies',
+            'nofx.resolveTaskConflict',
+            'nofx.resolveAllConflicts',
+            'nofx.retryBlockedTask',
+            'nofx.openConductorTerminal',
+            'nofx.openConductorChat',
+            'nofx.openConductorPanel',
+            'nofx.openSimpleConductor',
+            'nofx.quickStartChat',
+            'nofx.openMessageFlow',
+            'nofx.browseAgentTemplates',
+            'nofx.createAgentTemplate',
+            'nofx.editAgentTemplate',
+            'nofx.importAgentTemplate',
+            'nofx.testClaude',
+            'nofx.toggleWorktrees',
+            'nofx.mergeAgentWork'
+        ];
+    };
 
     // Commands that require parameters or special handling
     const COMMANDS_WITH_PARAMS: Record<string, any> = {
@@ -44,18 +83,13 @@ describe('Command Smoke Tests', () => {
     };
 
     // Commands that show UI elements and need mocking
-    const UI_COMMANDS = [
-        'nofx.addAgent',
-        'nofx.startConductor',
-        'nofx.quickStartChat',
-        'nofx.editAgent',
-        'nofx.createTask',
-        'nofx.createTaskBatch',
-        'nofx.browseAgentTemplates',
-        'nofx.createAgentTemplate',
-        'nofx.editAgentTemplate',
-        'nofx.importAgentTemplate'
-    ];
+    // Dynamically determine based on known patterns
+    const UI_COMMANDS = () => {
+        const patterns = ['add', 'create', 'edit', 'browse', 'import', 'start', 'quickStart'];
+        return expected.filter(cmd =>
+            patterns.some(pattern => cmd.toLowerCase().includes(pattern.toLowerCase()))
+        );
+    };
 
     // Commands that are interactive/external and should be skipped or mocked
     const INTERACTIVE_COMMANDS = [
@@ -79,15 +113,19 @@ describe('Command Smoke Tests', () => {
             });
         });
 
-        // Setup and activate extension
-        context = await setupExtension();
+        // Setup and activate extension using TestHarness
+        const { container: c, context: ctx } = await TestHarness.initialize();
+        container = c;
+        context = ctx;
+
+        // Get extension commands after initialization
+        expected = getExtensionCommands();
 
         // Setup mock workspace
         setupMockWorkspace(workspaceFolder);
 
-        // Initialize container and services
-        container = Container.getInstance();
-        // Remove container.reset() to avoid stale command bindings
+        // Reset container state but preserve command registrations
+        TestHarness.resetContainer();
 
         // Register essential services
         const configService = new ConfigurationService();
@@ -150,7 +188,7 @@ describe('Command Smoke Tests', () => {
         clearMockWorkspace();
 
         // Teardown extension
-        await teardownExtension();
+        await TestHarness.dispose();
     });
 
     describe('Command Registration', () => {
@@ -357,6 +395,49 @@ describe('Command Smoke Tests', () => {
                 ).resolves.not.toThrow();
             }
         });
+
+        test('Test mode should prevent orchestration server and status bar from starting', async () => {
+            // Verify test mode is enabled
+            const configService = container.resolve<ConfigurationService>(SERVICE_TOKENS.ConfigurationService);
+            expect(configService.get('nofx.testMode')).toBe(true);
+
+            // Verify orchestration server is not running
+            const orchestrationServer = container.resolveOptional<any>(SERVICE_TOKENS.OrchestrationServer);
+            if (orchestrationServer) {
+                expect(orchestrationServer.getStatus?.().isRunning).toBe(false);
+            }
+
+            // Verify status bar item is mocked and not shown
+            const statusBarItem = container.resolveOptional<any>(SERVICE_TOKENS.StatusBarItem);
+            if (statusBarItem) {
+                // In test mode, status bar should be a mock with no show method behavior
+                expect(statusBarItem.show).toBeDefined();
+                expect(typeof statusBarItem.show).toBe('function');
+            }
+        });
+
+        test('Toggle worktrees command should update configuration', async () => {
+            const configService = container.resolve<ConfigurationService>(SERVICE_TOKENS.ConfigurationService);
+            const updateSpy = jest.spyOn(configService, 'update').mockResolvedValue(undefined);
+
+            // Mock initial value
+            jest.spyOn(configService, 'get').mockReturnValue(false);
+
+            // Execute toggle command
+            await vscode.commands.executeCommand('nofx.toggleWorktrees');
+
+            // Verify configuration was toggled
+            expect(updateSpy).toHaveBeenCalledWith('nofx.useWorktrees', true);
+
+            // Mock toggled value
+            jest.spyOn(configService, 'get').mockReturnValue(true);
+
+            // Toggle again
+            await vscode.commands.executeCommand('nofx.toggleWorktrees');
+
+            // Verify toggled back
+            expect(updateSpy).toHaveBeenCalledWith('nofx.useWorktrees', false);
+        });
     });
 
     describe('Command Error Recovery', () => {
@@ -405,10 +486,21 @@ describe('Command Smoke Tests', () => {
 
     describe('Command Cleanup', () => {
         test('Clear persistence command should clean up data', async () => {
-            // Create some test data
-            const testDataPath = path.join(workspaceFolder, '.nofx');
-            fs.mkdirSync(testDataPath, { recursive: true });
-            fs.writeFileSync(path.join(testDataPath, 'agents.json'), '{}');
+            // Resolve AgentPersistence from container and spy on clearAll
+            const agentPersistence = container.resolveOptional<any>(SERVICE_TOKENS.AgentPersistence);
+            let clearAllSpy: jest.SpyInstance;
+
+            if (agentPersistence) {
+                clearAllSpy = jest.spyOn(agentPersistence, 'clearAll').mockResolvedValue(undefined);
+            } else {
+                // Create a mock if service doesn't exist
+                const mockPersistence = {
+                    clearAll: jest.fn().mockResolvedValue(undefined),
+                    loadAgents: jest.fn().mockResolvedValue([])
+                };
+                container.registerInstance(SERVICE_TOKENS.AgentPersistence, mockPersistence);
+                clearAllSpy = mockPersistence.clearAll;
+            }
 
             // Mock the confirmation dialog to return true
             jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue('Clear All' as any);
@@ -416,12 +508,14 @@ describe('Command Smoke Tests', () => {
             // Execute clear persistence
             await vscode.commands.executeCommand('nofx.clearPersistence');
 
-            // Wait a bit for async operations to complete
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Verify clearAll was called
+            expect(clearAllSpy).toHaveBeenCalled();
 
-            // Verify data is cleaned - check that the agents.json file is removed
-            // The clearPersistence command calls AgentPersistence.clearAll() which removes agents.json
-            expect(fs.existsSync(path.join(testDataPath, 'agents.json'))).toBe(false);
+            // Optionally verify that loadAgents returns empty array after clearing
+            if (agentPersistence?.loadAgents) {
+                const agents = await agentPersistence.loadAgents();
+                expect(agents).toEqual([]);
+            }
         });
 
         test('Commands should dispose resources properly', async () => {

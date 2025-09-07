@@ -78,10 +78,14 @@ jobs:
     - name: Run command registration tests
       run: npm run test:commands
       if: ${{ always() }}
+      env:
+        NOFX_TEST_MODE: true
     
     - name: Run service container tests
       run: npm run test:services
       if: ${{ always() }}
+      env:
+        NOFX_TEST_MODE: true
     
     - name: Check code coverage
       run: npm run test:coverage

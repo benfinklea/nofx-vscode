@@ -64,7 +64,7 @@ check_file() {
     local min_size="${2:-0}"
     local description="$3"
     
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     
     if [ ! -f "$file" ]; then
         log_error "$description does not exist: $file"
@@ -88,12 +88,16 @@ check_file() {
 validate_typescript_compilation() {
     log_info "Validating TypeScript compilation..."
     
+    # Initialize counters
+    local js_count=0
+    local ts_count=0
+    
     # Check main entry point
     check_file "$OUT_DIR/extension.js" $MIN_FILE_SIZE "Main extension entry point"
     
     # Check if out directory structure matches src directory
     log_info "Checking output directory structure..."
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     
     local src_structure=$(cd "$SRC_DIR" && find . -type d | sort)
     local out_structure=$(cd "$OUT_DIR" && find . -type d 2>/dev/null | sort)
@@ -104,8 +108,8 @@ validate_typescript_compilation() {
         log_success "Output directory structure exists"
         
         # Count JavaScript files
-        local js_count=$(find "$OUT_DIR" -name "*.js" -type f | wc -l)
-        local ts_count=$(find "$SRC_DIR" -name "*.ts" -type f | wc -l)
+        js_count=$(find "$OUT_DIR" -name "*.js" -type f | wc -l)
+        ts_count=$(find "$SRC_DIR" -name "*.ts" -type f | wc -l)
         
         log_verbose "Found $js_count JavaScript files (from $ts_count TypeScript files)"
         
@@ -117,7 +121,7 @@ validate_typescript_compilation() {
     fi
     
     # Check for TypeScript files in output (should not exist)
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     local ts_in_out=$(find "$OUT_DIR" -name "*.ts" -type f 2>/dev/null | wc -l)
     if [ "$ts_in_out" -gt 0 ]; then
         log_error "Found TypeScript files in output directory (should only contain JavaScript)"
@@ -144,11 +148,11 @@ validate_typescript_compilation() {
         }
     ")
     
-    ((TOTAL_CHECKS++)) || true
+    ((TOTAL_CHECKS++))
     if [ "$source_map_enabled" == "true" ]; then
         if [ "$map_count" -eq 0 ]; then
             log_error "Source maps are enabled in tsconfig.build.json but none were generated"
-        elif [ "$map_count" -ne "$js_count" ]; then
+        elif [ "$js_count" -gt 0 ] && [ "$map_count" -ne "$js_count" ]; then
             log_warning "Source map count ($map_count) doesn't match JavaScript file count ($js_count)"
         else
             log_success "All JavaScript files have corresponding source maps ($map_count)"
@@ -166,14 +170,14 @@ validate_typescript_compilation() {
 validate_package_json() {
     log_info "Validating package.json configuration..."
     
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     if [ ! -f "$PACKAGE_JSON" ]; then
         log_error "package.json not found"
         return 1
     fi
     
     # Check main entry point
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     local main_entry=$(node -e "console.log(require('$PACKAGE_JSON').main || '')")
     if [ -z "$main_entry" ]; then
         log_error "No main entry point defined in package.json"
@@ -187,7 +191,7 @@ validate_package_json() {
     fi
     
     # Count and validate commands
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     local command_count=$(node -e "
         const pkg = require('$PACKAGE_JSON');
         const commands = pkg.contributes?.commands || [];
@@ -220,7 +224,7 @@ validate_package_json() {
     fi
     
     # Validate activation events
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     local activation_events=$(node -e "
         const pkg = require('$PACKAGE_JSON');
         const events = pkg.activationEvents || [];
@@ -243,7 +247,7 @@ validate_extension_manifest() {
     check_file "$PROJECT_ROOT/package.json" 0 "package.json"
     
     # Validate version format
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     local version=$(node -e "console.log(require('$PACKAGE_JSON').version || '')")
     if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         log_success "Version follows semantic versioning: $version"
@@ -252,7 +256,7 @@ validate_extension_manifest() {
     fi
     
     # Check for required VS Code engine
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     local vscode_engine=$(node -e "console.log(require('$PACKAGE_JSON').engines?.vscode || '')")
     if [ -z "$vscode_engine" ]; then
         log_error "No VS Code engine version specified"
@@ -265,7 +269,7 @@ validate_extension_manifest() {
 validate_runtime() {
     log_info "Validating runtime loading..."
     
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     
     # Try to require the main extension file
     # Handle the case where vscode module is not available
@@ -294,13 +298,10 @@ validate_runtime() {
     
     if [[ "$load_result" == "success" ]]; then
         log_success "Extension can be loaded and exports required functions"
-        ((PASSED_CHECKS++)) || true
     elif [[ "$load_result" == *"vscode-module-missing"* ]]; then
         log_warning "Cannot verify runtime loading (vscode module not available outside VS Code)"
-        ((WARNINGS++)) || true
     else
         log_error "Failed to load extension: $load_result"
-        ((FAILED_CHECKS++)) || true
     fi
 }
 
@@ -309,7 +310,7 @@ check_common_issues() {
     log_info "Checking for common issues..."
     
     # Check for console.log statements in production code
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     local console_count=$(grep -r "console\\.log" "$OUT_DIR" --include="*.js" 2>/dev/null | wc -l)
     if [ "$console_count" -gt 0 ]; then
         log_warning "Found $console_count console.log statements in compiled code"
@@ -318,7 +319,7 @@ check_common_issues() {
     fi
     
     # Check for TODO/FIXME comments
-    ((TOTAL_CHECKS++)) || true || true || true
+    ((TOTAL_CHECKS++))
     local todo_count=$(grep -r "TODO\|FIXME" "$OUT_DIR" --include="*.js" 2>/dev/null | wc -l)
     if [ "$todo_count" -gt 0 ]; then
         log_warning "Found $todo_count TODO/FIXME comments in compiled code"

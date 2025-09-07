@@ -31,7 +31,8 @@ export const window = {
   showErrorMessage: jest.fn().mockResolvedValue(undefined),
   showQuickPick: jest.fn().mockResolvedValue(undefined),
   showInputBox: jest.fn().mockResolvedValue(undefined),
-  showOpenDialog: jest.fn().mockResolvedValue(undefined)
+  showOpenDialog: jest.fn().mockResolvedValue(undefined),
+  onDidCloseTerminal: jest.fn(()=>({dispose:jest.fn()}))
 };
 
 export const workspace = { 
@@ -47,7 +48,8 @@ export const workspace = {
 
 export const commands = { 
   executeCommand: jest.fn(),
-  getCommands: jest.fn().mockResolvedValue([])
+  getCommands: jest.fn().mockResolvedValue([]),
+  registerCommand: jest.fn(() => ({ dispose: jest.fn() }))
 };
 
 export const Uri = { file: (p:string)=>({ fsPath:p }) } as any;
@@ -68,4 +70,25 @@ export class EventEmitter {
   public event = jest.fn();
   public fire = jest.fn();
   public dispose = jest.fn();
+}
+
+export class TreeItem {
+  label?: string;
+  collapsibleState?: any;
+  command?: any;
+  iconPath?: any;
+  description?: string;
+  tooltip?: string;
+  contextValue?: string;
+  
+  constructor(label: string, collapsibleState?: any) {
+    this.label = label;
+    this.collapsibleState = collapsibleState;
+  }
+}
+
+export enum TreeItemCollapsibleState {
+  None = 0,
+  Collapsed = 1,
+  Expanded = 2
 }

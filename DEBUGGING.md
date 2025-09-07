@@ -25,7 +25,7 @@ Comprehensive debugging guide for the NofX VS Code extension development.
    - Breakpoints work in `.ts` files (not compiled `.js`)
 
 5. **Monitor Output**
-   - View → Output → Select "NofX Extension"
+   - View → Output → Select "NofX"
 
 ## 🔧 Development Environment Debugging
 
@@ -94,17 +94,33 @@ config.maxAgents = 5
 
 ### Output Channels
 
+The extension creates the following output channels for debugging:
+
+| Channel Name | Purpose | When Created |
+|-------------|---------|--------------|
+| **NofX** | Main extension logs and status updates | On activation |
+| **NofX Orchestration** | WebSocket server and message routing logs | When orchestration starts |
+| **NofX Conductor** | Conductor operations and command processing | When conductor starts |
+| **NofX Agents** | Agent creation, termination, and lifecycle events | When first agent spawns |
+| **NofX Tasks** | Task creation, assignment, and completion tracking | When first task created |
+| **NofX Metrics** | Performance metrics and resource usage statistics | When metrics enabled |
+| **NofX Extension** | Extension activation, configuration, and error logs | On activation |
+
+Access via: View → Output → Select channel from dropdown
+
 #### Creating Debug Output Channels
 
 ```typescript
 // src/services/LoggingService.ts
+import { OUTPUT_CHANNELS } from '../constants/outputChannels';
+
 export class LoggingService {
   private outputChannel: vscode.OutputChannel;
   private debugChannel: vscode.OutputChannel;
   
   constructor() {
-    this.outputChannel = vscode.window.createOutputChannel('NofX Extension');
-    this.debugChannel = vscode.window.createOutputChannel('NofX Debug');
+    this.outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNELS.MAIN);
+    this.debugChannel = vscode.window.createOutputChannel(OUTPUT_CHANNELS.EXTENSION);
   }
   
   log(message: string, ...args: any[]): void {
@@ -132,13 +148,18 @@ export class LoggingService {
 #### Channel Organization
 
 ```typescript
+// src/constants/outputChannels.ts
+import { OUTPUT_CHANNELS } from '../constants/outputChannels';
+
 // Separate channels for different components
 const channels = {
-  main: vscode.window.createOutputChannel('NofX Extension'),
-  orchestration: vscode.window.createOutputChannel('NofX Orchestration'),
-  conductor: vscode.window.createOutputChannel('NofX Conductor'),
-  metrics: vscode.window.createOutputChannel('NofX Metrics'),
-  debug: vscode.window.createOutputChannel('NofX Debug')
+  main: vscode.window.createOutputChannel(OUTPUT_CHANNELS.MAIN),
+  orchestration: vscode.window.createOutputChannel(OUTPUT_CHANNELS.ORCHESTRATION),
+  conductor: vscode.window.createOutputChannel(OUTPUT_CHANNELS.CONDUCTOR),
+  agents: vscode.window.createOutputChannel(OUTPUT_CHANNELS.AGENTS),
+  tasks: vscode.window.createOutputChannel(OUTPUT_CHANNELS.TASKS),
+  metrics: vscode.window.createOutputChannel(OUTPUT_CHANNELS.METRICS),
+  extension: vscode.window.createOutputChannel(OUTPUT_CHANNELS.EXTENSION)
 };
 
 // Use appropriate channel for each component

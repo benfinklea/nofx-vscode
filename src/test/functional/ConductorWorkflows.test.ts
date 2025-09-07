@@ -15,7 +15,8 @@ import { LoggingService } from '../../services/LoggingService';
 import { AgentTreeProvider } from '../../views/AgentTreeProvider';
 import { TreeStateManager } from '../../services/TreeStateManager';
 import { ExtensionTestHelpers } from '../utils/ExtensionTestHelpers';
-import { setupExtension, teardownExtension, setupMockWorkspace, clearMockWorkspace } from './setup';
+import { setupMockWorkspace, clearMockWorkspace } from './setup';
+import { TestHarness } from './testHarness';
 
 describe('Conductor Workflows', () => {
     let container: Container;
@@ -25,14 +26,15 @@ describe('Conductor Workflows', () => {
     let loggingService: LoggingService;
 
     beforeAll(async () => {
-        context = await setupExtension();
+        const { container: c, context: ctx } = await TestHarness.initialize();
+        container = c;
+        context = ctx;
         setupMockWorkspace();
     });
 
     beforeEach(() => {
-        container = Container.getInstance();
-        // Don't reset container to preserve command registrations
-        // container.reset(); // Removed to preserve command bindings
+        // Reset container state between tests but preserve command registrations
+        TestHarness.resetContainer();
 
         const configService = new ConfigurationService();
         const mainChannel = vscode.window.createOutputChannel('NofX Test');
@@ -54,7 +56,7 @@ describe('Conductor Workflows', () => {
 
     afterAll(async () => {
         clearMockWorkspace();
-        await teardownExtension();
+        await TestHarness.dispose();
     });
 
     describe('Team Presets', () => {
@@ -150,16 +152,8 @@ describe('Conductor Workflows', () => {
             // Spy on notification service to verify info message
             const notificationSpy = jest.spyOn(vscode.window, 'showInformationMessage');
 
-            // Mock the command execution to use our spied instance
-            jest.spyOn(vscode.commands, 'executeCommand').mockImplementation(async (command) => {
-                if (command === 'nofx.openConductorTerminal') {
-                    await conductorCommands['openConductorTerminal']();
-                }
-                return undefined;
-            });
-
-            // Execute the command that triggers conductor selection
-            await vscode.commands.executeCommand('nofx.openConductorTerminal');
+            // Directly invoke the command handler instead of using global spy
+            await conductorCommands['openConductorTerminal']();
 
             // Verify createConductor was called with 'basic' type
             expect(createConductorSpy).toHaveBeenCalledWith('basic');
@@ -197,16 +191,8 @@ describe('Conductor Workflows', () => {
             // Spy on notification service to verify info message
             const notificationSpy = jest.spyOn(vscode.window, 'showInformationMessage');
 
-            // Mock the command execution to use our spied instance
-            jest.spyOn(vscode.commands, 'executeCommand').mockImplementation(async (command) => {
-                if (command === 'nofx.openConductorTerminal') {
-                    await conductorCommands['openConductorTerminal']();
-                }
-                return undefined;
-            });
-
-            // Execute the command that triggers conductor selection
-            await vscode.commands.executeCommand('nofx.openConductorTerminal');
+            // Directly invoke the command handler instead of using global spy
+            await conductorCommands['openConductorTerminal']();
 
             // Verify createConductor was called with 'intelligent' type
             expect(createConductorSpy).toHaveBeenCalledWith('intelligent');
@@ -245,16 +231,8 @@ describe('Conductor Workflows', () => {
             // Spy on notification service to verify info message
             const notificationSpy = jest.spyOn(vscode.window, 'showInformationMessage');
 
-            // Mock the command execution to use our spied instance
-            jest.spyOn(vscode.commands, 'executeCommand').mockImplementation(async (command) => {
-                if (command === 'nofx.openConductorTerminal') {
-                    await conductorCommands['openConductorTerminal']();
-                }
-                return undefined;
-            });
-
-            // Execute the command that triggers conductor selection
-            await vscode.commands.executeCommand('nofx.openConductorTerminal');
+            // Directly invoke the command handler instead of using global spy
+            await conductorCommands['openConductorTerminal']();
 
             // Verify createConductor was called with 'supersmart' type
             expect(createConductorSpy).toHaveBeenCalledWith('supersmart');
@@ -311,9 +289,19 @@ describe('Conductor Workflows', () => {
             const configService = container.resolve<ConfigurationService>(SERVICE_TOKENS.ConfigurationService);
             const configGetSpy = jest.spyOn(configService, 'get');
 
+            // Spy on terminal creation to verify terminal command uses configured path
+            const sendTextSpy = jest.fn();
+            const mockTerminal = {
+                sendText: sendTextSpy,
+                show: jest.fn()
+            };
+            jest.spyOn(vscode.window, 'createTerminal').mockReturnValue(mockTerminal as any);
+
             const startSpy = jest.fn().mockImplementation(async () => {
                 // Simulate conductor accessing config during startup
-                configService.get('nofx.claudePath');
+                const claudePath = configService.get('nofx.claudePath');
+                // Simulate terminal command creation
+                mockTerminal.sendText(`${claudePath} --append-system-prompt 'IntelligentConductor prompt'`);
                 return undefined;
             });
             const testConductor = { start: startSpy } as any;
@@ -322,16 +310,8 @@ describe('Conductor Workflows', () => {
             const conductorCommands = new ConductorCommands(container);
             const createConductorSpy = jest.spyOn(conductorCommands, 'createConductor' as any).mockReturnValue(testConductor);
 
-            // Mock the command execution to use our spied instance
-            jest.spyOn(vscode.commands, 'executeCommand').mockImplementation(async (command) => {
-                if (command === 'nofx.openConductorTerminal') {
-                    await conductorCommands['openConductorTerminal']();
-                }
-                return undefined;
-            });
-
-            // Execute the command
-            await vscode.commands.executeCommand('nofx.openConductorTerminal');
+            // Directly invoke the command handler instead of using global spy
+            await conductorCommands['openConductorTerminal']();
 
             // Verify createConductor was called with 'intelligent' type
             expect(createConductorSpy).toHaveBeenCalledWith('intelligent');
@@ -341,6 +321,11 @@ describe('Conductor Workflows', () => {
 
             // Verify config consumption - the conductor should access the Claude path during startup
             expect(configGetSpy).toHaveBeenCalledWith('nofx.claudePath');
+
+            // Verify terminal command uses the configured Claude path
+            expect(sendTextSpy).toHaveBeenCalledWith(
+                expect.stringContaining('/mock/claude')
+            );
         });
 
         test('should handle conductor selection based on team complexity', async () => {
@@ -375,16 +360,8 @@ describe('Conductor Workflows', () => {
                 const conductorCommands = new ConductorCommands(container);
                 const createConductorSpy = jest.spyOn(conductorCommands, 'createConductor' as any).mockReturnValue(testConductor);
 
-                // Mock the command execution to use our spied instance
-                jest.spyOn(vscode.commands, 'executeCommand').mockImplementation(async (command) => {
-                    if (command === 'nofx.openConductorTerminal') {
-                        await conductorCommands['openConductorTerminal']();
-                    }
-                    return undefined;
-                });
-
-                // Execute the command
-                await vscode.commands.executeCommand('nofx.openConductorTerminal');
+                // Directly invoke the command handler instead of using global spy
+                await conductorCommands['openConductorTerminal']();
 
                 // Verify createConductor was called with expected type
                 expect(createConductorSpy).toHaveBeenCalledWith(testCase.expectedType);

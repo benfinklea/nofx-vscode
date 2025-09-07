@@ -26,11 +26,7 @@
     "automation"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onView:nofx.dev",
-    "onView:nofx.agents",
-    "onCommand:nofx.startConductor",
-    "onCommand:nofx.addAgent"
+    "*"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -224,6 +220,11 @@
         "command": "nofx.focusAgentTerminal",
         "title": "NofX: Focus Agent Terminal",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "nofx.viewTaskDetails",
+        "title": "NofX: View Task Details",
+        "icon": "$(info)"
       }
     ],
     "menus": {
@@ -295,12 +296,20 @@
     "viewsWelcome": [
       {
         "view": "nofx.dev",
-        "contents": "🎸 **NofX Conductor**\n\n**Quick Actions:**\n[$(play) Start New Session](command:nofx.startConductor)\n[$(history) Restore Previous Session](command:nofx.restoreAgents)\n[$(save) Save Current Session](command:nofx.exportSessions)\n\n**Agent Management:**\n[$(add) Add Agent(s)](command:nofx.addAgent)\n[$(graph) Messages Dashboard](command:nofx.openMessageFlow)"
+        "contents": "🎸 **NofX Conductor**\n\n**Debug:**\n[$(beaker) Test Command](command:nofx.testCommand)\n\n**Quick Actions:**\n[$(play) Start New Session](command:nofx.startConductor)\n[$(history) Restore Previous Session](command:nofx.restoreAgents)\n[$(save) Save Current Session](command:nofx.exportSessions)\n\n**Agent Management:**\n[$(add) Add Agent(s)](command:nofx.addAgent)\n[$(graph) Messages Dashboard](command:nofx.openMessageFlow)"
       },
       {
         "view": "nofx.agents",
         "contents": "No active agents yet.\n\n[$(add) Add Agent](command:nofx.addAgent)\n[$(play) Start Conductor](command:nofx.startConductor)",
         "when": "!nofx.hasAgents"
+      },
+      {
+        "view": "nofx.activity",
+        "contents": "**Agent Activity**\n\n[$(add) Add Agent](command:nofx.addAgent)\n[$(play) Start Team](command:nofx.startConductor)\n[$(history) Restore Agents](command:nofx.restoreAgents)"
+      },
+      {
+        "view": "nofx.tasks",
+        "contents": "**Task Management**\n\n[$(add) Create Task](command:nofx.createTask)\n[$(checklist) Create Task Batch](command:nofx.createTaskBatch)\n[$(list-tree) View Dependencies](command:nofx.viewTaskDependencies)"
       }
     ],
     "configuration": {
@@ -358,6 +367,64 @@
           "default": false,
           "description": "Enable performance metrics collection"
         },
+        "nofx.monitoring.inactivityWarning": {
+          "type": "number",
+          "default": 30,
+          "description": "Seconds of inactivity before showing warning (default: 30)",
+          "minimum": 10,
+          "maximum": 300
+        },
+        "nofx.monitoring.inactivityAlert": {
+          "type": "number",
+          "default": 120,
+          "description": "Seconds of inactivity before showing alert (default: 120)",
+          "minimum": 30,
+          "maximum": 600
+        },
+        "nofx.monitoring.autoComplete": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically mark tasks as complete when completion is detected"
+        },
+        "nofx.monitoring.notificationLevel": {
+          "type": "string",
+          "default": "normal",
+          "enum": ["minimal", "normal", "verbose"],
+          "enumDescriptions": [
+            "Only critical notifications",
+            "Standard notifications (recommended)",
+            "All notifications including completions"
+          ],
+          "description": "Level of notifications to display"
+        },
+        "nofx.monitoring.soundAlerts": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable sound alerts for critical notifications"
+        },
+        "nofx.monitoring.statusBarNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show agent status in status bar"
+        },
+        "nofx.monitoring.toastNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show toast notifications for agent events"
+        },
+        "nofx.monitoring.modalNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show modal dialogs for critical issues"
+        },
+        "nofx.monitoring.autoApprove": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "List of operations to auto-approve (e.g., 'file_read', 'workspace_search')"
+        },
         "nofx.metricsOutputLevel": {
           "type": "string",
           "default": "basic",
@@ -390,6 +457,11 @@
             "error"
           ],
           "description": "Logging level for NofX extension output"
+        },
+        "nofx.claudeSkipPermissions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Add --dangerously-skip-permissions flag when launching Claude (useful for some environments)"
         }
       }
     },
@@ -405,30 +477,38 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./tsconfig.build.json",
+    "postcompile": "cp -r src/agents/templates out/agents/ && ./scripts/validate-build.sh --quiet || true",
     "watch": "tsc -watch -p ./tsconfig.build.json",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "jest",
-    "test:unit": "jest --testPathPattern=unit",
+    "test:unit": "MOCK_FS=true jest --testPathPattern=unit",
     "test:integration": "jest --testPathPattern=integration",
-    "test:functional": "tsc -p ./tsconfig.test.json && node ./out/test/functional/runFunctionalTests.js",
+    "test:functional": "MOCK_FS=false tsc -p ./tsconfig.test.json && node ./out/test/functional/runFunctionalTests.js",
     "test:smoke": "jest --testPathPattern=CommandSmokeTests",
-    "test:e2e": "tsc -p ./tsconfig.test.json && node ./out/test/runTests.js",
+    "test:e2e": "MOCK_FS=false tsc -p ./tsconfig.test.json && node ./out/test/runTests.js",
+    "test:persistence": "MOCK_FS=false jest --testPathPattern=MetricsAndPersistence",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:functional",
     "test:ci": "npm run compile && npm run lint && npm run test:all",
     "test:manual": "echo 'Opening manual test checklist...' && code test-extension.md",
     "test:watch": "jest --watch",
+    "pretest:coverage": "npm run clean:src",
     "test:coverage": "jest --coverage --coverageDirectory=coverage --coverageReporters=text,lcov,html",
+    "clean:src": "rimraf src/**/*.js",
+    "coverage:baseline": "node ./scripts/coverage-baseline.mjs",
+    "coverage:update-thresholds": "node ./scripts/update-coverage-thresholds.mjs",
     "test:build": "npm run compile && jest --testPathPattern=build/BuildValidation",
     "test:commands": "jest --testPathPattern=commands/CommandRegistration",
     "test:services": "jest --testPathPattern=services/ContainerValidation",
     "validate:build": "./scripts/validate-build.sh",
-    "validate:commands": "npm run test:commands",
+    "validate:commands": "node ./scripts/validate-commands.js",
+    "print:commands": "node ./scripts/print-commands.js",
+    "print:scripts": "node ./scripts/print-scripts.js",
     "validate:services": "npm run test:services",
     "validate:all": "npm run validate:build && npm run validate:commands && npm run validate:services",
     "dev:setup": "./scripts/install-hooks.sh",
     "dev:validate": "npm run compile && npm run validate:build --quiet",
-    "dev:clean": "rimraf out coverage nofx-*.vsix",
+    "dev:clean": "rimraf out coverage nofx-*.vsix src/**/*.js",
     "dev:reset": "rimraf out coverage node_modules nofx-*.vsix && npm install && npm run compile",
     "build": "npm run compile && npx vsce package",
     "build:clean": "rimraf out nofx-*.vsix && npm run build",
@@ -442,6 +522,7 @@
     "qa:full": "npm run compile && npm run lint && npm run test:all && npm run validate:all",
     "qa:quick": "npm run compile && npm run validate:build",
     "qa:pre-commit": "npm run compile && npm run validate:build --quiet",
+    "print:commands": "node ./scripts/print-commands.js",
     "prepackage": "npm run compile",
     "package": "npx vsce package",
     "prepare": "husky"
@@ -452,6 +533,7 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "@vscode/test-electron": "^2.5.2",
@@ -470,7 +552,6 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@types/ws": "^8.18.1",
     "uuid": "^9.0.1",
     "ws": "^8.18.3",
     "zod": "^3.22.4"

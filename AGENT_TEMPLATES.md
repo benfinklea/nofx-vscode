@@ -241,7 +241,6 @@ Templates can include variables that get replaced at spawn time:
 - `NofX: Create Agent Template` - Open template editor
 - `NofX: Edit Agent Template` - Modify existing template
 - `NofX: Import Agent Template` - Load template from file
-- `NofX: Export Agent Template` - Save template to file
 
 ---
 

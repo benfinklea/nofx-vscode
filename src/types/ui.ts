@@ -281,6 +281,10 @@ export function normalizeTaskStatus(status: string): NormalizedTaskStatus {
  * Maps various status strings to standardized values
  */
 export function normalizeAgentStatus(status: string): NormalizedAgentStatus {
+    if (!status) {
+        console.warn('[NofX Debug] Agent status is undefined/null, defaulting to offline');
+        return 'offline';
+    }
     switch (status.toLowerCase()) {
         case 'idle':
         case 'available':

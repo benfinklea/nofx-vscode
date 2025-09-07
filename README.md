@@ -2,6 +2,20 @@
 
 🎸 **Orchestrate multiple Claude Code agents working in parallel on your codebase, all from within VS Code!**
 
+## 📚 Table of Contents
+
+- [✨ Features](#-features)
+- [📦 Installation](#-installation)
+- [🚀 Quick Start](#-quick-start)
+- [🎯 Usage Examples](#-usage-examples)
+- [⚙️ Configuration](#️-configuration)
+- [📝 Scripts Reference](#-scripts-reference)
+- [🔧 Development](#-development)
+- [📖 Documentation](#-documentation)
+- [🐛 Troubleshooting](#-troubleshooting)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
+
 ## ✨ Features
 
 - **🎼 Conductor Panel** - Central orchestration of multiple AI agents
@@ -312,10 +326,15 @@ npm run build:ci
 npx vsce package
 
 # Install in VS Code
-code --install-extension nofx-0.1.0.vsix --force
+# Install the latest VSIX (replace <version> with actual version)
+code --install-extension nofx-*.vsix --force
+# Or use the latest file:
+VSIX=$(ls -1t nofx-*.vsix 2>/dev/null | head -1)
+[ -n "$VSIX" ] && code --install-extension "$VSIX" --force
 
 # Install in Cursor
-cursor --install-extension nofx-0.1.0.vsix --force
+# For Cursor users (replace <version> with actual version)
+cursor --install-extension nofx-*.vsix --force
 ```
 
 ## 🧪 Testing
@@ -377,27 +396,78 @@ npm run hooks:install
 # Verify hooks are working
 npm run hooks:verify
 
-# Run pre-commit validation manually
-npm run hooks:precommit
+# Fix hooks configuration if needed
+npm run hooks:verify:fix
 
-# Run pre-push validation manually
-npm run hooks:prepush
+# Test hooks
+npm run hooks:test
+
+# Uninstall hooks
+npm run hooks:uninstall
 ```
+
+## 📝 Scripts Reference
+
+*All scripts are sourced from `package.json`. To regenerate this list, run `npm run print:commands` or `node scripts/print-scripts.js`.*
+
+### Build & Compile Scripts
+- `npm run compile` - Compile TypeScript to JavaScript (`tsc -p ./tsconfig.build.json`)
+- `npm run build` - Compile and package extension as VSIX (`npm run compile && npx vsce package`)
+- `npm run build:clean` - Clean artifacts and rebuild (`rimraf out nofx-*.vsix && npm run build`)
+- `npm run build:validate` - Build with full validation (`npm run compile && npm run validate:all && npm run build`)
+- `npm run build:ci` - CI build with tests and validation (`npm run test:ci && npm run build:validate`)
+- `npm run watch` - Watch mode for development (`tsc -watch -p ./tsconfig.build.json`)
+- `npm run package` - Package extension (`npx vsce package`)
+- `npm run vscode:prepublish` - Pre-publish hook (`npm run compile`)
+- `npm run postcompile` - Post-compile validation (`./scripts/validate-build.sh --quiet || true`)
+- `npm run prepackage` - Pre-package hook (`npm run compile`)
+
+### Test Scripts
+- `npm test` - Run all Jest tests (`jest`)
+- `npm run test:unit` - Run unit tests only (`MOCK_FS=true jest --testPathPattern=unit`)
+- `npm run test:integration` - Run integration tests (`jest --testPathPattern=integration`)
+- `npm run test:functional` - Run functional tests (`MOCK_FS=false tsc -p ./tsconfig.test.json && node ./out/test/functional/runFunctionalTests.js`)
+- `npm run test:smoke` - Run smoke tests (`jest --testPathPattern=CommandSmokeTests`)
+- `npm run test:e2e` - Run end-to-end tests (`MOCK_FS=false tsc -p ./tsconfig.test.json && node ./out/test/runTests.js`)
+- `npm run test:persistence` - Test persistence (`MOCK_FS=false jest --testPathPattern=MetricsAndPersistence`)
+- `npm run test:all` - Run all test suites (`npm run test:unit && npm run test:integration && npm run test:functional`)
+- `npm run test:ci` - Full CI test pipeline (`npm run compile && npm run lint && npm run test:all`)
+- `npm run test:manual` - Open manual test checklist (`echo 'Opening manual test checklist...' && code test-extension.md`)
+- `npm run test:watch` - Watch mode for tests (`jest --watch`)
+- `npm run test:coverage` - Generate coverage report (`jest --coverage --coverageDirectory=coverage --coverageReporters=text,lcov,html`)
+- `npm run test:build` - Test build validation (`npm run compile && jest --testPathPattern=build/BuildValidation`)
+- `npm run test:commands` - Test command registration (`jest --testPathPattern=commands/CommandRegistration`)
+- `npm run test:services` - Test service container (`jest --testPathPattern=services/ContainerValidation`)
+- `npm run pretest` - Pre-test hook (`npm run compile && npm run lint`)
+
+### Validation Scripts
+- `npm run validate:build` - Validate build output (`./scripts/validate-build.sh`)
+- `npm run validate:commands` - Validate command registration (`node ./scripts/validate-commands.js`)
+- `npm run validate:services` - Validate service container via tests (`npm run test:services`)
+- `npm run validate:all` - Run all validations (`npm run validate:build && npm run validate:commands && npm run validate:services`)
+- `npm run lint` - Run ESLint (`eslint src --ext ts`)
 
 ### Development Scripts
-```bash
-# Validate code without building
-npm run dev:validate
+- `npm run dev:setup` - Setup development environment (`./scripts/install-hooks.sh`)
+- `npm run dev:validate` - Quick validation for development (`npm run compile && npm run validate:build --quiet`)
+- `npm run dev:clean` - Clean development artifacts (`rimraf out coverage nofx-*.vsix`)
+- `npm run dev:reset` - Full reset (`rimraf out coverage node_modules nofx-*.vsix && npm install && npm run compile`)
 
-# Clean development artifacts (removes build outputs only)
-npm run dev:clean
+### Git Hooks Scripts
+- `npm run hooks:install` - Install git hooks (`./scripts/install-hooks.sh`)
+- `npm run hooks:uninstall` - Uninstall git hooks (`./scripts/install-hooks.sh uninstall`)
+- `npm run hooks:test` - Test git hooks (`./scripts/install-hooks.sh test`)
+- `npm run hooks:verify` - Verify hooks configuration (`./scripts/verify-hooks.sh`)
+- `npm run hooks:verify:fix` - Fix hooks configuration (`./scripts/verify-hooks.sh --fix`)
+- `npm run prepare` - Husky prepare hook (`husky`)
 
-# Full reset (removes everything including node_modules)
-npm run dev:reset
+### QA Scripts
+- `npm run qa:full` - Full QA pipeline (`npm run compile && npm run lint && npm run test:all && npm run validate:all`)
+- `npm run qa:quick` - Quick QA check (`npm run compile && npm run validate:build`)
+- `npm run qa:pre-commit` - Pre-commit validation (`npm run compile && npm run validate:build --quiet`)
 
-# Full development setup
-npm run dev:setup
-```
+### Utility Scripts
+- `npm run print:commands` - Print all registered commands (`node ./scripts/print-commands.js`)
 
 ### Quality Assurance
 ```bash
@@ -410,7 +480,7 @@ npm run qa:quick
 # Validate all components
 npm run validate:all
 npm run validate:commands
-npm run validate:services
+npm run validate:services  # Runs Jest tests for service validation
 npm run validate:build
 ```
 
@@ -419,12 +489,18 @@ npm run validate:build
 # Run linter
 npm run lint
 
-# Fix linting issues
-npm run lint:fix
+# Auto-fix lint issues (not exposed as npm script)
+npx eslint src --ext ts --fix
 
-# Format code
-npm run format
+# Format code (if Prettier is configured)
+npx prettier . --write
 ```
+
+### Common Fallback Commands
+For functionality not exposed as npm scripts:
+- **Clean all including node_modules**: `npx rimraf out coverage nofx-*.vsix node_modules`
+- **List VSIX contents**: `npx vsce ls`
+- **Install extension**: `code --install-extension nofx-*.vsix --force`
 
 ## 🐛 Debugging & Troubleshooting
 
@@ -436,10 +512,13 @@ npm run format
 
 ### Output Channels
 Monitor these output channels for debugging:
-- **NofX Extension** - General extension logs
-- **NofX Orchestration** - WebSocket server and messaging
-- **NofX Conductor** - Conductor process logs
-- **NofX Metrics** - Performance and usage metrics
+- **NofX** - Main extension logs and status updates
+- **NofX - Orchestration** - WebSocket server and message routing
+- **NofX Conductor Brain** - Intelligent conductor decision-making
+- **NofX VP Brain 🧠** - Strategic VP-level planning
+- **NofX Analyzer** - Codebase analysis and intelligence
+- **NofX Command Verification** - Command registration validation
+- **NofX Test** - Test execution and debugging
 
 ### Common Issues and Solutions
 
@@ -464,7 +543,11 @@ npm run build:clean
 # Completely remove old versions
 rm -rf ~/.vscode/extensions/nofx.nofx-*
 # Force install
-code --install-extension nofx-0.1.0.vsix --force
+# Install the latest VSIX (replace <version> with actual version)
+code --install-extension nofx-*.vsix --force
+# Or use the latest file:
+VSIX=$(ls -1t nofx-*.vsix 2>/dev/null | head -1)
+[ -n "$VSIX" ] && code --install-extension "$VSIX" --force
 # Restart VS Code/Cursor
 ```
 
@@ -505,10 +588,47 @@ npm run build:validate
 - Check for memory leaks with heap snapshots
 - Profile extension activation time
 
+## 📖 Documentation
+
+For detailed documentation, see the following guides:
+
+- **[Developer Guide](./DEVELOPER_GUIDE.md)** - Complete development setup and workflow
+- **[Build Guide](./BUILD_GUIDE.md)** - Build processes and optimization
+- **[Testing Guide](./TESTING_GUIDE.md)** - Testing strategies and best practices
+- **[Troubleshooting Guide](./TROUBLESHOOTING.md)** - Common issues and solutions
+- **[Debugging Guide](./DEBUGGING.md)** - Debugging techniques and tools
+- **[Contributing Guide](./CONTRIBUTING.md)** - How to contribute to the project
+- **[Architecture Overview](./ARCHITECTURE.md)** - System design and components
+- **[Security Guidelines](./SECURITY.md)** - Security best practices
+- **[Dependency Prioritization](./DEPENDENCY_PRIORITIZATION.md)** - Dependency management strategy
+
 ### Debug Commands
 The extension includes special debug commands:
 - `nofx.debug.verifyCommands` - Validate all command registrations
-- Check Output channels for detailed logs
+
+### Output Channels
+The extension creates the following output channels for debugging:
+
+| Channel Name | Purpose | When Created |
+|-------------|---------|--------------|
+| **NofX** | General extension messages and status updates | Extension activation |
+| **NofX - Orchestration** | WebSocket server and message routing logs | First WebSocket connection or server start |
+| **NofX Conductor Brain** | Intelligent conductor decision-making and reasoning | Intelligent Conductor initialization |
+| **NofX VP Brain 🧠** | Strategic VP-level planning and architecture decisions | VP Conductor initialization |
+| **NofX Analyzer** | Codebase analysis and intelligence gathering | First code analysis request |
+| **NofX Command Verification** | Command registration validation and verification | Debug command execution |
+| **NofX Test** | Test execution and debugging information | Test suite initialization |
+
+Access via: View → Output → Select channel from dropdown
+
+### VS Code CLI Installation
+To use the `code` command in your terminal:
+1. Open VS Code
+2. Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
+3. Type "Shell Command: Install 'code' command in PATH"
+4. Select the command and press Enter
+
+For Cursor users, the `cursor` command should be available automatically.
 
 ## 📁 Project Structure
 
@@ -570,7 +690,7 @@ npx vsce ls
 ### Installation Methods
 ```bash
 # Command line installation
-code --install-extension nofx-0.1.0.vsix
+code --install-extension nofx-*.vsix
 
 # Manual installation
 1. Open VS Code

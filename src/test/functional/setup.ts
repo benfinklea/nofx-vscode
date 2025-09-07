@@ -2,17 +2,47 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Container } from '../../services/Container';
+import { IContainer } from '../../services/interfaces';
 
 // Import extension module
 let extension: any;
 let extensionContext: vscode.ExtensionContext;
+let extensionExports: any;
 
 /**
  * Initialize and activate the extension for functional tests
  * This ensures all commands are properly registered
  */
 export async function setupExtension(): Promise<vscode.ExtensionContext> {
-    // Create mock extension context
+    // Check if we're running under VS Code test harness
+    const isVSCodeTest = process.env.VSCODE_TEST || process.env.VSCODE_EXTENSION_TEST;
+
+    if (isVSCodeTest) {
+        // Use real VS Code extension activation
+        const ext = vscode.extensions.getExtension('nofx.nofx');
+        if (ext) {
+            // Activate the extension if not already active
+            if (!ext.isActive) {
+                extensionExports = await ext.activate();
+            } else {
+                extensionExports = ext.exports;
+            }
+
+            // Get the real extension context
+            extensionContext = (ext as any).extensionContext || ext.extensionPath as any;
+
+            // If we have exports with a __getContainerForTests method, use it
+            if (extensionExports?.__getContainerForTests) {
+                const container = extensionExports.__getContainerForTests();
+                if (container) {
+                    // Container is available from the real extension
+                    return extensionContext;
+                }
+            }
+        }
+    }
+
+    // Fallback: Create mock extension context for unit tests
     const workspaceFolder = path.join(__dirname, 'test-workspace-' + Date.now());
     fs.mkdirSync(workspaceFolder, { recursive: true });
 
@@ -52,6 +82,9 @@ export async function setupExtension(): Promise<vscode.ExtensionContext> {
 
     // Try to import and activate the extension
     try {
+        // Set NODE_ENV for test export access
+        process.env.NODE_ENV = 'test';
+
         // Import the compiled extension module
         extension = require('../../../out/extension');
 
@@ -59,12 +92,32 @@ export async function setupExtension(): Promise<vscode.ExtensionContext> {
         if (extension && typeof extension.activate === 'function') {
             await extension.activate(extensionContext);
         }
+
+        // Store exports for test access
+        extensionExports = extension;
     } catch (error) {
         console.warn('Extension activation failed, commands may not be registered:', error);
         // Continue anyway - tests may still work with mocked services
     }
 
     return extensionContext;
+}
+
+/**
+ * Get the container from the activated extension
+ */
+export function getExtensionContainer(): IContainer | undefined {
+    // Try to get container from exports first
+    if (extensionExports?.__getContainerForTests) {
+        return extensionExports.__getContainerForTests();
+    }
+
+    // Fallback to singleton if available
+    try {
+        return Container.getInstance();
+    } catch (error) {
+        return undefined;
+    }
 }
 
 /**
@@ -95,13 +148,17 @@ export async function teardownExtension(): Promise<void> {
     await vscode.workspace.getConfiguration('nofx').update('testMode', undefined, vscode.ConfigurationTarget.Workspace);
 
     // Reset container if it exists
-    try {
-        const container = Container.getInstance();
-        if (container && typeof container.reset === 'function') {
-            container.reset();
+    const container = getExtensionContainer();
+    if (container) {
+        try {
+            if (typeof container.reset === 'function') {
+                container.reset();
+            } else if (typeof container.dispose === 'function') {
+                await container.dispose();
+            }
+        } catch (error) {
+            // Container cleanup failed, ignore
         }
-    } catch (error) {
-        // Container may not be available, ignore
     }
 }
 

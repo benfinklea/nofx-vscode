@@ -1,13 +1,19 @@
 import * as vscode from 'vscode';
 import { IAgentLifecycleManager, ITerminalManager, IWorktreeService, IConfigurationService, INotificationService, ILoggingService, IEventBus, IErrorHandler } from './interfaces';
 import { Agent, AgentConfig, AgentStatus } from '../agents/types';
+import { AgentActivityStatus } from '../types/agent';
 import { DOMAIN_EVENTS } from './EventConstants';
+import { ActivityMonitor } from './ActivityMonitor';
+import { AgentNotificationService } from './AgentNotificationService';
 
 export class AgentLifecycleManager implements IAgentLifecycleManager {
     private outputChannels = new Map<string, vscode.OutputChannel>();
     private loggingService?: ILoggingService;
     private eventBus?: IEventBus;
     private errorHandler?: IErrorHandler;
+    private activityMonitor: ActivityMonitor;
+    private agentNotificationService: AgentNotificationService;
+    private agents = new Map<string, Agent>();
 
     constructor(
         private terminalManager: ITerminalManager,
@@ -22,6 +28,80 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         this.loggingService = loggingService;
         this.eventBus = eventBus;
         this.errorHandler = errorHandler;
+        
+        // Initialize monitoring services
+        this.activityMonitor = new ActivityMonitor();
+        this.agentNotificationService = new AgentNotificationService();
+        
+        // Set up monitoring event listeners
+        this.setupMonitoringListeners();
+    }
+    
+    private setupMonitoringListeners(): void {
+        // Listen for monitoring events
+        this.activityMonitor.on('monitoring-event', (event) => {
+            this.handleMonitoringEvent(event);
+        });
+
+        this.activityMonitor.on('agent-status-changed', (data) => {
+            this.handleAgentStatusChange(data);
+        });
+    }
+
+    private handleMonitoringEvent(event: any): void {
+        const agent = this.agents.get(event.agentId);
+        if (!agent) return;
+
+        // Handle different event types
+        switch (event.type) {
+            case 'permission':
+                this.agentNotificationService.notifyUserAttention(agent, 'permission', event);
+                break;
+            case 'inactivity':
+                if (event.data.level === 'warning') {
+                    this.agentNotificationService.notifyUserAttention(agent, 'inactive', event);
+                } else if (event.data.level === 'alert') {
+                    this.agentNotificationService.notifyUserAttention(agent, 'stuck', event);
+                }
+                break;
+            case 'error':
+                this.agentNotificationService.notifyUserAttention(agent, 'error', event);
+                break;
+            case 'completion':
+                if (this.configService.get('nofx.monitoring.autoComplete', true)) {
+                    // Auto-mark task as complete
+                    agent.currentTask = null;
+                    agent.tasksCompleted++;
+                    this.onAgentUpdate();
+                }
+                this.agentNotificationService.notifyUserAttention(agent, 'completion', event);
+                break;
+        }
+    }
+
+    private handleAgentStatusChange(data: any): void {
+        const { agentId, newStatus } = data;
+        const agent = this.agents.get(agentId);
+        
+        if (agent) {
+            // Update agent's activity status (separate from operational status)
+            (agent as any).activityStatus = newStatus;
+            
+            // Update tree view
+            this.onAgentUpdate();
+            
+            // Update status bar
+            this.agentNotificationService.updateStatusBar(this.activityMonitor.getAllAgentStatuses());
+            
+            // Publish event
+            if (this.eventBus) {
+                this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, {
+                    agentId,
+                    status: agent.status,
+                    activityStatus: newStatus
+                });
+            }
+        }
     }
 
     async initialize(): Promise<void> {
@@ -57,12 +137,12 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         const outputChannel = this.loggingService?.getChannel(`Agent: ${config.name}`) ||
             vscode.window.createOutputChannel(`n of x: ${config.name}`);
 
-        // Create agent object
+        // Create agent object - initially offline until terminal is ready
         const agent: Agent = {
             id: agentId,
             name: config.name,
             type: config.type,
-            status: 'idle' as AgentStatus,
+            status: 'offline' as AgentStatus,  // Start as offline until terminal initializes
             terminal: terminal,
             currentTask: null,
             startTime: new Date(),
@@ -70,6 +150,12 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
             template: config.template // Store template for prompts and capabilities
         };
 
+        console.log('[NofX Debug] Created agent object:', {
+            id: agent.id,
+            name: agent.name,
+            status: agent.status,
+            hasTerminal: !!agent.terminal
+        });
         this.loggingService?.debug(`Created agent ${agentId} with status: ${agent.status}`);
 
         // Publish event to EventBus
@@ -92,9 +178,30 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
             }, `Failed to create worktree for ${agent.name}`) || undefined;
         }
 
-        // Initialize agent terminal
+        // Initialize agent terminal with a small delay to avoid overwhelming the terminal system
         await this.errorHandler?.handleAsync(async () => {
+            // Add a small delay to prevent terminal connection issues
+            await new Promise(resolve => setTimeout(resolve, 500));
             await this.terminalManager.initializeAgentTerminal(agent, workingDirectory);
+
+            // Terminal is now ready, update status to idle
+            agent.status = 'idle' as AgentStatus;
+            console.log(`[NofX Debug] Agent ${agent.name} terminal initialized, status updated to: ${agent.status}`);
+            
+            // Store agent for monitoring
+            this.agents.set(agentId, agent);
+            
+            // Start activity monitoring for this agent
+            this.activityMonitor.startMonitoring(agent, terminal);
+            console.log(`[NofX Debug] Started monitoring for agent ${agent.name}`);
+
+            // Notify that agent has been updated
+            this.onAgentUpdate();
+
+            // Publish status change event
+            if (this.eventBus) {
+                this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, { agentId, status: 'idle' });
+            }
         }, 'Error initializing agent terminal');
 
         outputChannel.appendLine(`✅ Agent ${config.name} (${config.type}) initialized`);
@@ -121,6 +228,13 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         if (this.eventBus) {
             this.eventBus.publish(DOMAIN_EVENTS.AGENT_LIFECYCLE_REMOVING, { agentId });
         }
+        
+        // Stop monitoring for this agent
+        this.activityMonitor.stopMonitoring(agentId);
+        this.agentNotificationService.clearNotification(agentId);
+        
+        // Remove from internal map
+        this.agents.delete(agentId);
 
         // Clean up worktree if it exists
         const worktreeRemoved = await this.worktreeService.removeForAgent(agentId);
@@ -154,6 +268,10 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
     }
 
     dispose(): void {
+        // Dispose monitoring services
+        this.activityMonitor.dispose();
+        this.agentNotificationService.dispose();
+        
         // Dispose all output channels (only if not managed by LoggingService)
         for (const outputChannel of this.outputChannels.values()) {
             if (!this.loggingService) {
@@ -161,5 +279,8 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
             }
         }
         this.outputChannels.clear();
+        
+        // Clear agent map
+        this.agents.clear();
     }
 }

@@ -495,66 +495,53 @@ export class TestHelpers {
 - [ ] No errors in Output → NofX Extension
 - [ ] Status bar item appears
 
-### Command Palette Integration (All NofX Commands)
+### Command Palette Integration
 
-#### Agent Commands
-- [ ] `NofX: Add Agent` - Opens agent selection
-- [ ] `NofX: Add Agent (Individual)` - Adds single agent
-- [ ] `NofX: Add Team Preset` - Shows team presets
-- [ ] `NofX: Remove Agent` - Removes selected agent
-- [ ] `NofX: List Agents` - Shows all agents
-- [ ] `NofX: Restore Previous Session` - Restores agents
+> **Note**: The command list below is generated from `package.json` manifest. Run `npm run print:commands` to refresh this list.
 
-#### Conductor Commands
-- [ ] `NofX: Start Conductor` - Opens conductor with team selection
-- [ ] `NofX: Open Conductor Terminal` - Opens conductor terminal
-- [ ] `NofX: Send Message to Conductor` - Sends conductor message
+See [All NofX Commands (from manifest)](#📋-all-nofx-commands-from-manifest) section below for the complete list of available commands.
 
-#### Task Commands
-- [ ] `NofX: Create Task` - Creates new task
-- [ ] `NofX: View Task Queue` - Shows task queue
-- [ ] `NofX: Assign Task` - Assigns task to agent
-- [ ] `NofX: Complete Task` - Marks task complete
-- [ ] `NofX: Cancel Task` - Cancels task
+### Planned Commands (Future Development)
 
-#### Orchestration Commands
-- [ ] `NofX: Start Orchestration Server` - Starts WebSocket server
-- [ ] `NofX: Stop Orchestration Server` - Stops server
-- [ ] `NofX: View Orchestration Status` - Shows server status
-- [ ] `NofX: Open Message Flow Dashboard` - Opens dashboard
+These commands are planned for future releases but not yet implemented:
 
-#### Worktree Commands
-- [ ] `NofX: Toggle Git Worktrees` - Enables/disables worktrees
-- [ ] `NofX: Merge Agent Work` - Merges worktree changes
-- [ ] `NofX: View Worktrees` - Lists active worktrees
+#### Agent Management
+- `NofX: Add Agent (Individual)` - Add single agent with custom configuration
+- `NofX: Add Team Preset` - Select from predefined team configurations
+- `NofX: Remove Agent` - Remove specific agent from workspace
+- `NofX: List Agents` - Display all active agents
 
-#### Template Commands
-- [ ] `NofX: Browse Agent Templates` - Shows template browser
-- [ ] `NofX: Create Agent Template` - Creates new template
-- [ ] `NofX: Edit Agent Template` - Edits existing template
+#### Conductor Operations
+- `NofX: Send Message to Conductor` - Direct message to conductor
 
-#### Persistence Commands
-- [ ] `NofX: Save Session` - Saves current session
-- [ ] `NofX: Load Session` - Loads saved session
-- [ ] `NofX: Export Sessions` - Exports to file
-- [ ] `NofX: Clear All Data` - Clears persistence
+#### Task Operations
+- `NofX: View Task Queue` - Display pending tasks
+- `NofX: Assign Task` - Manually assign task to agent
+- `NofX: Cancel Task` - Cancel pending or active task
 
-#### Metrics Commands
-- [ ] `NofX: View Metrics` - Shows metrics dashboard
-- [ ] `NofX: Export Metrics` - Exports metrics data
-- [ ] `NofX: Reset Metrics` - Clears metrics
+#### Orchestration Server
+- `NofX: Start Orchestration Server` - Manually start WebSocket server
+- `NofX: Stop Orchestration Server` - Stop WebSocket server
+- `NofX: View Orchestration Status` - Check server status
 
-#### Utility Commands
-- [ ] `NofX: Show Extension Info` - Shows version info
-- [ ] `NofX: Open Settings` - Opens extension settings
-- [ ] `NofX: View Logs` - Opens log viewer
-- [ ] `NofX: Report Issue` - Opens issue reporter
+#### Worktree Operations
+- `NofX: View Worktrees` - List all active worktrees
 
-#### Debug Commands
-- [ ] `NofX: Verify Commands` - Validates registration
-- [ ] `NofX: Validate Services` - Checks container
-- [ ] `NofX: Test WebSocket` - Tests connection
-- [ ] `NofX: Debug Mode` - Toggles debug mode
+#### Session Management
+- `NofX: Save Session` - Save current session state
+- `NofX: Load Session` - Load previously saved session
+
+#### Utility
+- `NofX: Show Extension Info` - Display version and configuration
+- `NofX: Open Settings` - Open extension settings page
+- `NofX: View Logs` - Open log viewer panel
+- `NofX: Report Issue` - Open issue reporter
+
+#### Debug
+- `NofX: Verify Commands` - Validate command registration
+- `NofX: Validate Services` - Check service container
+- `NofX: Test WebSocket` - Test WebSocket connection
+- `NofX: Debug Mode` - Toggle debug mode
 
 ### Conductor Workflows
 
@@ -1231,6 +1218,95 @@ class TestMetrics {
   }
 }
 ```
+
+## 📋 All NofX Commands (from manifest)
+
+*This list is generated from `package.json` manifest. Run `npm run print:commands` to refresh.*
+
+### Core Commands
+- `nofx.startConductor` - NofX: Start Conductor
+- `nofx.resetNofX` - NofX: Reset Everything
+
+### Agent Management
+- `nofx.addAgent` - NofX: Add Agent
+- `nofx.editAgent` - NofX: Edit Agent
+- `nofx.deleteAgent` - NofX: Delete Agent
+- `nofx.restoreAgents` - NofX: Restore Saved Agents
+- `nofx.createAgentTemplate` - NofX: Create Agent Template
+- `nofx.editAgentTemplate` - NofX: Edit Agent Template
+- `nofx.importAgentTemplate` - NofX: Import Agent Template
+- `nofx.browseAgentTemplates` - NofX: Browse Agent Templates
+- `nofx.mergeAgentWork` - NofX: Merge Agent Work
+- `nofx.focusAgentTerminal` - NofX: Focus Agent Terminal
+
+### Task Management
+- `nofx.createTask` - NofX: Create Task
+- `nofx.completeTask` - NofX: Mark Task Complete
+- `nofx.addTaskDependency` - NofX: Add Task Dependency
+- `nofx.removeTaskDependency` - NofX: Remove Task Dependency
+- `nofx.resolveTaskConflict` - NofX: Resolve Task Conflict
+- `nofx.viewTaskDependencies` - NofX: View Task Dependencies
+- `nofx.retryBlockedTask` - NofX: Retry Blocked Task
+- `nofx.createTaskBatch` - NofX: Create Task Batch
+- `nofx.resolveAllConflicts` - NofX: Resolve All Conflicts
+
+### UI & Navigation
+- `nofx.quickStartChat` - NofX: Quick Start with Conductor Chat
+- `nofx.showOrchestrator` - NofX: Show Orchestrator
+- `nofx.openConductorChat` - NofX: Open Conductor Chat
+- `nofx.openSimpleConductor` - NofX: Open Simple Conductor (No Permissions)
+- `nofx.openConductorTerminal` - NofX: Open Conductor Terminal
+- `nofx.openMessageFlow` - NofX: Open Message Flow Dashboard
+- `nofx.openConductorPanel` - NofX: Open Conductor Panel
+
+### Metrics & Monitoring
+- `nofx.showMetricsDashboard` - NofX: Show Metrics Dashboard
+- `nofx.exportMetrics` - NofX: Export Metrics Data
+- `nofx.resetMetrics` - NofX: Reset Metrics Data
+- `nofx.toggleMetrics` - NofX: Toggle Metrics Collection
+
+### Data Management
+- `nofx.exportSessions` - NofX: Export Agent Sessions
+- `nofx.archiveSessions` - NofX: Archive Old Sessions
+- `nofx.clearPersistence` - NofX: Clear All Persistence Data
+
+### Git & Worktrees
+- `nofx.toggleWorktrees` - NofX: Toggle Git Worktrees
+
+### Debug & Testing
+- `nofx.testClaude` - NofX: Test Claude Command
+- `nofx.debug.verifyCommands` - NofX: Debug - Verify Registered Commands
+
+**Total Commands: 38**
+
+### Manual Command Testing Checklist
+
+When manually testing the extension, verify each command category:
+
+1. **Core Workflow**
+   - [ ] Start Conductor creates team selection UI
+   - [ ] Reset Everything clears all state and restarts
+
+2. **Agent Operations**
+   - [ ] Add Agent shows type selection and creates terminal
+   - [ ] Edit Agent allows modification of properties
+   - [ ] Delete Agent removes from tree and terminates
+   - [ ] Agent templates load and apply correctly
+
+3. **Task Management**
+   - [ ] Create Task adds to queue with proper priority
+   - [ ] Task dependencies resolve correctly
+   - [ ] Batch operations work for multiple tasks
+
+4. **UI Components**
+   - [ ] All panels and webviews open without errors
+   - [ ] Message flow dashboard shows real-time updates
+   - [ ] Metrics dashboard displays accurate data
+
+5. **Persistence**
+   - [ ] Sessions save and restore correctly
+   - [ ] Clear persistence removes all data
+   - [ ] Export functions produce valid output
 
 ---
 

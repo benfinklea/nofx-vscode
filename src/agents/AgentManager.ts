@@ -657,7 +657,7 @@ export class AgentManager implements IAgentReader {
         this.worktreeService?.dispose();
 
         // Dispose all subscriptions
-        this.disposables.forEach(d => d.dispose());
+        this.disposables.forEach(d => d?.dispose());
         this.disposables = [];
 
         this._onAgentUpdate.dispose();

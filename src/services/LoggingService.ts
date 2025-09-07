@@ -9,13 +9,31 @@ export class LoggingService implements ILoggingService {
     private currentLogLevel: LogLevel = 'info';
 
     constructor(
-        private configService: IConfigurationService,
+        private configService: IConfigurationService | undefined,
         mainChannel: vscode.OutputChannel
     ) {
         this.mainChannel = mainChannel;
         this.channels.set('main', this.mainChannel);
 
-        // Initialize log level from configuration
+        // Initialize log level from configuration if available
+        if (this.configService) {
+            this.updateLogLevel();
+
+            // Listen for configuration changes
+            const disposable = this.configService.onDidChange(() => {
+                this.updateLogLevel();
+            });
+            this.disposables.push(disposable);
+        }
+    }
+
+    /**
+     * Set the configuration service after construction to avoid circular dependency
+     */
+    public setConfigurationService(configService: IConfigurationService): void {
+        if (this.configService) return; // Already set
+
+        this.configService = configService;
         this.updateLogLevel();
 
         // Listen for configuration changes
@@ -26,7 +44,7 @@ export class LoggingService implements ILoggingService {
     }
 
     private updateLogLevel(): void {
-        const raw = this.configService.getLogLevel?.();
+        const raw = this.configService?.getLogLevel?.();
         if (!raw) {
             this.currentLogLevel = 'info';
             return;
@@ -125,7 +143,11 @@ export class LoggingService implements ILoggingService {
     }
 
     onDidChangeConfiguration(callback: () => void): vscode.Disposable {
-        return this.configService.onDidChange(callback);
+        if (this.configService) {
+            return this.configService.onDidChange(callback);
+        }
+        // Return a no-op disposable if no config service
+        return { dispose: () => {} };
     }
 
     dispose(): void {

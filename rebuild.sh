@@ -45,11 +45,15 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Verify VSIX exists
+test -f "$VSIX_FILE" || { echo "❌ VSIX missing: $VSIX_FILE"; exit 1; }
+
 echo "✅ Build complete!"
 echo ""
 
 # Quick install without prompts
 echo "🔄 Quick installing..."
+echo "📦 Installing: $(pwd)/$VSIX_FILE"
 
 # Kill Cursor if running
 if pgrep -x "Cursor" > /dev/null; then

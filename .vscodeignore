@@ -25,23 +25,23 @@ out/test/**
 build.sh
 rebuild.sh
 install.sh
+quickstart.sh
 fix-*.sh
 update-*.sh
-test-extension.md
-CONTRIBUTING.md
-DEVELOPER_GUIDE.md
-BUILD_GUIDE.md
-TESTING_GUIDE.md
-DEBUGGING.md
-TROUBLESHOOTING.md
-DEPENDENCY_PRIORITIZATION.md
-INSTALL.md
+
+# Exclude all markdown files except essential ones
+*.md
+!README.md
+!LICENSE
+!CHANGELOG.md
+!CLAUDE.md
+
+# Exclude local development data
+.nofx/**
+.nofx-worktrees/**
 
 # Include runtime assets
 !out/**
 !webview/**
 !package.json
-!README.md
-!LICENSE
 !media/**
-!CLAUDE.md

@@ -79,7 +79,9 @@ Before contributing, ensure you have:
    ./build.sh --install-cursor  # Build and install to Cursor (macOS)
    # Or manually:
    npm run build
-   code --install-extension nofx-0.1.0.vsix --force
+   # Install the latest VSIX
+   VSIX=$(ls -1t nofx-*.vsix | head -1)
+   code --install-extension "$VSIX" --force
    ```
 
 ### First Contribution

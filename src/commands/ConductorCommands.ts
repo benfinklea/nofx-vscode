@@ -67,6 +67,16 @@ export class ConductorCommands implements ICommandHandler {
     }
 
     private async startConductor(): Promise<void> {
+        console.log('[NofX Debug] startConductor called');
+        this.loggingService.info('startConductor command invoked');
+
+        try {
+            // Show information message to confirm command is running
+            vscode.window.showInformationMessage('NofX: Starting conductor setup...');
+        } catch (error) {
+            console.error('[NofX Debug] Error showing info message:', error);
+        }
+
         // Show team preset selection
         const presets: PickItem<TeamPreset>[] = [
             {
@@ -163,6 +173,11 @@ export class ConductorCommands implements ICommandHandler {
                             template
                         });
                         createdCount++;
+
+                        // Add delay between agent creations to avoid overwhelming the terminal system
+                        if (createdCount < teamAgents.length) {
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
                     } catch (error) {
                         this.loggingService?.error(`Failed to create agent from template ${templateId}:`, error);
                     }

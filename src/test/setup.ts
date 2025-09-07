@@ -39,28 +39,43 @@ Object.defineProperty(global, 'WebSocket', {
     writable: true
 });
 
-// Mock file system operations
-const mockFs = {
-    readFileSync: () => '',
-    writeFileSync: () => {},
-    existsSync: () => false,
-    mkdirSync: () => {},
-    readdirSync: () => [],
-    statSync: () => ({ isDirectory: () => true, isFile: () => false }),
-    unlinkSync: () => {},
-    rmdirSync: () => {}
-};
+// Conditionally mock file system operations
+// Only mock fs when explicitly enabled - default is to use real filesystem
+if (process.env.MOCK_FS === 'true') {
+    const mockFs = {
+        readFileSync: jest.fn(() => ''),
+        writeFileSync: jest.fn(),
+        existsSync: jest.fn(() => false),
+        mkdirSync: jest.fn(),
+        readdirSync: jest.fn(() => []),
+        statSync: jest.fn(() => ({ isDirectory: () => true, isFile: () => false })),
+        unlinkSync: jest.fn(),
+        rmdirSync: jest.fn(),
+        rmSync: jest.fn(),
+        promises: {
+            readFile: jest.fn(() => Promise.resolve('')),
+            writeFile: jest.fn(() => Promise.resolve()),
+            mkdir: jest.fn(() => Promise.resolve()),
+            readdir: jest.fn(() => Promise.resolve([])),
+            stat: jest.fn(() => Promise.resolve({ isDirectory: () => true, isFile: () => false })),
+            unlink: jest.fn(() => Promise.resolve()),
+            rmdir: jest.fn(() => Promise.resolve())
+        }
+    };
+
+    jest.mock('fs', () => mockFs);
+}
 
 // Mock child_process
 const mockChildProcess = {
-    spawn: () => ({
-        stdout: { on: () => {} },
-        stderr: { on: () => {} },
-        on: () => {},
-        kill: () => {},
+    spawn: jest.fn(() => ({
+        stdout: { on: jest.fn() },
+        stderr: { on: jest.fn() },
+        on: jest.fn(),
+        kill: jest.fn(),
         pid: 12345
-    }),
-    exec: (command: any, options: any, callback: any) => {
+    })),
+    exec: jest.fn((command: any, options: any, callback: any) => {
         if (typeof options === 'function') {
             // Called with (command, callback)
             callback = options;
@@ -69,12 +84,10 @@ const mockChildProcess = {
         if (callback && typeof callback === 'function') {
             callback(null, 'mock output', '');
         }
-        return { kill: () => {} };
-    }
+        return { kill: jest.fn() };
+    })
 };
 
-// Mock modules
-jest.mock('fs', () => mockFs);
 jest.mock('child_process', () => mockChildProcess);
 
 // Mock process properties without overriding the entire object

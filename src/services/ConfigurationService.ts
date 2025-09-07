@@ -167,6 +167,10 @@ export class ConfigurationService implements IConfigurationService {
         return this.get<boolean>(CONFIG_KEYS.SHOW_AGENT_TERMINAL_ON_SPAWN, false);
     }
 
+    isClaudeSkipPermissions(): boolean {
+        return this.get<boolean>(CONFIG_KEYS.CLAUDE_SKIP_PERMISSIONS, false);
+    }
+
     getTemplatesPath(): string {
         return this.get<string>(CONFIG_KEYS.TEMPLATES_PATH, '.nofx/templates');
     }

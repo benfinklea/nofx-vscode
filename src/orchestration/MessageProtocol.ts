@@ -130,18 +130,15 @@ export function createMessage(
         to,
         type,
         payload,
-        correlationId,
+        correlationId: correlationId || generateMessageId(),
         requiresAck: shouldRequireAck(type)
     };
 }
 
 export function generateMessageId(): string {
-    // Simple UUID v4 generation
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
+    // Generate msg_ prefix with 8 hex characters
+    const hex = Math.random().toString(16).substring(2, 10).padEnd(8, '0');
+    return `msg_${hex}`;
 }
 
 export function shouldRequireAck(type: MessageType): boolean {
@@ -156,9 +153,10 @@ export function shouldRequireAck(type: MessageType): boolean {
 }
 
 export function isValidMessage(message: any): message is OrchestratorMessage {
+    if (!message || typeof message !== 'object') {
+        return false;
+    }
     return (
-        message &&
-        typeof message === 'object' &&
         typeof message.id === 'string' &&
         typeof message.timestamp === 'string' &&
         typeof message.from === 'string' &&
@@ -171,37 +169,74 @@ export function isValidMessage(message: any): message is OrchestratorMessage {
 // Message formatting for Claude
 
 export function formatMessageForClaude(message: OrchestratorMessage): string {
+    let content: string;
+    
     switch (message.type) {
         case MessageType.ASSIGN_TASK:
             const task = message.payload as AssignTaskPayload;
-            return `[TASK ASSIGNED] ${task.title}\nPriority: ${task.priority}\nDescription: ${task.description}`;
+            content = `[TASK ASSIGNED] ${task.title}\nPriority: ${task.priority}\nDescription: ${task.description}`;
+            break;
 
         case MessageType.QUERY_STATUS:
-            return '[STATUS REQUEST] Please report your current status';
+            content = '[STATUS REQUEST] Please report your current status';
+            break;
 
         case MessageType.AGENT_QUERY:
             const query = message.payload as AgentQueryPayload;
-            return `[QUESTION FROM ${message.from}] ${query.question}`;
+            content = `[QUESTION FROM ${message.from}] ${query.question}`;
+            break;
 
         default:
-            return `[${message.type}] ${JSON.stringify(message.payload)}`;
+            content = `[${message.type}] ${JSON.stringify(message.payload)}`;
+            break;
     }
+
+    return `ORCHESTRATION MESSAGE
+Type: ${message.type}
+From: ${message.from}
+To: ${message.to}
+Timestamp: ${message.timestamp}
+
+${content}
+
+\`\`\`json
+${JSON.stringify(message.payload, null, 2)}
+\`\`\``;
 }
 
-export function extractJsonFromClaudeOutput(output: string): OrchestratorMessage | null {
-    // Look for JSON blocks in Claude's output
-    const jsonMatches = output.match(/\{[^{}]*\}/g);
+export function extractJsonFromClaudeOutput(output: string): any | null {
+    // First try to extract JSON from code blocks
+    const codeBlockMatch = output.match(/```json\s*([\s\S]*?)\s*```/);
+    if (codeBlockMatch) {
+        try {
+            return JSON.parse(codeBlockMatch[1]);
+        } catch {
+            // Invalid JSON in code block
+        }
+    }
 
-    if (!jsonMatches) return null;
+    // Then look for inline JSON objects (handle nested braces properly)
+    const jsonMatches = [];
+    let depth = 0;
+    let start = -1;
+    
+    for (let i = 0; i < output.length; i++) {
+        if (output[i] === '{') {
+            if (depth === 0) {
+                start = i;
+            }
+            depth++;
+        } else if (output[i] === '}') {
+            depth--;
+            if (depth === 0 && start !== -1) {
+                jsonMatches.push(output.substring(start, i + 1));
+            }
+        }
+    }
 
     for (const match of jsonMatches) {
         try {
-            const parsed = JSON.parse(match);
-            // Check if it looks like a message command
-            if (parsed.type && (parsed.task || parsed.status || parsed.agentId || parsed.role)) {
-                // Convert Claude's simplified format to full message
-                return convertClaudeCommandToMessage(parsed);
-            }
+            return JSON.parse(match);
         } catch {
             // Not valid JSON, continue
         }

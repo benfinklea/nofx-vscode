@@ -13,7 +13,8 @@ import { Agent } from '../../types/agent';
 import { Task, TaskStatus } from '../../types/task';
 import { LoggingService } from '../../services/LoggingService';
 import { ConfigurationService } from '../../services/ConfigurationService';
-import { setupExtension, teardownExtension, setupMockWorkspace, clearMockWorkspace } from './setup';
+import { setupMockWorkspace, clearMockWorkspace } from './setup';
+import { TestHarness } from './testHarness';
 
 describe('UI Components', () => {
     let container: Container;
@@ -26,14 +27,15 @@ describe('UI Components', () => {
     let taskTreeProvider: TaskTreeProvider;
 
     beforeAll(async () => {
-        context = await setupExtension();
+        const { container: c, context: ctx } = await TestHarness.initialize();
+        container = c;
+        context = ctx;
         setupMockWorkspace();
     });
 
     beforeEach(() => {
-        container = Container.getInstance();
-        // Don't reset container to preserve command registrations
-        // Instead, just override specific services for this test
+        // Reset container state between tests but preserve command registrations
+        TestHarness.resetContainer();
 
         const configService = new ConfigurationService();
         const mainChannel = vscode.window.createOutputChannel('NofX Test');
@@ -63,9 +65,9 @@ describe('UI Components', () => {
         container.registerInstance(SERVICE_TOKENS.AgentManager, agentManager);
         container.registerInstance(SERVICE_TOKENS.TaskQueue, taskQueue);
 
-        // Create tree providers
-        const treeStateManager = new TreeStateManager({} as any, eventBus, loggingService);
+        // Create tree providers with real UIStateManager
         const uiStateManager = new UIStateManager(eventBus, loggingService, agentManager, taskQueue);
+        const treeStateManager = new TreeStateManager(uiStateManager, eventBus, loggingService);
 
         agentTreeProvider = new AgentTreeProvider(treeStateManager, uiStateManager);
         taskTreeProvider = new TaskTreeProvider(uiStateManager, container);
@@ -77,7 +79,7 @@ describe('UI Components', () => {
 
     afterAll(async () => {
         clearMockWorkspace();
-        await teardownExtension();
+        await TestHarness.dispose();
     });
 
     describe('Agent Tree', () => {
@@ -187,6 +189,70 @@ describe('UI Components', () => {
 
             const children = await taskTreeProvider.getChildren();
             expect(children).toHaveLength(0);
+        });
+    });
+
+    describe('EventBus Integration', () => {
+        test('should refresh agent tree on AGENT_CREATED event', async () => {
+            const refreshSpy = jest.spyOn(agentTreeProvider, 'refresh');
+
+            // Publish AGENT_CREATED event
+            eventBus.publish(DOMAIN_EVENTS.AGENT_CREATED, {
+                agent: { id: 'new-agent', name: 'New Agent' }
+            });
+
+            // Wait for async operations
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            expect(refreshSpy).toHaveBeenCalled();
+        });
+
+        test('should refresh task tree on TASK_CREATED event', async () => {
+            const refreshSpy = jest.spyOn(taskTreeProvider, 'refresh');
+
+            // Publish TASK_CREATED event
+            eventBus.publish(DOMAIN_EVENTS.TASK_CREATED, {
+                task: { id: 'new-task', description: 'New Task' }
+            });
+
+            // Wait for async operations
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            expect(refreshSpy).toHaveBeenCalled();
+        });
+
+        test('should update UI on TASK_COMPLETED event', async () => {
+            const refreshSpy = jest.spyOn(taskTreeProvider, 'refresh');
+
+            // Publish TASK_COMPLETED event
+            eventBus.publish(DOMAIN_EVENTS.TASK_COMPLETED, {
+                taskId: 'task-1',
+                agentId: 'agent-1'
+            });
+
+            // Wait for async operations
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            expect(refreshSpy).toHaveBeenCalled();
+        });
+
+        test('should handle multiple events in sequence', async () => {
+            const agentRefreshSpy = jest.spyOn(agentTreeProvider, 'refresh');
+            const taskRefreshSpy = jest.spyOn(taskTreeProvider, 'refresh');
+
+            // Publish multiple events
+            eventBus.publish(DOMAIN_EVENTS.AGENT_CREATED, { agent: { id: 'agent-1' } });
+            eventBus.publish(DOMAIN_EVENTS.TASK_CREATED, { task: { id: 'task-1' } });
+            eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, {
+                agentId: 'agent-1',
+                status: 'working'
+            });
+
+            // Wait for async operations
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            expect(agentRefreshSpy).toHaveBeenCalled();
+            expect(taskRefreshSpy).toHaveBeenCalled();
         });
     });
 

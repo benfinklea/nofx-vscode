@@ -14,7 +14,8 @@ import { DOMAIN_EVENTS } from '../../services/EventConstants';
 import { MessageFlowDashboard } from '../../dashboard/MessageFlowDashboard';
 import { LoggingService } from '../../services/LoggingService';
 import { ConfigurationService } from '../../services/ConfigurationService';
-import { setupExtension, teardownExtension, setupMockWorkspace, clearMockWorkspace } from './setup';
+import { setupMockWorkspace, clearMockWorkspace } from './setup';
+import { TestHarness } from './testHarness';
 
 describe('Orchestration Integration', () => {
     let container: Container;
@@ -25,14 +26,15 @@ describe('Orchestration Integration', () => {
     let port: number;
 
     beforeAll(async () => {
-        context = await setupExtension();
+        const { container: c, context: ctx } = await TestHarness.initialize();
+        container = c;
+        context = ctx;
         setupMockWorkspace();
     });
 
     beforeEach(async () => {
-        container = Container.getInstance();
-        // Don't reset container to preserve command registrations
-        // container.reset(); // Removed to preserve command bindings
+        // Reset container state between tests but preserve command registrations
+        TestHarness.resetContainer();
 
         const configService = new ConfigurationService();
         const mainChannel = vscode.window.createOutputChannel('NofX Test');
@@ -100,7 +102,120 @@ describe('Orchestration Integration', () => {
 
     afterAll(async () => {
         clearMockWorkspace();
-        await teardownExtension();
+        await TestHarness.dispose();
+    });
+
+    describe('MessageRouter', () => {
+        test('should route SPAWN_AGENT message to AgentManager', async () => {
+            // Create MessageRouter with mocks
+            const agentManager = {
+                spawnAgent: jest.fn().mockResolvedValue({ id: 'agent-1', name: 'Test Agent' })
+            };
+            const taskQueue = {
+                addTask: jest.fn(),
+                assignTask: jest.fn()
+            };
+
+            container.registerInstance(SERVICE_TOKENS.AgentManager, agentManager);
+            container.registerInstance(SERVICE_TOKENS.TaskQueue, taskQueue);
+
+            const connectionPool = {
+                send: jest.fn(),
+                broadcast: jest.fn()
+            };
+
+            const messagePersistence = {
+                save: jest.fn()
+            };
+
+            const errorHandler = {
+                handleError: jest.fn()
+            };
+
+            const messageRouter = new MessageRouter(
+                connectionPool as any,
+                messagePersistence as any,
+                loggingService,
+                eventBus,
+                errorHandler as any,
+                agentManager as any,
+                taskQueue as any
+            );
+
+            // Route a SPAWN_AGENT message
+            const message = createMessage(MessageType.SPAWN_AGENT, {
+                role: 'frontend-specialist',
+                name: 'Frontend Dev'
+            });
+
+            await messageRouter.route(message);
+
+            // Verify AgentManager.spawnAgent was called with expected config
+            expect(agentManager.spawnAgent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    name: expect.any(String),
+                    type: expect.any(String),
+                    template: expect.anything()
+                })
+            );
+        });
+
+        test('should route ASSIGN_TASK message to TaskQueue', async () => {
+            const agentManager = {
+                spawnAgent: jest.fn()
+            };
+            const taskQueue = {
+                addTask: jest.fn(),
+                assignTask: jest.fn().mockResolvedValue(true)
+            };
+
+            container.registerInstance(SERVICE_TOKENS.AgentManager, agentManager);
+            container.registerInstance(SERVICE_TOKENS.TaskQueue, taskQueue);
+
+            const connectionPool = {
+                send: jest.fn(),
+                broadcast: jest.fn()
+            };
+
+            const messagePersistence = {
+                save: jest.fn()
+            };
+
+            const errorHandler = {
+                handleError: jest.fn()
+            };
+
+            const messageRouter = new MessageRouter(
+                connectionPool as any,
+                messagePersistence as any,
+                loggingService,
+                eventBus,
+                errorHandler as any,
+                agentManager as any,
+                taskQueue as any
+            );
+
+            // Route an ASSIGN_TASK message
+            const message = createMessage(MessageType.ASSIGN_TASK, {
+                taskId: 'task-1',
+                agentId: 'agent-1',
+                title: 'Test Task',
+                description: 'Test description',
+                priority: 'high'
+            });
+
+            await messageRouter.route(message);
+
+            // Verify TaskQueue methods were called appropriately
+            // The actual implementation may call addTask and/or assignTask
+            expect(taskQueue.addTask).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    title: 'Test Task',
+                    description: 'Test description',
+                    priority: 'high'
+                })
+            );
+        });
     });
 
     describe('Server Startup', () => {

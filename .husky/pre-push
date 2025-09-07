@@ -6,14 +6,7 @@
 echo "🚀 Running pre-push validation..."
 echo "This may take a few minutes..."
 
-# Full build validation
-echo "🔨 Running full build..."
-npm run compile || {
-    echo "❌ Build failed. Please fix errors before pushing."
-    exit 1
-}
-
-# Run all tests
+# Run all tests (which includes compilation via pretest)
 echo "🧪 Running test suite..."
 npm test || {
     echo "❌ Tests failed. Please fix failing tests before pushing."

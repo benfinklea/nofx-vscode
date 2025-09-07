@@ -256,7 +256,7 @@ describe('Build Validation', () => {
             } catch (error) {
                 fail('TypeScript compilation failed');
             }
-        }, 30000);
+        });
     });
 
     describe('Build Validation Script', () => {
@@ -290,7 +290,7 @@ describe('Build Validation', () => {
                 console.error('Validation output:', error.stdout);
                 fail('Build validation script failed');
             }
-        }, 15000);
+        });
     });
 
     describe('Quality Checks', () => {

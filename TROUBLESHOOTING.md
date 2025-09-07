@@ -9,14 +9,16 @@ Comprehensive troubleshooting guide for common issues with the NofX VS Code exte
 #### Extension Won't Activate
 ```bash
 # Check Output panel for errors
-View → Output → Select "NofX Extension" from dropdown
+View → Output → Select "NofX" from dropdown
 
 # Force reload VS Code
 Cmd+Shift+P → "Developer: Reload Window"
 
 # Reinstall extension
 code --uninstall-extension nofx.nofx
-code --install-extension nofx-0.1.0.vsix --force
+# Install the latest VSIX
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+code --install-extension "$VSIX" --force
 ```
 
 #### Commands Not Found
@@ -29,7 +31,9 @@ Extensions → Search "NofX" → Ensure enabled
 
 # Rebuild and reinstall
 npm run build
-code --install-extension nofx-0.1.0.vsix --force
+# Install the latest VSIX
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+code --install-extension "$VSIX" --force
 ```
 
 #### Build Failures
@@ -123,7 +127,9 @@ npx vsce package  # Includes node_modules
 # npx vsce package --no-dependencies  # ❌ Breaks WebSocket
 
 # Check package contents
-unzip -l nofx-0.1.0.vsix | grep node_modules
+# Check if dependencies are included
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+unzip -l "$VSIX" | grep node_modules
 ```
 
 #### File Size Issues
@@ -183,6 +189,30 @@ n 18
 
 ### Extension Won't Install
 
+#### CLI 'code' Command Not Found
+
+If the `code` or `cursor` command is not recognized:
+
+**VS Code:**
+1. Open VS Code
+2. Open Command Palette (`Cmd+Shift+P` on macOS, `Ctrl+Shift+P` on Windows/Linux)
+3. Type and run: "Shell Command: Install 'code' command in PATH"
+4. Restart your terminal
+
+**Cursor:**
+- Cursor typically adds itself to PATH during installation
+- Use `cursor` command instead of `code`
+- If not available, check Cursor's installation directory
+
+**Manual PATH Setup:**
+```bash
+# macOS/Linux - Add to ~/.bashrc or ~/.zshrc
+export PATH="$PATH:/Applications/Visual Studio Code.app/Contents/Resources/app/bin"
+
+# Windows - Add to System PATH via Environment Variables
+# C:\Users\{username}\AppData\Local\Programs\Microsoft VS Code\bin
+```
+
 #### Installation Failures
 ```bash
 # Completely remove old versions
@@ -190,23 +220,28 @@ rm -rf ~/.vscode/extensions/nofx.nofx-*
 rm -rf ~/.cursor/extensions/nofx.nofx-*
 
 # Install with force flag
-code --install-extension nofx-0.1.0.vsix --force
+# Install the latest VSIX
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+code --install-extension "$VSIX" --force
 
 # For Cursor
-cursor --install-extension nofx-0.1.0.vsix --force
+# For Cursor users
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+cursor --install-extension "$VSIX" --force
 
 # Manual installation
 1. Open VS Code
 2. Extensions view (Cmd+Shift+X)
 3. "..." menu → "Install from VSIX..."
-4. Select nofx-0.1.0.vsix file
+4. Select the nofx-*.vsix file
 ```
 
 #### Permission Issues
 ```bash
 # macOS/Linux: Fix permissions
-chmod 644 nofx-0.1.0.vsix
-sudo code --install-extension nofx-0.1.0.vsix --force
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+chmod 644 "$VSIX"
+sudo code --install-extension "$VSIX" --force
 
 # Windows: Run as Administrator
 # Right-click VS Code → Run as Administrator
@@ -323,7 +358,7 @@ kill -9 [PID]  # macOS/Linux
 taskkill /PID [PID] /F  # Windows
 
 # Extension uses dynamic port allocation
-# Check Output → NofX Orchestration for actual port
+# Check Output → NofX - Orchestration for actual port
 ```
 
 #### Firewall Blocking
@@ -341,7 +376,7 @@ sudo ufw allow 7777/tcp
 #### WebSocket Server Not Starting
 ```typescript
 // Check orchestration server logs
-// Output → NofX Orchestration
+// Output → NofX - Orchestration
 
 // Common issues:
 // 1. Port binding failed
@@ -478,7 +513,7 @@ export function activate(context: vscode.ExtensionContext) {
   console.timeEnd('NofX Activation');
 }
 
-// Check Output → NofX Extension for timing
+// Check Output → NofX for timing
 ```
 
 #### Optimization Steps
@@ -695,8 +730,9 @@ export class MessageRouter {
 
 #### Gatekeeper Blocking
 ```bash
-# Remove quarantine attribute
-xattr -d com.apple.quarantine nofx-0.1.0.vsix
+# Remove quarantine attribute from VSIX
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+xattr -d com.apple.quarantine "$VSIX"
 
 # Allow unsigned extensions
 sudo spctl --master-disable  # Use with caution
@@ -817,7 +853,9 @@ rm -rf ~/Library/Application\ Support/Code/CachedData/*
 # 4. Rebuild and reinstall
 npm run dev:reset
 npm run build
-code --install-extension nofx-0.1.0.vsix --force
+# Install the latest VSIX
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+code --install-extension "$VSIX" --force
 
 # 5. Restart VS Code
 ```
@@ -903,7 +941,7 @@ vscode.commands.registerCommand('nofx.diagnostics', async () => {
       .then(cmds => cmds.filter(c => c.startsWith('nofx.')).length),
   };
   
-  const output = vscode.window.createOutputChannel('NofX Diagnostics');
+  const output = vscode.window.createOutputChannel('NofX Command Verification');
   output.appendLine(JSON.stringify(diagnostics, null, 2));
   output.show();
 });

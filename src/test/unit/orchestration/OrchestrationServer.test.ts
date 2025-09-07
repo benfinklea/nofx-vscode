@@ -1,22 +1,6 @@
 // VS Code is mocked via jest.config.js moduleNameMapper
 
-import { OrchestrationServer } from '../../../orchestration/OrchestrationServer';
-import {
-    ILoggingService,
-    IEventBus,
-    IErrorHandler,
-    IConnectionPoolService,
-    IMessageRouter,
-    IMessageValidator,
-    IMessagePersistenceService,
-    IMetricsService,
-    ValidationResult,
-    ManagedConnection
-} from '../../../services/interfaces';
-import { OrchestratorMessage, MessageType } from '../../../orchestration/MessageProtocol';
-import { ORCH_EVENTS } from '../../../services/EventConstants';
-
-// Mock WebSocket
+// Mock WebSocket classes need to be defined before the jest.mock call
 class MockWebSocket {
     public readyState = 1; // WebSocket.OPEN
     public onopen: ((event: any) => void) | null = null;
@@ -28,6 +12,16 @@ class MockWebSocket {
     public close = jest.fn();
     public addEventListener = jest.fn();
     public removeEventListener = jest.fn();
+    public on = jest.fn();
+    public off = jest.fn();
+    public emit = jest.fn();
+    public ping = jest.fn();
+    public pong = jest.fn();
+    public terminate = jest.fn();
+    public CONNECTING = 0;
+    public OPEN = 1;
+    public CLOSING = 2;
+    public CLOSED = 3;
 
     constructor(url: string) {
         this.url = url;
@@ -59,11 +53,27 @@ class MockWebSocketServer {
 // Factory pattern for WebSocketServer mock
 let currentWebSocketServerImpl = MockWebSocketServer;
 
-// Mock the ws module with factory pattern
+// Mock the ws module with factory pattern - defined before imports
 jest.mock('ws', () => ({
     WebSocketServer: class { constructor(...args: any[]) { return new currentWebSocketServerImpl(...(args as [any])); } },
     WebSocket: MockWebSocket
 }));
+
+import { OrchestrationServer } from '../../../orchestration/OrchestrationServer';
+import {
+    ILoggingService,
+    IEventBus,
+    IErrorHandler,
+    IConnectionPoolService,
+    IMessageRouter,
+    IMessageValidator,
+    IMessagePersistenceService,
+    IMetricsService,
+    ValidationResult,
+    ManagedConnection
+} from '../../../services/interfaces';
+import { OrchestratorMessage, MessageType } from '../../../orchestration/MessageProtocol';
+import { ORCH_EVENTS } from '../../../services/EventConstants';
 
 describe('OrchestrationServer', () => {
     let orchestrationServer: OrchestrationServer;
@@ -87,7 +97,14 @@ describe('OrchestrationServer', () => {
             warn: jest.fn(),
             error: jest.fn(),
             isLevelEnabled: jest.fn() as any,
-            getChannel: jest.fn() as any,
+            getChannel: jest.fn(() => ({
+                appendLine: jest.fn(),
+                append: jest.fn(),
+                clear: jest.fn(),
+                dispose: jest.fn(),
+                hide: jest.fn(),
+                show: jest.fn()
+            })) as any,
             time: jest.fn(),
             timeEnd: jest.fn(),
             dispose: jest.fn()
@@ -106,7 +123,15 @@ describe('OrchestrationServer', () => {
 
         mockErrorHandler = {
             handleError: jest.fn(),
-            handleAsync: jest.fn(),
+            handleAsync: jest.fn().mockImplementation(async (operation: () => Promise<any>, context?: string) => {
+                try {
+                    return await operation();
+                } catch (error) {
+                    // Call handleError and then re-throw
+                    mockErrorHandler.handleError(error instanceof Error ? error : new Error(String(error)), context);
+                    throw error;
+                }
+            }),
             wrapSync: jest.fn(),
             withRetry: jest.fn(),
             dispose: jest.fn()
@@ -181,8 +206,8 @@ describe('OrchestrationServer', () => {
         );
     });
 
-    afterEach(() => {
-        orchestrationServer.dispose();
+    afterEach(async () => {
+        await orchestrationServer.dispose();
     });
 
     describe('Server Lifecycle', () => {
@@ -214,22 +239,32 @@ describe('OrchestrationServer', () => {
             let attemptCount = 0;
             const originalImpl = currentWebSocketServerImpl;
 
-            currentWebSocketServerImpl = jest.fn().mockImplementation((options) => {
-                attemptCount++;
-                if (attemptCount === 1) {
-                    // First attempt fails
-                    const server = new MockWebSocketServer(options);
-                    setTimeout(() => {
-                        const errorHandler = server.on.mock.calls.find(([event]) => event === 'error')?.[1];
-                        if (errorHandler) {
-                            errorHandler(new Error('Port in use'));
-                        }
-                    }, 0);
-                    return server;
+            currentWebSocketServerImpl = class MockFailingWebSocketServer {
+                public on = jest.fn();
+                public close = jest.fn();
+                public clients = new Set();
+
+                constructor(options: { port: number }) {
+                    attemptCount++;
+                    if (attemptCount === 1) {
+                        // First attempt fails immediately
+                        setTimeout(() => {
+                            const errorHandler = this.on.mock.calls.find(([event]) => event === 'error')?.[1];
+                            if (errorHandler) {
+                                errorHandler(new Error('Port in use'));
+                            }
+                        }, 0);
+                    } else {
+                        // Second attempt succeeds
+                        setTimeout(() => {
+                            const listeningHandler = this.on.mock.calls.find(([event]) => event === 'listening')?.[1];
+                            if (listeningHandler) {
+                                listeningHandler();
+                            }
+                        }, 0);
+                    }
                 }
-                // Second attempt succeeds
-                return new MockWebSocketServer(options);
-            });
+            };
 
             await orchestrationServer.start();
 
@@ -264,16 +299,21 @@ describe('OrchestrationServer', () => {
         it('should handle start errors', async () => {
             const originalImpl = currentWebSocketServerImpl;
 
-            currentWebSocketServerImpl = jest.fn().mockImplementation(() => {
-                const server = new MockWebSocketServer({ port: 7777 });
-                setTimeout(() => {
-                    const errorHandler = server.on.mock.calls.find(([event]) => event === 'error')?.[1];
-                    if (errorHandler) {
-                        errorHandler(new Error('Startup failed'));
-                    }
-                }, 0);
-                return server;
-            });
+            currentWebSocketServerImpl = class MockErrorWebSocketServer {
+                public on = jest.fn();
+                public close = jest.fn();
+                public clients = new Set();
+
+                constructor(options: { port: number }) {
+                    // Always trigger error immediately
+                    setTimeout(() => {
+                        const errorHandler = this.on.mock.calls.find(([event]) => event === 'error')?.[1];
+                        if (errorHandler) {
+                            errorHandler(new Error('Startup failed'));
+                        }
+                    }, 0);
+                }
+            };
 
             await expect(orchestrationServer.start()).rejects.toThrow('Startup failed');
             expect(mockErrorHandler.handleError).toHaveBeenCalled();
@@ -453,7 +493,13 @@ describe('OrchestrationServer', () => {
             await handleMessage('client-1', JSON.stringify(message));
 
             expect(mockConnectionPool.registerLogicalId).toHaveBeenCalledWith('client-1', 'logical-client-1');
-            expect(mockMessageRouter.replayToClient).toHaveBeenCalledWith('logical-client-1');
+            expect(mockMessageRouter.replayToClient).toHaveBeenCalledWith('logical-client-1', {
+                timeRange: {
+                    from: expect.any(Date),
+                    to: expect.any(Date)
+                },
+                limit: 100
+            });
         });
 
         it('should handle duplicate logical ID registration', async () => {
@@ -536,7 +582,7 @@ describe('OrchestrationServer', () => {
                 expect.any(Number),
                 {
                     clientId: 'client-1',
-                    messageType: 'request'
+                    messageType: 'agent_query'
                 }
             );
         });
@@ -618,9 +664,11 @@ describe('OrchestrationServer', () => {
 
     describe('Connection Management', () => {
         it('should get connections for backward compatibility', () => {
+            const mockConnection1 = { ws: new MockWebSocket('ws://localhost:7777') };
+            const mockConnection2 = { ws: new MockWebSocket('ws://localhost:7777') };
             const mockConnections = new Map([
-                ['client-1', new MockWebSocket('ws://localhost:7777')],
-                ['client-2', new MockWebSocket('ws://localhost:7777')]
+                ['client-1', mockConnection1],
+                ['client-2', mockConnection2]
             ]);
 
             mockConnectionPool.getAllConnections.mockReturnValue(mockConnections as any);
@@ -721,7 +769,7 @@ describe('OrchestrationServer', () => {
             orchestrationServer.sendToClient('client-1', message);
 
             expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('bytes_out_total', {
-                messageType: 'request',
+                messageType: 'agent_query',
                 bytes: expect.any(String)
             });
         });
@@ -851,8 +899,8 @@ describe('OrchestrationServer', () => {
     });
 
     describe('Disposal', () => {
-        it('should dispose properly', () => {
-            orchestrationServer.dispose();
+        it('should dispose properly', async () => {
+            await orchestrationServer.dispose();
 
             expect(mockLoggingService.debug).toHaveBeenCalledWith('OrchestrationServer disposed');
         });

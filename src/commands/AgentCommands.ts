@@ -35,6 +35,14 @@ export class AgentCommands implements ICommandHandler {
     }
 
     private async addAgent(): Promise<void> {
+        console.log('[NofX Debug] addAgent called');
+
+        try {
+            vscode.window.showInformationMessage('NofX: Opening agent selection...');
+        } catch (error) {
+            console.error('[NofX Debug] Error showing info message:', error);
+        }
+
         // Show selection between individual agent and team preset
         const addType = await this.notificationService.showQuickPick<PickItem<string>>([
             {

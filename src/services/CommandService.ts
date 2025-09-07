@@ -58,6 +58,10 @@ export class CommandService implements ICommandService {
         return await vscode.commands.getCommands(filterInternal);
     }
 
+    getRegisteredCommands(): string[] {
+        return Array.from(this.registeredCommands);
+    }
+
     /**
      * Development-only command to verify all expected commands are registered.
      * This compares the commands in package.json against actually registered commands.

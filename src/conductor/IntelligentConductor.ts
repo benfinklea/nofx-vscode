@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { AgentManager } from '../agents/AgentManager';
 import { TaskQueue } from '../tasks/TaskQueue';
 import { Agent } from '../agents/types';
+import { OUTPUT_CHANNELS } from '../constants/outputChannels';
 
 /**
  * The REAL Conductor - Actually manages agents and tasks
@@ -19,7 +20,7 @@ export class IntelligentConductor {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
         this.claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
-        this.outputChannel = vscode.window.createOutputChannel('NofX Conductor Brain');
+        this.outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNELS.CONDUCTOR_BRAIN);
 
         // Monitor agent updates
         this.agentManager.onAgentUpdate(() => {

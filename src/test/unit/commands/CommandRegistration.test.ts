@@ -46,6 +46,11 @@ describe('Command Registration', () => {
             storageUri: vscode.Uri.file(path.join(projectRoot, '.nofx')),
             globalStorageUri: vscode.Uri.file(path.join(projectRoot, '.nofx-global')),
             logUri: vscode.Uri.file(path.join(projectRoot, 'logs')),
+            storagePath: path.join(projectRoot, '.nofx'),
+            globalStoragePath: path.join(projectRoot, '.nofx-global'),
+            logPath: path.join(projectRoot, 'logs'),
+            extension: {} as any,
+            languageModelAccessInformation: {} as any,
             secrets: {} as any,
             environmentVariableCollection: {} as any,
             asAbsolutePath: (relativePath: string) => path.join(projectRoot, relativePath)
@@ -145,11 +150,15 @@ describe('Command Registration', () => {
         it('should register core services', () => {
             // Register core services
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
-            container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
-            container.register(SERVICE_TOKENS.LoggingService, (c) =>
-                new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)), true);
+            container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), 'singleton');
+            const mockOutputChannel = vscode.window.createOutputChannel('Test');
             container.register(SERVICE_TOKENS.ConfigurationService, () =>
-                new ConfigurationService(), true);
+                new ConfigurationService(), 'singleton');
+            container.register(SERVICE_TOKENS.LoggingService, (c) =>
+                new LoggingService(
+                    c.resolve(SERVICE_TOKENS.ConfigurationService),
+                    mockOutputChannel
+                ), 'singleton');
 
             // Verify services can be resolved
             expect(container.resolve(SERVICE_TOKENS.ExtensionContext)).toBe(mockContext);
@@ -205,17 +214,19 @@ describe('Command Registration', () => {
 
             // Setup minimal dependencies
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
-            container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
-            container.register(SERVICE_TOKENS.LoggingService, (c) =>
-                new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)), true);
+            container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), 'singleton');
+            const mockOutputChannel = vscode.window.createOutputChannel('Test');
             container.register(SERVICE_TOKENS.ConfigurationService, () =>
-                new ConfigurationService(), true);
+                new ConfigurationService(), 'singleton');
+            container.register(SERVICE_TOKENS.LoggingService, (c) =>
+                new LoggingService(
+                    c.resolve(SERVICE_TOKENS.ConfigurationService),
+                    mockOutputChannel
+                ), 'singleton');
             container.register(SERVICE_TOKENS.AgentManager, (c) =>
                 new AgentManager(
-                    c.resolve(SERVICE_TOKENS.EventBus),
-                    c.resolve(SERVICE_TOKENS.LoggingService),
-                    c.resolve(SERVICE_TOKENS.ConfigurationService)
-                ), true);
+                    c.resolve(SERVICE_TOKENS.ExtensionContext)
+                ), 'singleton');
 
             const agentCommands = new AgentCommands(
                 container.resolve(SERVICE_TOKENS.AgentManager),
@@ -392,7 +403,7 @@ describe('Command Registration', () => {
 
         it('should resolve services quickly', () => {
             // Register services
-            container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
+            container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), 'singleton');
 
             const start = Date.now();
 

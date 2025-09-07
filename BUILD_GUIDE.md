@@ -18,7 +18,13 @@ The fastest way to build and test the extension:
 
 # Or manual steps
 npm run build
-cursor --install-extension nofx-0.1.0.vsix --force
+# Install the latest VSIX (replace <version> with actual version)
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+cursor --install-extension "$VSIX" --force
+
+# Note: If 'cursor' command is not found, ensure Cursor is in your PATH
+# For VS Code users, use 'code' instead and install via:
+# Command Palette → "Shell Command: Install 'code' command in PATH"
 ```
 
 ## 📋 Prerequisites
@@ -141,7 +147,7 @@ npm run watch
 #### Cleaning
 ```bash
 # Remove build artifacts
-npm run clean        # Removes out/ and *.vsix
+npm run dev:clean    # Removes out/, coverage/, and *.vsix
 
 # Deep clean (artifacts only, safe for frequent use)
 npm run dev:clean    # Removes out/, coverage/, and *.vsix
@@ -312,10 +318,14 @@ npx vsce ls
 ls -lh *.vsix
 
 # Extract and inspect (optional)
-unzip -l nofx-0.1.0.vsix
+# Check VSIX contents (replace <version> with actual version)
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+unzip -l "$VSIX"
 
 # Validate package.json is included
-unzip -p nofx-0.1.0.vsix extension/package.json | jq .version
+# Extract version from VSIX
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+unzip -p "$VSIX" extension/package.json | jq .version
 ```
 
 ## 🛠️ Development Builds
@@ -447,10 +457,17 @@ if (!hasErrors) {
 
 ### Service Container Validation
 
-Ensure all services are properly registered:
+Service validation is performed via Jest tests:
+
+```bash
+# Run service validation tests
+npm run validate:services  # Runs npm run test:services
+```
+
+The validation tests check that all required services are registered:
 
 ```javascript
-// scripts/validate-services.js
+// Example from test suite (src/test/unit/services/ContainerValidation.test.ts)
 const { Container } = require('../out/services/Container');
 
 const requiredServices = [
@@ -546,8 +563,11 @@ npm run compile
 
 **Solutions**:
 ```bash
-# Ensure package.json is valid
-npm run validate:package
+# Check VSIX contents (since validate:package doesn't exist)
+npx vsce ls
+
+# Or validate package.json manually
+node -e "try { require('./package.json'); console.log('✓ package.json is valid'); } catch(e) { console.error('✗ Invalid package.json:', e.message); process.exit(1); }"
 
 # Check all required files exist
 npx vsce ls
@@ -655,7 +675,14 @@ npm install
 
 # Or manual build
 npm run build
-code --install-extension nofx-0.1.0.vsix
+# Install extension (replace <version> with actual version)
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+code --install-extension "$VSIX"
+
+# Note: If 'code' command is not found, install it via VS Code:
+# - Open Command Palette (Cmd+Shift+P)
+# - Run: "Shell Command: Install 'code' command in PATH"
+# - For Cursor users, use 'cursor' instead of 'code'
 ```
 
 ### Windows Build Instructions
@@ -670,8 +697,13 @@ cd nofx-vscode
 npm install
 npm run build
 
-# Install extension
-code --install-extension nofx-0.1.0.vsix
+# Install extension (replace <version> with actual version)
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+code --install-extension "$VSIX"
+
+# Note: If 'code' command is not found on Windows:
+# - Open VS Code Command Palette (Ctrl+Shift+P)
+# - Run: "Shell Command: Install 'code' command in PATH"
 ```
 
 ### Linux Build Instructions
@@ -687,7 +719,38 @@ sudo snap install node --classic
 # Build
 npm install
 npm run build
-code --install-extension nofx-0.1.0.vsix
+# Install extension (replace <version> with actual version)
+VSIX=$(ls -1t nofx-*.vsix | head -1)
+code --install-extension "$VSIX"
+
+# Note: On Linux, if 'code' command is not found:
+# - Open VS Code Command Palette (Ctrl+Shift+P)
+# - Run: "Shell Command: Install 'code' command in PATH"
+# - Or add VS Code bin directory to PATH manually
+```
+
+### Setting up 'code' Command in PATH
+
+If the `code` command is not recognized, you need to install it:
+
+**VS Code:**
+1. Open VS Code
+2. Open Command Palette (`Cmd+Shift+P` on macOS, `Ctrl+Shift+P` on Windows/Linux)
+3. Type and run: "Shell Command: Install 'code' command in PATH"
+4. Restart your terminal
+
+**Cursor:**
+- Cursor typically adds itself to PATH during installation
+- Use `cursor` command instead of `code`
+- If not available, check Cursor's installation directory
+
+**Manual PATH Setup (if automatic method fails):**
+```bash
+# macOS/Linux - Add to ~/.bashrc or ~/.zshrc
+export PATH="$PATH:/Applications/Visual Studio Code.app/Contents/Resources/app/bin"
+
+# Windows - Add to System PATH
+# C:\Users\{username}\AppData\Local\Programs\Microsoft VS Code\bin
 ```
 
 ### CI/CD Build Instructions
@@ -750,7 +813,7 @@ out/
 ### VSIX Package Contents
 
 ```
-nofx-0.1.0.vsix
+nofx-<version>.vsix
 ├── extension/
 │   ├── out/              # Compiled JavaScript
 │   ├── node_modules/     # Dependencies
