@@ -1,35 +1,39 @@
 // Mock VS Code
-jest.mock('vscode', () => ({
-    window: {
-        createTerminal: jest.fn(),
-        showInformationMessage: jest.fn(),
-        showQuickPick: jest.fn(),
-        showInputBox: jest.fn()
-    },
-    workspace: {
-        getConfiguration: jest.fn()
-    },
-    ExtensionContext: {},
-    Disposable: { from: jest.fn() },
-    Uri: {
-        file: (path: string) => ({ fsPath: path, path, scheme: 'file' })
-    },
-    ExtensionMode: {
-        Production: 1,
-        Development: 2,
-        Test: 3
-    },
-    ExtensionKind: {
-        UI: 1,
-        Workspace: 2
-    },
-    EventEmitter: class MockEventEmitter {
-        public event = jest.fn();
-        public fire = jest.fn();
-        public dispose = jest.fn();
-        constructor() {}
-    }
-}), { virtual: true });
+jest.mock(
+    'vscode',
+    () => ({
+        window: {
+            createTerminal: jest.fn(),
+            showInformationMessage: jest.fn(),
+            showQuickPick: jest.fn(),
+            showInputBox: jest.fn()
+        },
+        workspace: {
+            getConfiguration: jest.fn()
+        },
+        ExtensionContext: {},
+        Disposable: { from: jest.fn() },
+        Uri: {
+            file: (path: string) => ({ fsPath: path, path, scheme: 'file' })
+        },
+        ExtensionMode: {
+            Production: 1,
+            Development: 2,
+            Test: 3
+        },
+        ExtensionKind: {
+            UI: 1,
+            Workspace: 2
+        },
+        EventEmitter: class MockEventEmitter {
+            public event = jest.fn();
+            public fire = jest.fn();
+            public dispose = jest.fn();
+            constructor() {}
+        }
+    }),
+    { virtual: true }
+);
 
 import * as vscode from 'vscode';
 import { AgentManager } from '../../../agents/AgentManager';
@@ -135,7 +139,7 @@ describe('AgentManager', () => {
             onDidChange: jest.fn() as any,
             validateAll: jest.fn(() => ({ isValid: true, errors: [] })),
             getMaxAgents: jest.fn(() => 3),
-            getClaudePath: jest.fn(() => 'claude'),
+            getAiPath: jest.fn(() => 'claude'),
             isAutoAssignTasks: jest.fn(() => true),
             isUseWorktrees: jest.fn(() => true),
             isShowAgentTerminalOnSpawn: jest.fn(() => true),
@@ -229,9 +233,7 @@ describe('AgentManager', () => {
             await agentManager.initialize();
 
             expect(mockAgentLifecycleManager.initialize).toHaveBeenCalled();
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                expect.stringContaining('AgentManager initialized')
-            );
+            expect(mockLoggingService.info).toHaveBeenCalledWith(expect.stringContaining('AgentManager initialized'));
         });
 
         it('should throw error if dependencies not set', async () => {
@@ -264,9 +266,7 @@ describe('AgentManager', () => {
 
             expect(vscode.window.createTerminal).toHaveBeenCalledWith('Claude Test');
             expect(mockTerminal.show).toHaveBeenCalled();
-            expect(mockTerminal.sendText).toHaveBeenCalledWith(
-                expect.stringContaining('claude --version')
-            );
+            expect(mockTerminal.sendText).toHaveBeenCalledWith(expect.stringContaining('claude --version'));
         });
 
         it('should handle Change Path selection', async () => {
@@ -281,7 +281,7 @@ describe('AgentManager', () => {
                 placeHolder: 'e.g., claude, /usr/local/bin/claude'
             });
             expect(mockConfigService.update).toHaveBeenCalledWith(
-                'claudePath',
+                'aiPath',
                 '/new/path/claude',
                 vscode.ConfigurationTarget.Global
             );
@@ -374,9 +374,7 @@ describe('AgentManager', () => {
         it('should throw error if AgentLifecycleManager not available', async () => {
             const newAgentManager = new AgentManager(mockExtensionContext);
 
-            await expect(newAgentManager.removeAgent('agent-1')).rejects.toThrow(
-                'AgentLifecycleManager not available'
-            );
+            await expect(newAgentManager.removeAgent('agent-1')).rejects.toThrow('AgentLifecycleManager not available');
         });
     });
 
@@ -479,9 +477,7 @@ describe('AgentManager', () => {
                 agentId: 'agent-1',
                 task: mockTask
             });
-            expect(mockNotificationService.showInformation).toHaveBeenCalledWith(
-                '✅ Test Agent completed: Test Task'
-            );
+            expect(mockNotificationService.showInformation).toHaveBeenCalledWith('✅ Test Agent completed: Test Task');
         });
 
         it('should handle non-existent agent gracefully', async () => {
@@ -723,4 +719,3 @@ describe('AgentManager', () => {
         });
     });
 });
-

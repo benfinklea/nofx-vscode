@@ -17,7 +17,13 @@ import {
     IMessagePersistenceService,
     IMetricsService
 } from '../services/interfaces';
-import { ORCH_EVENTS, MessageReceivedPayload, ServerStartedPayload, ServerStoppedPayload, LogicalIdReassignedPayload } from '../services/EventConstants';
+import {
+    ORCH_EVENTS,
+    MessageReceivedPayload,
+    ServerStartedPayload,
+    ServerStoppedPayload,
+    LogicalIdReassignedPayload
+} from '../services/EventConstants';
 
 export class OrchestrationServer {
     private wss: WebSocketServer | undefined;
@@ -175,7 +181,7 @@ export class OrchestrationServer {
                 resolve();
             });
 
-            this.wss.on('error', (error) => {
+            this.wss.on('error', error => {
                 reject(error);
             });
 
@@ -230,7 +236,7 @@ export class OrchestrationServer {
         });
 
         // Set up connection error handling
-        ws.on('error', (error) => {
+        ws.on('error', error => {
             this.metricsService?.incrementCounter('connection_errors', {
                 clientType: isAgent ? 'agent' : 'client',
                 errorType: error.name || 'unknown'
@@ -361,16 +367,12 @@ export class OrchestrationServer {
                 clientId: clientId.substring(0, 8),
                 messageType: message.type || 'unknown'
             });
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler?.handleError(err, `Error handling message from ${clientId}`);
 
             // Send error response
-            const errorResponse = this.messageValidator?.createErrorResponse(
-                'Internal server error',
-                clientId
-            );
+            const errorResponse = this.messageValidator?.createErrorResponse('Internal server error', clientId);
 
             if (errorResponse) {
                 this.connectionPool?.sendToClient(clientId, errorResponse);
@@ -428,7 +430,7 @@ export class OrchestrationServer {
      * Get message history (for backward compatibility)
      */
     async getMessageHistory(): Promise<OrchestratorMessage[]> {
-        return await this.messagePersistence?.load(0, 100) || [];
+        return (await this.messagePersistence?.load(0, 100)) || [];
     }
 
     /**

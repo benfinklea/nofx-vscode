@@ -16,6 +16,12 @@ export const DOMAIN_EVENTS = {
     AGENT_LIFECYCLE_REMOVING: 'agent.lifecycle.removing',
     AGENT_LIFECYCLE_REMOVED: 'agent.lifecycle.removed',
 
+    // Agent spawn events (batch operations)
+    AGENT_SPAWN_REQUESTED: 'agent.spawn.requested',
+    AGENT_SPAWN_SUCCESS: 'agent.spawn.success',
+    AGENT_SPAWN_FAILED: 'agent.spawn.failed',
+    AGENT_SPAWN_BATCH_COMPLETE: 'agent.spawn.batch.complete',
+
     // Task events
     TASK_CREATED: 'task.created',
     TASK_ASSIGNED: 'task.assigned',
@@ -263,7 +269,7 @@ export interface MessageValidationFailedPayload {
 }
 
 // Type helpers for event names
-export type DomainEventName = typeof DOMAIN_EVENTS[keyof typeof DOMAIN_EVENTS];
-export type OrchEventName = typeof ORCH_EVENTS[keyof typeof ORCH_EVENTS];
-export type UIEventName = typeof UI_EVENTS[keyof typeof UI_EVENTS];
+export type DomainEventName = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];
+export type OrchEventName = (typeof ORCH_EVENTS)[keyof typeof ORCH_EVENTS];
+export type UIEventName = (typeof UI_EVENTS)[keyof typeof UI_EVENTS];
 export type EventName = DomainEventName | OrchEventName | UIEventName;

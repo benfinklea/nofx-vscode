@@ -13,13 +13,13 @@ export class IntelligentConductor {
     private taskQueue: TaskQueue;
     private terminal: vscode.Terminal | undefined;
     private outputChannel: vscode.OutputChannel;
-    private claudePath: string;
+    private aiPath: string;
     private isProcessingCommand: boolean = false;
 
     constructor(agentManager: AgentManager, taskQueue: TaskQueue) {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
-        this.claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
+        this.aiPath = vscode.workspace.getConfiguration('nofx').get<string>('aiPath') || 'claude';
         this.outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNELS.CONDUCTOR_BRAIN);
 
         // Monitor agent updates
@@ -61,7 +61,7 @@ export class IntelligentConductor {
 
         // Start Claude with the enhanced conductor prompt using --append-system-prompt
         const systemPrompt = this.getEnhancedSystemPrompt().replace(/'/g, "'\\''"); // Escape single quotes for shell
-        this.terminal.sendText(`${this.claudePath} --append-system-prompt '${systemPrompt}'`);
+        this.terminal.sendText(`${this.aiPath} --append-system-prompt '${systemPrompt}'`);
 
         // Send the initial greeting
         setTimeout(() => {
@@ -134,7 +134,10 @@ You are a senior engineering manager with deep technical knowledge. Be proactive
         this.outputChannel.appendLine(`Processing command: ${command}`);
 
         if (command.startsWith('CREATE_TASK')) {
-            const parts = command.replace('CREATE_TASK', '').split('|').map(s => s.trim());
+            const parts = command
+                .replace('CREATE_TASK', '')
+                .split('|')
+                .map(s => s.trim());
             const [title, description, agentType] = parts;
 
             // Actually create the task
@@ -166,9 +169,7 @@ You are a senior engineering manager with deep technical knowledge. Be proactive
         // If no exact match, find one with matching capabilities
         if (!agent && idleAgents.length > 0) {
             agent = idleAgents.find(a =>
-                a.template?.capabilities?.some((c: string) =>
-                    c.toLowerCase().includes(type.toLowerCase())
-                )
+                a.template?.capabilities?.some((c: string) => c.toLowerCase().includes(type.toLowerCase()))
             );
         }
 
@@ -267,8 +268,7 @@ You are a senior engineering manager with deep technical knowledge. Be proactive
             }
 
             // Check specialization match
-            if (agent.template?.specialization &&
-                taskText.includes(agent.template.specialization.toLowerCase())) {
+            if (agent.template?.specialization && taskText.includes(agent.template.specialization.toLowerCase())) {
                 score += 8;
             }
 

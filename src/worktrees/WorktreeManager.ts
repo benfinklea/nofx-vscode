@@ -60,13 +60,20 @@ export class WorktreeManager {
 
             // Create a marker file to identify this as an agent worktree
             const markerPath = path.join(worktreePath, '.nofx-agent');
-            fs.writeFileSync(markerPath, JSON.stringify({
-                agentId: agent.id,
-                agentName: agent.name,
-                agentType: agent.type,
-                branchName: branchName,
-                createdAt: new Date().toISOString()
-            }, null, 2));
+            fs.writeFileSync(
+                markerPath,
+                JSON.stringify(
+                    {
+                        agentId: agent.id,
+                        agentName: agent.name,
+                        agentType: agent.type,
+                        branchName: branchName,
+                        createdAt: new Date().toISOString()
+                    },
+                    null,
+                    2
+                )
+            );
 
             // Add marker file to .gitignore if not already there
             const gitignorePath = path.join(worktreePath, '.gitignore');
@@ -177,7 +184,9 @@ export class WorktreeManager {
 
                     // If we don't have this agent in our map, it's orphaned
                     if (!this.worktrees.has(markerData.agentId)) {
-                        this.loggingService?.info(`Found orphaned worktree for agent ${markerData.agentName}, cleaning up...`);
+                        this.loggingService?.info(
+                            `Found orphaned worktree for agent ${markerData.agentName}, cleaning up...`
+                        );
 
                         try {
                             execSync(`git worktree remove "${worktreePath}" --force`, {
@@ -305,10 +314,13 @@ export class WorktreeManager {
             }).trim();
 
             // Merge the agent's branch
-            execSync(`git merge ${markerData.branchName} --no-ff -m "Merge agent ${markerData.agentName} work from ${markerData.branchName}"`, {
-                cwd: this.workspacePath,
-                encoding: 'utf-8'
-            });
+            execSync(
+                `git merge ${markerData.branchName} --no-ff -m "Merge agent ${markerData.agentName} work from ${markerData.branchName}"`,
+                {
+                    cwd: this.workspacePath,
+                    encoding: 'utf-8'
+                }
+            );
 
             this.loggingService?.info(`Merged agent ${markerData.agentName} work from ${markerData.branchName}`);
 

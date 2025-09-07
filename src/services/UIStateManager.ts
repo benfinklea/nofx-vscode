@@ -1,6 +1,15 @@
 import * as vscode from 'vscode';
 import { IEventBus, ILoggingService, IUIStateManager, IAgentReader, ITaskReader } from './interfaces';
-import { AgentDTO, TaskDTO, ConductorViewState, toAgentDTO, toTaskDTO, normalizeTaskStatus, normalizeAgentStatus, computeDependencyStatus } from '../types/ui';
+import {
+    AgentDTO,
+    TaskDTO,
+    ConductorViewState,
+    toAgentDTO,
+    toTaskDTO,
+    normalizeTaskStatus,
+    normalizeAgentStatus,
+    computeDependencyStatus
+} from '../types/ui';
 import { DOMAIN_EVENTS, UI_EVENTS } from './EventConstants';
 
 export class UIStateManager implements IUIStateManager {
@@ -32,16 +41,17 @@ export class UIStateManager implements IUIStateManager {
 
     private agents: AgentDTO[] = [];
     private tasks: TaskDTO[] = [];
-    private dependencyGraph: {taskId: string, dependencies: string[], softDependencies: string[]}[] = [];
-    private conflicts: {taskId: string, conflictsWith: string[], reason: string}[] = [];
+    private dependencyGraph: { taskId: string; dependencies: string[]; softDependencies: string[] }[] = [];
+    private conflicts: { taskId: string; conflictsWith: string[]; reason: string }[] = [];
     private blockedTasks: TaskDTO[] = [];
     private readyTasks: TaskDTO[] = [];
     private theme: 'light' | 'dark' = 'light';
 
     // Caching for performance optimization
     private taskHashCache: Map<string, string> = new Map();
-    private dependencyGraphCache: {taskId: string, dependencies: string[], softDependencies: string[]}[] | null = null;
-    private blockedAndReadyCache: {blockedTasks: TaskDTO[], readyTasks: TaskDTO[]} | null = null;
+    private dependencyGraphCache: { taskId: string; dependencies: string[]; softDependencies: string[] }[] | null =
+        null;
+    private blockedAndReadyCache: { blockedTasks: TaskDTO[]; readyTasks: TaskDTO[] } | null = null;
 
     // Separate cache keys to avoid unnecessary invalidation
     private lastDependencyGraphHash: string = '';
@@ -214,7 +224,17 @@ export class UIStateManager implements IUIStateManager {
         return { ...this.agentStats };
     }
 
-    getTaskStats(): { queued: number; validated: number; ready: number; assigned: number; inProgress: number; completed: number; failed: number; blocked: number; conflicted: number } {
+    getTaskStats(): {
+        queued: number;
+        validated: number;
+        ready: number;
+        assigned: number;
+        inProgress: number;
+        completed: number;
+        failed: number;
+        blocked: number;
+        conflicted: number;
+    } {
         return { ...this.taskStats };
     }
 
@@ -370,15 +390,18 @@ export class UIStateManager implements IUIStateManager {
      */
     private computeTaskHash(): string {
         const allTasks = this.taskReader.getTasks();
-        const hashData = allTasks.map(task =>
-            `${task.id}:${task.status}:${(task.dependsOn || []).join(',')}:${(task.prefers || []).join(',')}:${(task.conflictsWith || []).join(',')}`
-        ).join('|');
+        const hashData = allTasks
+            .map(
+                task =>
+                    `${task.id}:${task.status}:${(task.dependsOn || []).join(',')}:${(task.prefers || []).join(',')}:${(task.conflictsWith || []).join(',')}`
+            )
+            .join('|');
 
         // Simple hash function
         let hash = 0;
         for (let i = 0; i < hashData.length; i++) {
             const char = hashData.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
+            hash = (hash << 5) - hash + char;
             hash |= 0; // Convert to 32-bit integer
         }
         return hash.toString();
@@ -389,15 +412,15 @@ export class UIStateManager implements IUIStateManager {
      */
     private computeDependencyGraphHash(): string {
         const allTasks = this.taskReader.getTasks();
-        const hashData = allTasks.map(task =>
-            `${task.id}:${(task.dependsOn || []).join(',')}:${(task.prefers || []).join(',')}`
-        ).join('|');
+        const hashData = allTasks
+            .map(task => `${task.id}:${(task.dependsOn || []).join(',')}:${(task.prefers || []).join(',')}`)
+            .join('|');
 
         // Simple hash function
         let hash = 0;
         for (let i = 0; i < hashData.length; i++) {
             const char = hashData.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
+            hash = (hash << 5) - hash + char;
             hash |= 0; // Convert to 32-bit integer
         }
         return hash.toString();
@@ -408,15 +431,18 @@ export class UIStateManager implements IUIStateManager {
      */
     private computeBlockedAndReadyHash(): string {
         const allTasks = this.taskReader.getTasks();
-        const hashData = allTasks.map(task =>
-            `${task.id}:${task.status}:${(task.blockedBy || []).join(',')}:${(task.conflictsWith || []).join(',')}`
-        ).join('|');
+        const hashData = allTasks
+            .map(
+                task =>
+                    `${task.id}:${task.status}:${(task.blockedBy || []).join(',')}:${(task.conflictsWith || []).join(',')}`
+            )
+            .join('|');
 
         // Simple hash function
         let hash = 0;
         for (let i = 0; i < hashData.length; i++) {
             const char = hashData.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
+            hash = (hash << 5) - hash + char;
             hash |= 0; // Convert to 32-bit integer
         }
         return hash.toString();

@@ -43,11 +43,15 @@ export class OrchestrationCommands implements ICommandHandler {
         this.configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
         this.loggingService = container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
         this.context = container.resolve<vscode.ExtensionContext>(SERVICE_TOKENS.ExtensionContext);
-        this.messagePersistence = container.resolve<IMessagePersistenceService>(SERVICE_TOKENS.MessagePersistenceService);
+        this.messagePersistence = container.resolve<IMessagePersistenceService>(
+            SERVICE_TOKENS.MessagePersistenceService
+        );
 
         // Resolve optional services
         this.orchestrationServer = container.resolveOptional<OrchestrationServer>(SERVICE_TOKENS.OrchestrationServer);
-        this.messageFlowDashboard = container.resolveOptional<MessageFlowDashboard>(SERVICE_TOKENS.MessageFlowDashboard);
+        this.messageFlowDashboard = container.resolveOptional<MessageFlowDashboard>(
+            SERVICE_TOKENS.MessageFlowDashboard
+        );
     }
 
     setOrchestrationServer(server: OrchestrationServer): void {
@@ -94,84 +98,89 @@ export class OrchestrationCommands implements ICommandHandler {
             return;
         }
 
-        await this.notificationService.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: 'Resetting NofX...',
-            cancellable: false
-        }, async (progress) => {
-            try {
-                // Step 1: Stop orchestration server
-                progress.report({ message: 'Stopping orchestration server...', increment: 20 });
-                if (this.orchestrationServer) {
-                    await this.orchestrationServer.stop();
-                }
-
-                // Step 2: Remove all agents
-                progress.report({ message: 'Removing all agents...', increment: 20 });
-                const agents = this.agentManager.getActiveAgents();
-                for (const agent of agents) {
-                    await this.agentManager.removeAgent(agent.id);
-                }
-
-                // Step 3: Clear task queue
-                progress.report({ message: 'Clearing task queue...', increment: 20 });
-                this.taskQueue.clearAllTasks();
-
-                // Step 4: Clear persistence
-                progress.report({ message: 'Clearing saved data...', increment: 15 });
-                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-                if (workspaceFolder) {
-                    const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
-                    await persistence.clearAll();
-
-                    // Also clear .nofx directory if it exists
-                    const nofxDir = path.join(workspaceFolder.uri.fsPath, '.nofx');
-                    try {
-                        await fsPromises.access(nofxDir);
-                        await this.removeDirectory(nofxDir);
-                    } catch (error) {
-                        // Directory doesn't exist, ignore
-                    }
-                }
-
-                // Step 5: Clear orchestration history
-                progress.report({ message: 'Clearing orchestration history...', increment: 5 });
+        await this.notificationService.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: 'Resetting NofX...',
+                cancellable: false
+            },
+            async progress => {
                 try {
-                    await this.messagePersistence.clear();
+                    // Step 1: Stop orchestration server
+                    progress.report({ message: 'Stopping orchestration server...', increment: 20 });
+                    if (this.orchestrationServer) {
+                        await this.orchestrationServer.stop();
+                    }
+
+                    // Step 2: Remove all agents
+                    progress.report({ message: 'Removing all agents...', increment: 20 });
+                    const agents = this.agentManager.getActiveAgents();
+                    for (const agent of agents) {
+                        await this.agentManager.removeAgent(agent.id);
+                    }
+
+                    // Step 3: Clear task queue
+                    progress.report({ message: 'Clearing task queue...', increment: 20 });
+                    this.taskQueue.clearAllTasks();
+
+                    // Step 4: Clear persistence
+                    progress.report({ message: 'Clearing saved data...', increment: 15 });
+                    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                    if (workspaceFolder) {
+                        const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
+                        await persistence.clearAll();
+
+                        // Also clear .nofx directory if it exists
+                        const nofxDir = path.join(workspaceFolder.uri.fsPath, '.nofx');
+                        try {
+                            await fsPromises.access(nofxDir);
+                            await this.removeDirectory(nofxDir);
+                        } catch (error) {
+                            // Directory doesn't exist, ignore
+                        }
+                    }
+
+                    // Step 5: Clear orchestration history
+                    progress.report({ message: 'Clearing orchestration history...', increment: 5 });
+                    try {
+                        await this.messagePersistence.clear();
+                    } catch (error) {
+                        this.loggingService?.warn('Failed to clear orchestration history:', error);
+                        // Don't fail the entire reset for this
+                    }
+
+                    // Step 6: Restart orchestration server
+                    progress.report({ message: 'Restarting orchestration server...', increment: 20 });
+                    if (this.orchestrationServer) {
+                        await this.orchestrationServer.start();
+                    }
+
+                    // Close any open dashboards or panels
+                    this.messageFlowDashboard = undefined;
+                    this.conductorPanel?.dispose();
+                    this.conductorPanel = undefined;
+
+                    await this.notificationService.showInformation(
+                        '🎸 NofX has been completely reset. You can now start fresh!'
+                    );
                 } catch (error) {
-                    this.loggingService?.warn('Failed to clear orchestration history:', error);
-                    // Don't fail the entire reset for this
+                    this.loggingService?.error('Error resetting NofX:', error);
+                    await this.notificationService.showError(
+                        `Failed to reset NofX: ${error instanceof Error ? error.message : 'Unknown error'}`
+                    );
                 }
-
-                // Step 6: Restart orchestration server
-                progress.report({ message: 'Restarting orchestration server...', increment: 20 });
-                if (this.orchestrationServer) {
-                    await this.orchestrationServer.start();
-                }
-
-                // Close any open dashboards or panels
-                this.messageFlowDashboard = undefined;
-                this.conductorPanel?.dispose();
-                this.conductorPanel = undefined;
-
-                await this.notificationService.showInformation(
-                    '🎸 NofX has been completely reset. You can now start fresh!'
-                );
-
-            } catch (error) {
-                this.loggingService?.error('Error resetting NofX:', error);
-                await this.notificationService.showError(
-                    `Failed to reset NofX: ${error instanceof Error ? error.message : 'Unknown error'}`
-                );
             }
-        });
+        );
     }
 
     private async removeDirectory(dirPath: string): Promise<void> {
         // Check if this is the .nofx directory and preserve templates
         if (dirPath.endsWith('.nofx')) {
             const templatesPath = path.join(dirPath, 'templates');
-            const hasTemplates = await fsPromises.access(templatesPath).then(() => true).catch(() => false);
+            const hasTemplates = await fsPromises
+                .access(templatesPath)
+                .then(() => true)
+                .catch(() => false);
 
             if (hasTemplates) {
                 // Remove everything except templates

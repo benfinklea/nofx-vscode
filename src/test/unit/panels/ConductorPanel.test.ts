@@ -156,12 +156,7 @@ describe('ConductorPanel', () => {
         // Setup default createWebviewHost mock
         mockCreateWebviewHost.mockReturnValue(mockWebviewHost);
 
-        conductorPanel = new ConductorPanel(
-            mockWebviewHost,
-            mockContext,
-            mockViewModel,
-            mockLoggingService
-        );
+        conductorPanel = new ConductorPanel(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
     });
 
     afterEach(() => {
@@ -244,9 +239,7 @@ describe('ConductorPanel', () => {
                 {
                     enableScripts: true,
                     retainContextWhenHidden: true,
-                    localResourceRoots: [
-                        vscode.Uri.joinPath(mockContext.extensionUri, 'webview')
-                    ]
+                    localResourceRoots: [vscode.Uri.joinPath(mockContext.extensionUri, 'webview')]
                 }
             );
 
@@ -264,12 +257,7 @@ describe('ConductorPanel', () => {
 
         it('should use custom webview host factory', () => {
             const customFactory = jest.fn().mockReturnValue(mockWebviewHost);
-            const panel = ConductorPanel.create(
-                mockContext,
-                mockViewModel,
-                mockLoggingService,
-                customFactory
-            );
+            const panel = ConductorPanel.create(mockContext, mockViewModel, mockLoggingService, customFactory);
 
             expect(customFactory).toHaveBeenCalledWith(mockWebviewPanel, mockLoggingService);
             expect(mockCreateWebviewHost).not.toHaveBeenCalled();

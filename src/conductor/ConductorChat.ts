@@ -6,12 +6,12 @@ export class ConductorChat {
     private terminal: vscode.Terminal | undefined;
     private agentManager: AgentManager;
     private taskQueue: TaskQueue;
-    private claudePath: string;
+    private aiPath: string;
 
     constructor(agentManager: AgentManager, taskQueue: TaskQueue) {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
-        this.claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
+        this.aiPath = vscode.workspace.getConfiguration('nofx').get<string>('aiPath') || 'claude';
     }
 
     async start() {
@@ -39,23 +39,27 @@ export class ConductorChat {
         const escapedPrompt = conductorPrompt.replace(/'/g, "'\\''"); // Escape single quotes for shell
 
         // Start Claude in conductor mode with system prompt
-        this.terminal.sendText(`${this.claudePath} --append-system-prompt '${escapedPrompt}'`);
+        this.terminal.sendText(`${this.aiPath} --append-system-prompt '${escapedPrompt}'`);
 
         // Send the initial greeting after Claude starts
         setTimeout(() => {
             if (this.terminal) {
-                this.terminal.sendText('Hello! I am the NofX Conductor. I manage a team of specialized AI agents. Tell me what you want to build or fix, and I will orchestrate the agents to complete your request. What would you like to work on today?');
+                this.terminal.sendText(
+                    'Hello! I am the NofX Conductor. I manage a team of specialized AI agents. Tell me what you want to build or fix, and I will orchestrate the agents to complete your request. What would you like to work on today?'
+                );
             }
         }, 2000);
 
-        vscode.window.showInformationMessage(
-            '🎼 Conductor is ready! Chat with the conductor to manage your development team.',
-            'View Conductor'
-        ).then(selection => {
-            if (selection === 'View Conductor') {
-                this.terminal?.show();
-            }
-        });
+        vscode.window
+            .showInformationMessage(
+                '🎼 Conductor is ready! Chat with the conductor to manage your development team.',
+                'View Conductor'
+            )
+            .then(selection => {
+                if (selection === 'View Conductor') {
+                    this.terminal?.show();
+                }
+            });
     }
 
     private getConductorSystemPrompt(): string {

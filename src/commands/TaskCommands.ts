@@ -81,7 +81,12 @@ export class TaskCommands implements ICommandHandler {
             value: ''
         });
 
-        const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0) : [];
+        const tags = tagsInput
+            ? tagsInput
+                  .split(',')
+                  .map(tag => tag.trim())
+                  .filter(tag => tag.length > 0)
+            : [];
 
         // Get required capabilities
         const capabilitiesInput = await this.notificationService.showInputBox({
@@ -90,7 +95,12 @@ export class TaskCommands implements ICommandHandler {
             value: ''
         });
 
-        const requiredCapabilities = capabilitiesInput ? capabilitiesInput.split(',').map(cap => cap.trim()).filter(cap => cap.length > 0) : [];
+        const requiredCapabilities = capabilitiesInput
+            ? capabilitiesInput
+                  .split(',')
+                  .map(cap => cap.trim())
+                  .filter(cap => cap.length > 0)
+            : [];
 
         // Get estimated duration
         const durationInput = await this.notificationService.showInputBox({
@@ -106,12 +116,15 @@ export class TaskCommands implements ICommandHandler {
         let dependsOn: string[] = [];
 
         if (existingTasks.length > 0) {
-            const dependencyChoice = await this.notificationService.showQuickPick([
-                { label: 'No dependencies', value: 'none' },
-                { label: 'Add dependencies', value: 'add' }
-            ], {
-                placeHolder: 'Does this task depend on other tasks?'
-            });
+            const dependencyChoice = await this.notificationService.showQuickPick(
+                [
+                    { label: 'No dependencies', value: 'none' },
+                    { label: 'Add dependencies', value: 'add' }
+                ],
+                {
+                    placeHolder: 'Does this task depend on other tasks?'
+                }
+            );
 
             if (dependencyChoice?.value === 'add') {
                 const dependencyItems: PickItem<string>[] = existingTasks.map(task => ({
@@ -172,7 +185,9 @@ export class TaskCommands implements ICommandHandler {
             const items: PickItem<string>[] = activeTasks.map(task => ({
                 label: task.title,
                 description: `${task.status} - ${task.priority} priority`,
-                detail: task.assignedTo ? `Assigned to: ${this.agentManager.getAgent(task.assignedTo)?.name}` : 'Unassigned',
+                detail: task.assignedTo
+                    ? `Assigned to: ${this.agentManager.getAgent(task.assignedTo)?.name}`
+                    : 'Unassigned',
                 value: task.id
             }));
 
@@ -207,7 +222,6 @@ export class TaskCommands implements ICommandHandler {
             await this.notificationService.showError('Failed to complete task. Check task state and dependencies.');
         }
     }
-
 
     // New command methods for enhanced task management
 
@@ -427,13 +441,16 @@ export class TaskCommands implements ICommandHandler {
 
             if (!description) break;
 
-            const priority = await this.notificationService.showQuickPick([
-                { label: '🔴 High', value: 'high' },
-                { label: '🟡 Medium', value: 'medium' },
-                { label: '🟢 Low', value: 'low' }
-            ], {
-                placeHolder: `Select priority for task ${i + 1}`
-            });
+            const priority = await this.notificationService.showQuickPick(
+                [
+                    { label: '🔴 High', value: 'high' },
+                    { label: '🟡 Medium', value: 'medium' },
+                    { label: '🟢 Low', value: 'low' }
+                ],
+                {
+                    placeHolder: `Select priority for task ${i + 1}`
+                }
+            );
 
             if (!priority) break;
 
@@ -454,7 +471,9 @@ export class TaskCommands implements ICommandHandler {
             try {
                 this.taskQueue.addTask(taskConfig);
             } catch (error: any) {
-                await this.notificationService.showError(`Failed to create task "${taskConfig.title}": ${error.message}`);
+                await this.notificationService.showError(
+                    `Failed to create task "${taskConfig.title}": ${error.message}`
+                );
             }
         }
 
@@ -482,7 +501,9 @@ export class TaskCommands implements ICommandHandler {
             if (success) resolved++;
         }
 
-        await this.notificationService.showInformation(`Resolved conflicts for ${resolved} out of ${blockedTasks.length} tasks`);
+        await this.notificationService.showInformation(
+            `Resolved conflicts for ${resolved} out of ${blockedTasks.length} tasks`
+        );
     }
 
     dispose(): void {

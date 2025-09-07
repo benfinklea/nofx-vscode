@@ -55,7 +55,11 @@ let currentWebSocketServerImpl = MockWebSocketServer;
 
 // Mock the ws module with factory pattern - defined before imports
 jest.mock('ws', () => ({
-    WebSocketServer: class { constructor(...args: any[]) { return new currentWebSocketServerImpl(...(args as [any])); } },
+    WebSocketServer: class {
+        constructor(...args: any[]) {
+            return new currentWebSocketServerImpl(...(args as [any]));
+        }
+    },
     WebSocket: MockWebSocket
 }));
 
@@ -229,9 +233,7 @@ describe('OrchestrationServer', () => {
             await orchestrationServer.start();
             await orchestrationServer.start();
 
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                'Server already running on port 7777'
-            );
+            expect(mockLoggingService.info).toHaveBeenCalledWith('Server already running on port 7777');
         });
 
         it('should try alternative ports if primary port is unavailable', async () => {
@@ -269,9 +271,7 @@ describe('OrchestrationServer', () => {
             await orchestrationServer.start();
 
             expect(attemptCount).toBe(2);
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                'Port 7777 unavailable, trying 7778'
-            );
+            expect(mockLoggingService.warn).toHaveBeenCalledWith('Port 7777 unavailable, trying 7778');
 
             // Restore original implementation
             currentWebSocketServerImpl = originalImpl;
@@ -548,10 +548,7 @@ describe('OrchestrationServer', () => {
                 expect.any(Error),
                 'Error handling message from client-1'
             );
-            expect(mockMessageValidator.createErrorResponse).toHaveBeenCalledWith(
-                'Internal server error',
-                'client-1'
-            );
+            expect(mockMessageValidator.createErrorResponse).toHaveBeenCalledWith('Internal server error', 'client-1');
         });
 
         it('should record message processing duration', async () => {
@@ -795,10 +792,12 @@ describe('OrchestrationServer', () => {
 
     describe('Server Status', () => {
         it('should return server status', () => {
-            mockConnectionPool.getAllConnections.mockReturnValue(new Map([
-                ['client-1', {} as any],
-                ['client-2', {} as any]
-            ]));
+            mockConnectionPool.getAllConnections.mockReturnValue(
+                new Map([
+                    ['client-1', {} as any],
+                    ['client-2', {} as any]
+                ])
+            );
 
             const status = orchestrationServer.getStatus();
 
@@ -851,17 +850,21 @@ describe('OrchestrationServer', () => {
             const now = Date.now();
             const msgTimestamps = (orchestrationServer as any).msgTimestamps;
             msgTimestamps.push(now - 10000); // 10 seconds ago
-            msgTimestamps.push(now - 5000);  // 5 seconds ago
-            msgTimestamps.push(now - 2000);  // 2 seconds ago
+            msgTimestamps.push(now - 5000); // 5 seconds ago
+            msgTimestamps.push(now - 2000); // 2 seconds ago
 
             // Mock connection pool
-            mockConnectionPool.getAllConnections.mockReturnValue(new Map([
-                ['client-1', {} as any],
-                ['client-2', {} as any]
-            ]));
+            mockConnectionPool.getAllConnections.mockReturnValue(
+                new Map([
+                    ['client-1', {} as any],
+                    ['client-2', {} as any]
+                ])
+            );
 
             // Call collectPeriodicMetrics directly
-            const collectPeriodicMetrics = (orchestrationServer as any).collectPeriodicMetrics.bind(orchestrationServer);
+            const collectPeriodicMetrics = (orchestrationServer as any).collectPeriodicMetrics.bind(
+                orchestrationServer
+            );
             collectPeriodicMetrics();
 
             expect(mockMetricsService.setGauge).toHaveBeenCalledWith('concurrent_connections', 2);
@@ -876,13 +879,17 @@ describe('OrchestrationServer', () => {
             // Set initial peak
             (orchestrationServer as any).concurrentConnectionsPeak = 1;
 
-            mockConnectionPool.getAllConnections.mockReturnValue(new Map([
-                ['client-1', {} as any],
-                ['client-2', {} as any],
-                ['client-3', {} as any]
-            ]));
+            mockConnectionPool.getAllConnections.mockReturnValue(
+                new Map([
+                    ['client-1', {} as any],
+                    ['client-2', {} as any],
+                    ['client-3', {} as any]
+                ])
+            );
 
-            const collectPeriodicMetrics = (orchestrationServer as any).collectPeriodicMetrics.bind(orchestrationServer);
+            const collectPeriodicMetrics = (orchestrationServer as any).collectPeriodicMetrics.bind(
+                orchestrationServer
+            );
             collectPeriodicMetrics();
 
             expect(mockMetricsService.setGauge).toHaveBeenCalledWith('concurrent_connections_peak', 3);
@@ -891,7 +898,9 @@ describe('OrchestrationServer', () => {
         it('should handle empty message timestamps', () => {
             mockConnectionPool.getAllConnections.mockReturnValue(new Map());
 
-            const collectPeriodicMetrics = (orchestrationServer as any).collectPeriodicMetrics.bind(orchestrationServer);
+            const collectPeriodicMetrics = (orchestrationServer as any).collectPeriodicMetrics.bind(
+                orchestrationServer
+            );
             collectPeriodicMetrics();
 
             expect(mockMetricsService.setGauge).toHaveBeenCalledWith('messages_per_second', 0);
@@ -906,4 +915,3 @@ describe('OrchestrationServer', () => {
         });
     });
 });
-

@@ -43,7 +43,13 @@ describe('MetricsCommands', () => {
                 systemMetrics: { memory: { heapUsed: 1000000 } },
                 recent: [
                     { name: 'messages_received', type: 'counter', timestamp: new Date(), value: 1, tags: {} },
-                    { name: 'message_processing_duration', type: 'histogram', timestamp: new Date(), value: 10, tags: {} }
+                    {
+                        name: 'message_processing_duration',
+                        type: 'histogram',
+                        timestamp: new Date(),
+                        value: 10,
+                        tags: {}
+                    }
                 ]
             })),
             dispose: jest.fn()
@@ -67,7 +73,7 @@ describe('MetricsCommands', () => {
             onDidChange: jest.fn(),
             validateAll: jest.fn(() => ({ isValid: true, errors: [] })),
             getMaxAgents: jest.fn(),
-            getClaudePath: jest.fn(),
+            getAiPath: jest.fn(),
             isAutoAssignTasks: jest.fn(),
             isUseWorktrees: jest.fn(),
             isShowAgentTerminalOnSpawn: jest.fn(),
@@ -83,7 +89,9 @@ describe('MetricsCommands', () => {
 
         mockCommandService = {
             register: jest.fn((commandId: string, handler: any, thisArg?: any) => ({ dispose: jest.fn() })),
-            registerTextEditorCommand: jest.fn((commandId: string, handler: any, thisArg?: any) => ({ dispose: jest.fn() })),
+            registerTextEditorCommand: jest.fn((commandId: string, handler: any, thisArg?: any) => ({
+                dispose: jest.fn()
+            })),
             execute: jest.fn(),
             getCommands: jest.fn(),
             hasCommand: jest.fn(),
@@ -107,12 +115,18 @@ describe('MetricsCommands', () => {
             registerInstance: jest.fn(),
             resolve: jest.fn(<T>(token: symbol): T => {
                 switch (token) {
-                    case SERVICE_TOKENS.MetricsService: return mockMetricsService as any;
-                    case SERVICE_TOKENS.NotificationService: return mockNotificationService as any;
-                    case SERVICE_TOKENS.ConfigurationService: return mockConfigService as any;
-                    case SERVICE_TOKENS.CommandService: return mockCommandService as any;
-                    case SERVICE_TOKENS.EventBus: return mockEventBus as any;
-                    default: return undefined as any;
+                    case SERVICE_TOKENS.MetricsService:
+                        return mockMetricsService as any;
+                    case SERVICE_TOKENS.NotificationService:
+                        return mockNotificationService as any;
+                    case SERVICE_TOKENS.ConfigurationService:
+                        return mockConfigService as any;
+                    case SERVICE_TOKENS.CommandService:
+                        return mockCommandService as any;
+                    case SERVICE_TOKENS.EventBus:
+                        return mockEventBus as any;
+                    default:
+                        return undefined as any;
                 }
             }) as any,
             resolveOptional: jest.fn(),
@@ -154,8 +168,20 @@ describe('MetricsCommands', () => {
         it('should apply time range filter correctly', () => {
             const data = {
                 recent: [
-                    { name: 'test1', type: 'counter', timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), value: 1, tags: {} }, // 2 hours ago
-                    { name: 'test2', type: 'counter', timestamp: new Date(Date.now() - 30 * 60 * 1000), value: 1, tags: {} }, // 30 minutes ago
+                    {
+                        name: 'test1',
+                        type: 'counter',
+                        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
+                        value: 1,
+                        tags: {}
+                    }, // 2 hours ago
+                    {
+                        name: 'test2',
+                        type: 'counter',
+                        timestamp: new Date(Date.now() - 30 * 60 * 1000),
+                        value: 1,
+                        tags: {}
+                    }, // 30 minutes ago
                     { name: 'test3', type: 'counter', timestamp: new Date(), value: 1, tags: {} } // now
                 ]
             };
@@ -252,8 +278,9 @@ describe('MetricsCommands', () => {
             const refreshSpy = jest.spyOn(metricsCommands as any, 'refreshMetricsDashboard');
 
             // Get the counter event handler
-            const counterHandler = mockEventBus.subscribe.mock.calls
-                .find(call => call[0] === 'metrics.counter.incremented')?.[1];
+            const counterHandler = mockEventBus.subscribe.mock.calls.find(
+                call => call[0] === 'metrics.counter.incremented'
+            )?.[1];
 
             expect(counterHandler).toBeDefined();
 
@@ -268,8 +295,7 @@ describe('MetricsCommands', () => {
             const refreshSpy = jest.spyOn(metricsCommands as any, 'refreshMetricsDashboard');
 
             // Get the gauge event handler
-            const gaugeHandler = mockEventBus.subscribe.mock.calls
-                .find(call => call[0] === 'metrics.gauge.set')?.[1];
+            const gaugeHandler = mockEventBus.subscribe.mock.calls.find(call => call[0] === 'metrics.gauge.set')?.[1];
 
             expect(gaugeHandler).toBeDefined();
 
@@ -284,8 +310,7 @@ describe('MetricsCommands', () => {
             const refreshSpy = jest.spyOn(metricsCommands as any, 'refreshMetricsDashboard');
 
             // Get the recorded event handler
-            const recordedHandler = mockEventBus.subscribe.mock.calls
-                .find(call => call[0] === 'metrics.recorded')?.[1];
+            const recordedHandler = mockEventBus.subscribe.mock.calls.find(call => call[0] === 'metrics.recorded')?.[1];
 
             expect(recordedHandler).toBeDefined();
 

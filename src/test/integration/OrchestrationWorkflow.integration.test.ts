@@ -14,7 +14,12 @@ import {
     ManagedConnection,
     MessageFilter
 } from '../../services/interfaces';
-import { OrchestratorMessage, MessageType, createMessage, generateMessageId } from '../../orchestration/MessageProtocol';
+import {
+    OrchestratorMessage,
+    MessageType,
+    createMessage,
+    generateMessageId
+} from '../../orchestration/MessageProtocol';
 import { ORCH_EVENTS } from '../../services/EventConstants';
 import { createTestContainer, createMockAgent, waitForEvent, measureTime } from '../setup';
 
@@ -121,10 +126,10 @@ describe('Orchestration Workflow Integration Tests', () => {
                     messageCount: 0
                 });
             }),
-            removeConnection: jest.fn((clientId) => {
+            removeConnection: jest.fn(clientId => {
                 connections.delete(clientId);
             }),
-            getConnection: jest.fn((clientId) => connections.get(clientId)),
+            getConnection: jest.fn(clientId => connections.get(clientId)),
             getAllConnections: jest.fn(() => connections),
             broadcast: jest.fn((message, excludeIds = []) => {
                 connections.forEach((connection, clientId) => {
@@ -148,14 +153,16 @@ describe('Orchestration Workflow Integration Tests', () => {
             registerLogicalId: jest.fn(),
             resolveLogicalId: jest.fn(),
             unregisterLogicalId: jest.fn(),
-            getConnectionSummaries: jest.fn(() => Array.from(connections.values()).map(conn => ({
-                clientId: conn.metadata.clientId,
-                isAgent: conn.metadata.isAgent,
-                connectedAt: conn.metadata.connectedAt.toISOString(),
-                lastHeartbeat: conn.metadata.lastHeartbeat.toISOString(),
-                messageCount: conn.metadata.messageCount,
-                userAgent: conn.metadata.userAgent
-            }))),
+            getConnectionSummaries: jest.fn(() =>
+                Array.from(connections.values()).map(conn => ({
+                    clientId: conn.metadata.clientId,
+                    isAgent: conn.metadata.isAgent,
+                    connectedAt: conn.metadata.connectedAt.toISOString(),
+                    lastHeartbeat: conn.metadata.lastHeartbeat.toISOString(),
+                    messageCount: conn.metadata.messageCount,
+                    userAgent: conn.metadata.userAgent
+                }))
+            ),
             startHeartbeat: jest.fn(),
             stopHeartbeat: jest.fn(),
             dispose: jest.fn()
@@ -187,9 +194,9 @@ describe('Orchestration Workflow Integration Tests', () => {
                     return true;
                 });
 
-                const limitedMessages = filter?.limit ?
-                    filteredMessages.slice(filter.offset || 0, (filter.offset || 0) + filter.limit) :
-                    filteredMessages.slice(filter?.offset || 0);
+                const limitedMessages = filter?.limit
+                    ? filteredMessages.slice(filter.offset || 0, (filter.offset || 0) + filter.limit)
+                    : filteredMessages.slice(filter?.offset || 0);
 
                 limitedMessages.forEach(msg => {
                     mockConnectionPool.sendToClient(target, msg);
@@ -235,14 +242,16 @@ describe('Orchestration Workflow Integration Tests', () => {
                     result: payload
                 };
             }),
-            createErrorResponse: jest.fn((error: string, clientId: string): OrchestratorMessage => ({
-                id: generateMessageId(),
-                type: MessageType.SYSTEM_ERROR,
-                from: 'server',
-                to: clientId,
-                payload: { error },
-                timestamp: new Date().toISOString()
-            })),
+            createErrorResponse: jest.fn(
+                (error: string, clientId: string): OrchestratorMessage => ({
+                    id: generateMessageId(),
+                    type: MessageType.SYSTEM_ERROR,
+                    from: 'server',
+                    to: clientId,
+                    payload: { error },
+                    timestamp: new Date().toISOString()
+                })
+            ),
             dispose: jest.fn()
         };
 

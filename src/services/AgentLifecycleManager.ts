@@ -1,5 +1,14 @@
 import * as vscode from 'vscode';
-import { IAgentLifecycleManager, ITerminalManager, IWorktreeService, IConfigurationService, INotificationService, ILoggingService, IEventBus, IErrorHandler } from './interfaces';
+import {
+    IAgentLifecycleManager,
+    ITerminalManager,
+    IWorktreeService,
+    IConfigurationService,
+    INotificationService,
+    ILoggingService,
+    IEventBus,
+    IErrorHandler
+} from './interfaces';
 import { Agent, AgentConfig, AgentStatus } from '../agents/types';
 import { AgentActivityStatus } from '../types/agent';
 import { DOMAIN_EVENTS } from './EventConstants';
@@ -39,11 +48,11 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
 
     private setupMonitoringListeners(): void {
         // Listen for monitoring events
-        this.activityMonitor.on('monitoring-event', (event) => {
+        this.activityMonitor.on('monitoring-event', event => {
             this.handleMonitoringEvent(event);
         });
 
-        this.activityMonitor.on('agent-status-changed', (data) => {
+        this.activityMonitor.on('agent-status-changed', data => {
             this.handleAgentStatusChange(data);
         });
     }
@@ -114,15 +123,15 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
 
         // Get icon based on agent type/template
         const iconMap: { [key: string]: string } = {
-            'frontend': 'symbol-color',
-            'backend': 'server',
-            'fullstack': 'layers',
-            'mobile': 'device-mobile',
-            'database': 'database',
-            'devops': 'cloud',
-            'testing': 'beaker',
-            'ai': 'hubot',
-            'general': 'person'
+            frontend: 'symbol-color',
+            backend: 'server',
+            fullstack: 'layers',
+            mobile: 'device-mobile',
+            database: 'database',
+            devops: 'cloud',
+            testing: 'beaker',
+            ai: 'hubot',
+            general: 'person'
         };
 
         const terminalIcon = iconMap[config.type] || 'person';
@@ -134,7 +143,8 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         });
 
         // Create output channel for agent logs using LoggingService
-        const outputChannel = this.loggingService?.getChannel(`Agent: ${config.name}`) ||
+        const outputChannel =
+            this.loggingService?.getChannel(`Agent: ${config.name}`) ||
             vscode.window.createOutputChannel(`n of x: ${config.name}`);
 
         // Create agent object - initially offline until terminal is ready
@@ -142,7 +152,7 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
             id: agentId,
             name: config.name,
             type: config.type,
-            status: 'offline' as AgentStatus,  // Start as offline until terminal initializes
+            status: 'offline' as AgentStatus, // Start as offline until terminal initializes
             terminal: terminal,
             currentTask: null,
             startTime: new Date(),
@@ -169,13 +179,14 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         // Setup worktree if enabled
         let workingDirectory: string | undefined;
         if (this.worktreeService.isAvailable()) {
-            workingDirectory = await this.errorHandler?.handleAsync(async () => {
-                const result = await this.worktreeService.createForAgent(agent);
-                if (result) {
-                    this.loggingService?.debug(`Created worktree for ${agent.name} at ${result}`);
-                }
-                return result;
-            }, `Failed to create worktree for ${agent.name}`) || undefined;
+            workingDirectory =
+                (await this.errorHandler?.handleAsync(async () => {
+                    const result = await this.worktreeService.createForAgent(agent);
+                    if (result) {
+                        this.loggingService?.debug(`Created worktree for ${agent.name} at ${result}`);
+                    }
+                    return result;
+                }, `Failed to create worktree for ${agent.name}`)) || undefined;
         }
 
         // Initialize agent terminal with a small delay to avoid overwhelming the terminal system
@@ -194,6 +205,22 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
             // Start activity monitoring for this agent
             this.activityMonitor.startMonitoring(agent, terminal);
             console.log(`[NofX Debug] Started monitoring for agent ${agent.name}`);
+
+            // Start sub-agent monitoring if available
+            try {
+                const Container = require('./Container').Container;
+                const container = Container.getInstance();
+                const SERVICE_TOKENS = require('./interfaces').SERVICE_TOKENS;
+                const terminalMonitor = container.resolveOptional(SERVICE_TOKENS.TerminalMonitor);
+
+                if (terminalMonitor && terminal) {
+                    terminalMonitor.startMonitoring(terminal, agentId);
+                    console.log(`[NofX Debug] Started sub-agent monitoring for ${agent.name}`);
+                    this.loggingService?.info(`Sub-agent capabilities enabled for ${agent.name}`);
+                }
+            } catch (error) {
+                console.log(`[NofX Debug] Sub-agent monitoring not available: ${error}`);
+            }
 
             // Notify that agent has been updated
             this.onAgentUpdate();

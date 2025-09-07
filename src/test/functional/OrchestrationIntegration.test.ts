@@ -329,7 +329,12 @@ describe('Orchestration Integration', () => {
 
             // Create lightweight test dependencies
             const connectionPoolService = new ConnectionPoolService(loggingService, eventBus);
-            const messagePersistenceService = new MessagePersistenceService(loggingService, configService, eventBus, '/tmp/test-workspace');
+            const messagePersistenceService = new MessagePersistenceService(
+                loggingService,
+                configService,
+                eventBus,
+                '/tmp/test-workspace'
+            );
             const errorHandler = {
                 handleError: jest.fn(),
                 handleWarning: jest.fn(),
@@ -361,7 +366,12 @@ describe('Orchestration Integration', () => {
         test('should handle invalid message routing', async () => {
             // Create lightweight test dependencies
             const connectionPoolService = new ConnectionPoolService(loggingService, eventBus);
-            const messagePersistenceService = new MessagePersistenceService(loggingService, configService, eventBus, '/tmp/test-workspace');
+            const messagePersistenceService = new MessagePersistenceService(
+                loggingService,
+                configService,
+                eventBus,
+                '/tmp/test-workspace'
+            );
             const errorHandler = {
                 handleError: jest.fn(),
                 handleWarning: jest.fn(),
@@ -452,12 +462,7 @@ describe('Orchestration Integration', () => {
 
             const configService = new ConfigurationService();
 
-            const connectionPool = new ConnectionPoolService(
-                loggingService,
-                eventBus,
-                errorHandler,
-                configService
-            );
+            const connectionPool = new ConnectionPoolService(loggingService, eventBus, errorHandler, configService);
 
             // Simulate connection
             const mockConnection = {
@@ -484,12 +489,7 @@ describe('Orchestration Integration', () => {
 
             const configService = new ConfigurationService();
 
-            const connectionPool = new ConnectionPoolService(
-                loggingService,
-                eventBus,
-                errorHandler,
-                configService
-            );
+            const connectionPool = new ConnectionPoolService(loggingService, eventBus, errorHandler, configService);
 
             const mockConnection = {
                 send: jest.fn(),
@@ -554,10 +554,7 @@ describe('Orchestration Integration', () => {
         });
 
         test('should handle message validation errors', async () => {
-            const messageValidator = new MessageValidator(
-                loggingService,
-                eventBus
-            );
+            const messageValidator = new MessageValidator(loggingService, eventBus);
 
             const invalidMessage = {
                 type: 'INVALID',
@@ -573,4 +570,3 @@ describe('Orchestration Integration', () => {
         });
     });
 });
-

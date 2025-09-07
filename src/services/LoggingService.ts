@@ -94,9 +94,14 @@ export class LoggingService implements ILoggingService {
 
         // Console fallback for development
         if (this.currentLogLevel === 'debug') {
-            const consoleMethod = level === 'error' ? console.error :
-                level === 'warn' ? console.warn :
-                    level === 'info' ? console.info : console.log;
+            const consoleMethod =
+                level === 'error'
+                    ? console.error
+                    : level === 'warn'
+                      ? console.warn
+                      : level === 'info'
+                        ? console.info
+                        : console.log;
             consoleMethod(formattedMessage);
         }
     }

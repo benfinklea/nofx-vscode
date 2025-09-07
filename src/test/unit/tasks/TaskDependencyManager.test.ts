@@ -49,11 +49,7 @@ describe('TaskDependencyManager', () => {
             showQuickPick: jest.fn()
         } as any;
 
-        manager = new TaskDependencyManager(
-            mockLoggingService,
-            mockEventBus,
-            mockNotificationService
-        );
+        manager = new TaskDependencyManager(mockLoggingService, mockEventBus, mockNotificationService);
     });
 
     describe('addDependency', () => {
@@ -62,10 +58,10 @@ describe('TaskDependencyManager', () => {
 
             expect(result).toBe(true);
             expect(mockLoggingService.info).toHaveBeenCalledWith('Added dependency: task-1 -> task-2');
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                DOMAIN_EVENTS.TASK_DEPENDENCY_ADDED,
-                { taskId: 'task-1', dependsOnTaskId: 'task-2' }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(DOMAIN_EVENTS.TASK_DEPENDENCY_ADDED, {
+                taskId: 'task-1',
+                dependsOnTaskId: 'task-2'
+            });
         });
 
         it('should prevent self-dependencies', () => {
@@ -102,10 +98,10 @@ describe('TaskDependencyManager', () => {
             manager.removeDependency('task-1', 'task-2');
 
             expect(mockLoggingService.info).toHaveBeenCalledWith('Removed dependency: task-1 -> task-2');
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                DOMAIN_EVENTS.TASK_DEPENDENCY_REMOVED,
-                { taskId: 'task-1', dependsOnTaskId: 'task-2' }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(DOMAIN_EVENTS.TASK_DEPENDENCY_REMOVED, {
+                taskId: 'task-1',
+                dependsOnTaskId: 'task-2'
+            });
         });
 
         it('should handle removing non-existent dependency gracefully', () => {
@@ -354,7 +350,9 @@ describe('TaskDependencyManager', () => {
             const result = manager.addSoftDependency('task-1', 'task-2');
 
             expect(result).toBe(true);
-            expect(mockLoggingService.debug).toHaveBeenCalledWith('Soft dependency already exists: task-1 prefers task-2');
+            expect(mockLoggingService.debug).toHaveBeenCalledWith(
+                'Soft dependency already exists: task-1 prefers task-2'
+            );
         });
     });
 });

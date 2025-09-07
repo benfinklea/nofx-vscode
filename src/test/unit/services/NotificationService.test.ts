@@ -14,9 +14,15 @@ describe('NotificationService', () => {
 
     beforeEach(() => {
         // Mock VS Code window methods
-        mockShowInformationMessage = vscode.window.showInformationMessage as jest.MockedFunction<typeof vscode.window.showInformationMessage>;
-        mockShowWarningMessage = vscode.window.showWarningMessage as jest.MockedFunction<typeof vscode.window.showWarningMessage>;
-        mockShowErrorMessage = vscode.window.showErrorMessage as jest.MockedFunction<typeof vscode.window.showErrorMessage>;
+        mockShowInformationMessage = vscode.window.showInformationMessage as jest.MockedFunction<
+            typeof vscode.window.showInformationMessage
+        >;
+        mockShowWarningMessage = vscode.window.showWarningMessage as jest.MockedFunction<
+            typeof vscode.window.showWarningMessage
+        >;
+        mockShowErrorMessage = vscode.window.showErrorMessage as jest.MockedFunction<
+            typeof vscode.window.showErrorMessage
+        >;
         mockShowQuickPick = vscode.window.showQuickPick as jest.MockedFunction<typeof vscode.window.showQuickPick>;
         mockShowInputBox = vscode.window.showInputBox as jest.MockedFunction<typeof vscode.window.showInputBox>;
         mockWithProgress = vscode.window.withProgress as jest.MockedFunction<typeof vscode.window.withProgress>;
@@ -101,7 +107,8 @@ describe('NotificationService', () => {
         });
 
         it('should handle long warning messages', async () => {
-            const message = 'This is a very long warning message that contains a lot of information about potential issues that need attention';
+            const message =
+                'This is a very long warning message that contains a lot of information about potential issues that need attention';
             mockShowWarningMessage.mockResolvedValue(undefined);
 
             await notificationService.showWarning(message);
@@ -169,11 +176,7 @@ describe('NotificationService', () => {
         });
 
         it('should handle multi-select quick pick', async () => {
-            const items = [
-                { label: 'Item 1' },
-                { label: 'Item 2' },
-                { label: 'Item 3' }
-            ];
+            const items = [{ label: 'Item 1' }, { label: 'Item 2' }, { label: 'Item 3' }];
             const options = { canPickMany: true as const, placeHolder: 'Select multiple items' };
             const selectedItems = [items[0], items[2]];
             mockShowQuickPick.mockResolvedValue(selectedItems);
@@ -281,7 +284,7 @@ describe('NotificationService', () => {
             const mockProgress = {
                 report: jest.fn()
             };
-            const mockTask = jest.fn().mockImplementation((progress) => {
+            const mockTask = jest.fn().mockImplementation(progress => {
                 progress.report({ message: 'Step 1', increment: 25 });
                 progress.report({ message: 'Step 2', increment: 50 });
                 return Promise.resolve('Done');

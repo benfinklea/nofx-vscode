@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Container } from '../services/Container';
+import { SERVICE_TOKENS } from '../services/interfaces';
+import type { AgentManager } from './AgentManager';
 
 export interface AgentTemplate {
     id: string;
@@ -8,6 +11,7 @@ export interface AgentTemplate {
     icon: string;
     color?: string;
     description: string;
+    types?: string[]; // New field for type matching
     tags: string[];
     capabilities: {
         languages: string[];
@@ -148,8 +152,7 @@ export class AgentTemplateManager {
 
         // First, load built-in templates from the extension
         if (fs.existsSync(this.builtInTemplatesDir)) {
-            const builtInFiles = fs.readdirSync(this.builtInTemplatesDir)
-                .filter(file => file.endsWith('.json'));
+            const builtInFiles = fs.readdirSync(this.builtInTemplatesDir).filter(file => file.endsWith('.json'));
 
             for (const file of builtInFiles) {
                 try {
@@ -164,8 +167,7 @@ export class AgentTemplateManager {
 
         // Then load user templates from .nofx/templates (these can override built-in)
         if (fs.existsSync(this.templatesDir)) {
-            const templateFiles = fs.readdirSync(this.templatesDir)
-                .filter(file => file.endsWith('.json'));
+            const templateFiles = fs.readdirSync(this.templatesDir).filter(file => file.endsWith('.json'));
 
             for (const file of templateFiles) {
                 try {
@@ -181,8 +183,7 @@ export class AgentTemplateManager {
 
         // Finally, load custom templates (with custom- prefix)
         if (fs.existsSync(this.customTemplatesDir)) {
-            const customFiles = fs.readdirSync(this.customTemplatesDir)
-                .filter(file => file.endsWith('.json'));
+            const customFiles = fs.readdirSync(this.customTemplatesDir).filter(file => file.endsWith('.json'));
 
             for (const file of customFiles) {
                 try {
@@ -234,7 +235,8 @@ export class AgentTemplateManager {
         if (fs.existsSync(filePath)) {
             const overwrite = await vscode.window.showWarningMessage(
                 `Template ${template.name} already exists. Overwrite?`,
-                'Yes', 'No'
+                'Yes',
+                'No'
             );
             if (overwrite !== 'Yes') return false;
         }
@@ -354,6 +356,110 @@ export class AgentTemplateManager {
         }
 
         return bestTemplate;
+    }
+
+    /**
+     * Find the best matching template for a given agent type
+     * Uses multiple strategies: exact ID match, types array, name/tag matching
+     */
+    public findTemplateByType(agentType: string): AgentTemplate | null {
+        const normalizedType = agentType.toLowerCase().trim();
+
+        // Strategy 1: Exact ID match
+        const exactMatch = Array.from(this.templates.values()).find(t => t.id === normalizedType);
+        if (exactMatch) return exactMatch;
+
+        // Strategy 2: Check types array (if we've added it)
+        for (const template of this.templates.values()) {
+            if (template.types && Array.isArray(template.types)) {
+                if (
+                    template.types.some(
+                        (t: string) =>
+                            t.toLowerCase() === normalizedType ||
+                            normalizedType.includes(t.toLowerCase()) ||
+                            t.toLowerCase().includes(normalizedType)
+                    )
+                ) {
+                    return template;
+                }
+            }
+        }
+
+        // Strategy 3: Check tags array (already exists in templates)
+        for (const template of this.templates.values()) {
+            if (template.tags && Array.isArray(template.tags)) {
+                if (
+                    template.tags.some(
+                        (tag: string) =>
+                            tag.toLowerCase() === normalizedType ||
+                            normalizedType.includes(tag.toLowerCase()) ||
+                            tag.toLowerCase().includes(normalizedType)
+                    )
+                ) {
+                    return template;
+                }
+            }
+        }
+
+        // Strategy 4: Match by template name or description
+        for (const template of this.templates.values()) {
+            const templateName = template.name?.toLowerCase() || '';
+            const templateId = template.id?.toLowerCase() || '';
+            const description = template.description?.toLowerCase() || '';
+
+            if (
+                templateName.includes(normalizedType) ||
+                templateId.includes(normalizedType) ||
+                description.includes(normalizedType)
+            ) {
+                return template;
+            }
+        }
+
+        // No match found
+        return null;
+    }
+
+    /**
+     * Get all currently active agent types to prevent duplicates
+     * NOTE: This returns an empty set for now as we can't access AgentManager from here
+     * The caller should check active agents directly from AgentManager
+     */
+    public getActiveAgentTypes(): Set<string> {
+        const activeTypes = new Set<string>();
+
+        try {
+            // Try to get AgentManager from Container
+            const container = Container.getInstance();
+            if (container) {
+                const agentManager = container.resolve<AgentManager>(SERVICE_TOKENS.AgentManager);
+                if (agentManager && typeof agentManager.getAllAgents === 'function') {
+                    const agents = agentManager.getAllAgents();
+                    for (const agent of agents) {
+                        // Add the agent type
+                        if (agent.type) {
+                            activeTypes.add(agent.type.toLowerCase());
+                        }
+                        // Also add template ID if available
+                        if (agent.template?.id) {
+                            activeTypes.add(agent.template.id.toLowerCase());
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            // Container or AgentManager not available - return empty set
+            // This is expected during initialization or testing
+        }
+
+        return activeTypes;
+    }
+
+    /**
+     * Get all available templates (alias for getTemplates)
+     */
+    public getAllTemplates(): AgentTemplate[] {
+        return this.getTemplates();
     }
 
     dispose() {

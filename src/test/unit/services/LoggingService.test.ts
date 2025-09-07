@@ -146,9 +146,7 @@ describe('LoggingService', () => {
             loggingService.error('error message');
 
             expect(mockMainChannel.appendLine).toHaveBeenCalledTimes(3);
-            expect(mockMainChannel.appendLine).not.toHaveBeenCalledWith(
-                expect.stringContaining('debug message')
-            );
+            expect(mockMainChannel.appendLine).not.toHaveBeenCalledWith(expect.stringContaining('debug message'));
         });
 
         it('should only log warn and error when level is warn', () => {
@@ -173,9 +171,7 @@ describe('LoggingService', () => {
             loggingService.error('error message');
 
             expect(mockMainChannel.appendLine).toHaveBeenCalledTimes(1);
-            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('error message')
-            );
+            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('error message'));
         });
 
         it('should handle invalid log levels gracefully', () => {
@@ -184,9 +180,7 @@ describe('LoggingService', () => {
 
             loggingService.info('test message');
 
-            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('test message')
-            );
+            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('test message'));
         });
 
         it('should handle null/undefined log level', () => {
@@ -195,9 +189,7 @@ describe('LoggingService', () => {
 
             loggingService.info('test message');
 
-            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('test message')
-            );
+            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('test message'));
         });
     });
 
@@ -230,9 +222,7 @@ describe('LoggingService', () => {
         it('should handle undefined data', () => {
             loggingService.info('test message');
 
-            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringMatching(/test message$/)
-            );
+            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(expect.stringMatching(/test message$/));
         });
 
         it('should handle circular references in objects', () => {
@@ -341,9 +331,7 @@ describe('LoggingService', () => {
 
             loggingService.timeEnd('operation');
 
-            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('Timer operation: 150ms')
-            );
+            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Timer operation: 150ms'));
         });
 
         it('should handle timeEnd without time', () => {
@@ -352,9 +340,7 @@ describe('LoggingService', () => {
 
             loggingService.timeEnd('non-existent');
 
-            expect(mockMainChannel.appendLine).not.toHaveBeenCalledWith(
-                expect.stringContaining('Timer non-existent')
-            );
+            expect(mockMainChannel.appendLine).not.toHaveBeenCalledWith(expect.stringContaining('Timer non-existent'));
         });
 
         it('should handle multiple timers', () => {
@@ -368,16 +354,12 @@ describe('LoggingService', () => {
             jest.advanceTimersByTime(50);
 
             loggingService.timeEnd('timer1');
-            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('Timer timer1: 150ms')
-            );
+            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Timer timer1: 150ms'));
 
             jest.advanceTimersByTime(25);
 
             loggingService.timeEnd('timer2');
-            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('Timer timer2: 75ms')
-            );
+            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Timer timer2: 75ms'));
         });
 
         it('should clear timer after timeEnd', () => {
@@ -463,9 +445,7 @@ describe('LoggingService', () => {
             loggingService.timeEnd('timer1');
             loggingService.timeEnd('timer2');
 
-            expect(mockMainChannel.appendLine).not.toHaveBeenCalledWith(
-                expect.stringContaining('Timer')
-            );
+            expect(mockMainChannel.appendLine).not.toHaveBeenCalledWith(expect.stringContaining('Timer'));
         });
 
         it('should handle multiple dispose calls', () => {
@@ -479,18 +459,14 @@ describe('LoggingService', () => {
             const longMessage = 'a'.repeat(10000);
             loggingService.info(longMessage);
 
-            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining(longMessage)
-            );
+            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining(longMessage));
         });
 
         it('should handle special characters in messages', () => {
             const specialMessage = 'Test \n\r\t\b\f\v\0 message';
             loggingService.info(specialMessage);
 
-            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining(specialMessage)
-            );
+            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining(specialMessage));
         });
 
         it('should handle error objects', () => {
@@ -499,9 +475,7 @@ describe('LoggingService', () => {
 
             loggingService.error('An error occurred', error);
 
-            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('Test error')
-            );
+            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Test error'));
         });
 
         it('should handle null and undefined values', () => {
@@ -535,9 +509,7 @@ describe('LoggingService', () => {
 
             // Now info should log
             loggingService.info('info message 2');
-            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('info message 2')
-            );
+            expect(mockMainChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('info message 2'));
         });
     });
 });

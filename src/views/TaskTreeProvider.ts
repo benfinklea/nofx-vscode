@@ -8,7 +8,10 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
     private disposables: vscode.Disposable[] = [];
     private taskQueue?: ITaskQueue;
 
-    constructor(private uiStateManager: IUIStateManager, container?: IContainer) {
+    constructor(
+        private uiStateManager: IUIStateManager,
+        container?: IContainer
+    ) {
         if (container) {
             this.taskQueue = container.resolve<ITaskQueue>(SERVICE_TOKENS.TaskQueue);
         }
@@ -44,82 +47,98 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
 
         // Validated Tasks
         if (state.taskStats.validated > 0) {
-            groups.push(new TaskItem({
-                type: 'group',
-                groupType: 'validated',
-                title: `✓ Validated Tasks (${state.taskStats.validated})`,
-                collapsibleState: vscode.TreeItemCollapsibleState.Expanded
-            }));
+            groups.push(
+                new TaskItem({
+                    type: 'group',
+                    groupType: 'validated',
+                    title: `✓ Validated Tasks (${state.taskStats.validated})`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.Expanded
+                })
+            );
         }
 
         // Ready Tasks
         if (state.taskStats.ready > 0) {
-            groups.push(new TaskItem({
-                type: 'group',
-                groupType: 'ready',
-                title: `🟢 Ready Tasks (${state.taskStats.ready})`,
-                collapsibleState: vscode.TreeItemCollapsibleState.Expanded
-            }));
+            groups.push(
+                new TaskItem({
+                    type: 'group',
+                    groupType: 'ready',
+                    title: `🟢 Ready Tasks (${state.taskStats.ready})`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.Expanded
+                })
+            );
         }
 
         // In Progress
         if (state.taskStats.inProgress > 0) {
-            groups.push(new TaskItem({
-                type: 'group',
-                groupType: 'in-progress',
-                title: `🔄 In Progress (${state.taskStats.inProgress})`,
-                collapsibleState: vscode.TreeItemCollapsibleState.Expanded
-            }));
+            groups.push(
+                new TaskItem({
+                    type: 'group',
+                    groupType: 'in-progress',
+                    title: `🔄 In Progress (${state.taskStats.inProgress})`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.Expanded
+                })
+            );
         }
 
         // Blocked
         if (state.taskStats.blocked > 0) {
-            groups.push(new TaskItem({
-                type: 'group',
-                groupType: 'blocked',
-                title: `🔴 Blocked (${state.taskStats.blocked})`,
-                collapsibleState: vscode.TreeItemCollapsibleState.Expanded
-            }));
+            groups.push(
+                new TaskItem({
+                    type: 'group',
+                    groupType: 'blocked',
+                    title: `🔴 Blocked (${state.taskStats.blocked})`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.Expanded
+                })
+            );
         }
 
         // Assigned
         if (state.taskStats.assigned > 0) {
-            groups.push(new TaskItem({
-                type: 'group',
-                groupType: 'assigned',
-                title: `👤 Assigned (${state.taskStats.assigned})`,
-                collapsibleState: vscode.TreeItemCollapsibleState.Expanded
-            }));
+            groups.push(
+                new TaskItem({
+                    type: 'group',
+                    groupType: 'assigned',
+                    title: `👤 Assigned (${state.taskStats.assigned})`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.Expanded
+                })
+            );
         }
 
         // Queued
         if (state.taskStats.queued > 0) {
-            groups.push(new TaskItem({
-                type: 'group',
-                groupType: 'queued',
-                title: `⏳ Queued (${state.taskStats.queued})`,
-                collapsibleState: vscode.TreeItemCollapsibleState.Expanded
-            }));
+            groups.push(
+                new TaskItem({
+                    type: 'group',
+                    groupType: 'queued',
+                    title: `⏳ Queued (${state.taskStats.queued})`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.Expanded
+                })
+            );
         }
 
         // Completed
         if (state.taskStats.completed > 0) {
-            groups.push(new TaskItem({
-                type: 'group',
-                groupType: 'completed',
-                title: `✅ Completed (${state.taskStats.completed})`,
-                collapsibleState: vscode.TreeItemCollapsibleState.Collapsed
-            }));
+            groups.push(
+                new TaskItem({
+                    type: 'group',
+                    groupType: 'completed',
+                    title: `✅ Completed (${state.taskStats.completed})`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.Collapsed
+                })
+            );
         }
 
         // Failed
         if (state.taskStats.failed > 0) {
-            groups.push(new TaskItem({
-                type: 'group',
-                groupType: 'failed',
-                title: `❌ Failed (${state.taskStats.failed})`,
-                collapsibleState: vscode.TreeItemCollapsibleState.Collapsed
-            }));
+            groups.push(
+                new TaskItem({
+                    type: 'group',
+                    groupType: 'failed',
+                    title: `❌ Failed (${state.taskStats.failed})`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.Collapsed
+                })
+            );
         }
 
         return groups;
@@ -127,14 +146,17 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
 
     private getTasksInGroup(groupType: string): TaskItem[] {
         const tasks = this.uiStateManager.getTasksByStatus(groupType);
-        return tasks.map(task => new TaskItem({
-            type: 'task',
-            task,
-            title: task.title,
-            collapsibleState: this.hasTaskDetails(task) ?
-                vscode.TreeItemCollapsibleState.Collapsed :
-                vscode.TreeItemCollapsibleState.None
-        }));
+        return tasks.map(
+            task =>
+                new TaskItem({
+                    type: 'task',
+                    task,
+                    title: task.title,
+                    collapsibleState: this.hasTaskDetails(task)
+                        ? vscode.TreeItemCollapsibleState.Collapsed
+                        : vscode.TreeItemCollapsibleState.None
+                })
+        );
     }
 
     private getTaskDetails(task: TaskDTO): TaskItem[] {
@@ -142,68 +164,82 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
 
         // Dependencies
         if (task.dependsOn && task.dependsOn.length > 0) {
-            details.push(new TaskItem({
-                type: 'detail',
-                title: `📋 Depends on: ${task.dependsOn.join(', ')}`,
-                collapsibleState: vscode.TreeItemCollapsibleState.None
-            }));
+            details.push(
+                new TaskItem({
+                    type: 'detail',
+                    title: `📋 Depends on: ${task.dependsOn.join(', ')}`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.None
+                })
+            );
         }
 
         // Required capabilities
         if (task.requiredCapabilities && task.requiredCapabilities.length > 0) {
-            details.push(new TaskItem({
-                type: 'detail',
-                title: `🎯 Capabilities: ${task.requiredCapabilities.join(', ')}`,
-                collapsibleState: vscode.TreeItemCollapsibleState.None
-            }));
+            details.push(
+                new TaskItem({
+                    type: 'detail',
+                    title: `🎯 Capabilities: ${task.requiredCapabilities.join(', ')}`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.None
+                })
+            );
         }
 
         // Tags
         if (task.tags && task.tags.length > 0) {
-            details.push(new TaskItem({
-                type: 'detail',
-                title: `🏷️ Tags: ${task.tags.join(', ')}`,
-                collapsibleState: vscode.TreeItemCollapsibleState.None
-            }));
+            details.push(
+                new TaskItem({
+                    type: 'detail',
+                    title: `🏷️ Tags: ${task.tags.join(', ')}`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.None
+                })
+            );
         }
 
         // Estimated duration
         if (task.estimatedDuration) {
-            details.push(new TaskItem({
-                type: 'detail',
-                title: `⏱️ Estimated: ${task.estimatedDuration} minutes`,
-                collapsibleState: vscode.TreeItemCollapsibleState.None
-            }));
+            details.push(
+                new TaskItem({
+                    type: 'detail',
+                    title: `⏱️ Estimated: ${task.estimatedDuration} minutes`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.None
+                })
+            );
         }
 
         // Blocking reason
         if (task.blockingReason) {
-            details.push(new TaskItem({
-                type: 'detail',
-                title: `🚫 Blocked: ${task.blockingReason}`,
-                collapsibleState: vscode.TreeItemCollapsibleState.None
-            }));
+            details.push(
+                new TaskItem({
+                    type: 'detail',
+                    title: `🚫 Blocked: ${task.blockingReason}`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.None
+                })
+            );
         }
 
         // Agent match score
         if (task.agentMatchScore !== undefined) {
-            details.push(new TaskItem({
-                type: 'detail',
-                title: `📊 Match Score: ${(task.agentMatchScore * 100).toFixed(0)}%`,
-                collapsibleState: vscode.TreeItemCollapsibleState.None
-            }));
+            details.push(
+                new TaskItem({
+                    type: 'detail',
+                    title: `📊 Match Score: ${(task.agentMatchScore * 100).toFixed(0)}%`,
+                    collapsibleState: vscode.TreeItemCollapsibleState.None
+                })
+            );
         }
 
         return details;
     }
 
     private hasTaskDetails(task: TaskDTO): boolean {
-        return !!(task.dependsOn?.length ||
-                 task.requiredCapabilities?.length ||
-                 task.tags?.length ||
-                 task.estimatedDuration ||
-                 task.blockingReason ||
-                 task.agentMatchScore !== undefined);
+        return !!(
+            task.dependsOn?.length ||
+            task.requiredCapabilities?.length ||
+            task.tags?.length ||
+            task.estimatedDuration ||
+            task.blockingReason ||
+            task.agentMatchScore !== undefined
+        );
     }
 
     refresh(): void {
@@ -218,22 +254,30 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskItem> {
         return {
             dragMimeTypes: ['application/vnd.code.tree.taskTree'],
             dropMimeTypes: ['application/vnd.code.tree.taskTree'],
-            handleDrag: (source: TaskItem[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void | Thenable<void> => {
+            handleDrag: (
+                source: TaskItem[],
+                dataTransfer: vscode.DataTransfer,
+                token: vscode.CancellationToken
+            ): void | Thenable<void> => {
                 // Store the dragged task IDs
-                const taskIds = source
-                    .filter(item => item.type === 'task' && item.task)
-                    .map(item => item.task!.id);
+                const taskIds = source.filter(item => item.type === 'task' && item.task).map(item => item.task!.id);
 
                 if (taskIds.length > 0) {
                     dataTransfer.set('application/vnd.code.tree.taskTree', new vscode.DataTransferItem(taskIds));
                 }
             },
-            handleDrop: (target: TaskItem | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void | Thenable<void> => {
+            handleDrop: (
+                target: TaskItem | undefined,
+                dataTransfer: vscode.DataTransfer,
+                token: vscode.CancellationToken
+            ): void | Thenable<void> => {
                 if (!target || target.type !== 'task' || !target.task || !taskQueue) {
                     return;
                 }
 
-                const draggedTaskIds = dataTransfer.get('application/vnd.code.tree.taskTree')?.value as string[] | undefined;
+                const draggedTaskIds = dataTransfer.get('application/vnd.code.tree.taskTree')?.value as
+                    | string[]
+                    | undefined;
                 if (!draggedTaskIds || draggedTaskIds.length === 0) {
                     return;
                 }
@@ -297,14 +341,21 @@ class TaskItem extends vscode.TreeItem {
 
         // Set icon based on status
         this.iconPath = new vscode.ThemeIcon(
-            task.status === 'completed' ? 'pass' :
-                task.status === 'in-progress' ? 'sync~spin' :
-                    task.status === 'assigned' ? 'arrow-right' :
-                        task.status === 'failed' ? 'error' :
-                            task.status === 'blocked' ? 'circle-slash' :
-                                task.status === 'ready' ? 'play' :
-                                    task.status === 'validated' ? 'check' :
-                                        'circle-outline'
+            task.status === 'completed'
+                ? 'pass'
+                : task.status === 'in-progress'
+                  ? 'sync~spin'
+                  : task.status === 'assigned'
+                    ? 'arrow-right'
+                    : task.status === 'failed'
+                      ? 'error'
+                      : task.status === 'blocked'
+                        ? 'circle-slash'
+                        : task.status === 'ready'
+                          ? 'play'
+                          : task.status === 'validated'
+                            ? 'check'
+                            : 'circle-outline'
         );
 
         // Set context value for context menu

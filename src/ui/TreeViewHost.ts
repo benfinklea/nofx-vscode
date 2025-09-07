@@ -7,7 +7,11 @@ export class TreeViewHost implements ITreeViewHost {
     private loggingService?: ILoggingService;
     private subscriptions: vscode.Disposable[] = [];
 
-    constructor(treeView: vscode.TreeView<any>, dataProvider?: ITreeDataProviderWithRefresh, loggingService?: ILoggingService) {
+    constructor(
+        treeView: vscode.TreeView<any>,
+        dataProvider?: ITreeDataProviderWithRefresh,
+        loggingService?: ILoggingService
+    ) {
         this.treeView = treeView;
         this.dataProvider = dataProvider;
         this.loggingService = loggingService;
@@ -17,7 +21,11 @@ export class TreeViewHost implements ITreeViewHost {
         });
     }
 
-    static create(treeView: vscode.TreeView<any>, dataProvider?: ITreeDataProviderWithRefresh, loggingService?: ILoggingService): TreeViewHost {
+    static create(
+        treeView: vscode.TreeView<any>,
+        dataProvider?: ITreeDataProviderWithRefresh,
+        loggingService?: ILoggingService
+    ): TreeViewHost {
         return new TreeViewHost(treeView, dataProvider, loggingService);
     }
 
@@ -50,18 +58,16 @@ export class TreeViewHost implements ITreeViewHost {
     }
 
     onDidChangeSelection(handler: (selection: any) => void): vscode.Disposable {
-        const disposable = this.treeView.onDidChangeSelection(
-            (e) => {
-                try {
-                    this.loggingService?.debug('TreeViewHost: Selection changed', {
-                        selectionCount: e.selection.length
-                    });
-                    handler(e.selection);
-                } catch (error) {
-                    this.loggingService?.error('TreeViewHost: Error handling selection change', error);
-                }
+        const disposable = this.treeView.onDidChangeSelection(e => {
+            try {
+                this.loggingService?.debug('TreeViewHost: Selection changed', {
+                    selectionCount: e.selection.length
+                });
+                handler(e.selection);
+            } catch (error) {
+                this.loggingService?.error('TreeViewHost: Error handling selection change', error);
             }
-        );
+        });
 
         this.subscriptions.push(disposable);
         return disposable;

@@ -433,7 +433,9 @@ describe('CommandService', () => {
 
             await commandService.verifyCommands();
 
-            expect(mockLoggingService.debug).toHaveBeenCalledWith('Command verification skipped (not in test/dev mode)');
+            expect(mockLoggingService.debug).toHaveBeenCalledWith(
+                'Command verification skipped (not in test/dev mode)'
+            );
             expect(mockCommands.getCommands).not.toHaveBeenCalled();
         });
 
@@ -629,13 +631,7 @@ describe('CommandService', () => {
 
         it('should handle command execution with complex argument types', async () => {
             const commandId = 'test.complex';
-            const complexArgs = [
-                { nested: { object: true } },
-                [1, 2, 3],
-                new Date(),
-                /regex/g,
-                function() {}
-            ];
+            const complexArgs = [{ nested: { object: true } }, [1, 2, 3], new Date(), /regex/g, function () {}];
 
             await commandService.execute(commandId, ...complexArgs);
 
@@ -649,7 +645,10 @@ describe('CommandService', () => {
             mockCommands.executeCommand.mockRejectedValue(vscodeError);
 
             await expect(commandService.execute(commandId)).rejects.toThrow('VS Code API error');
-            expect(mockErrorHandler.handleError).toHaveBeenCalledWith(vscodeError, `Error executing command ${commandId}`);
+            expect(mockErrorHandler.handleError).toHaveBeenCalledWith(
+                vscodeError,
+                `Error executing command ${commandId}`
+            );
         });
     });
 });

@@ -13,9 +13,7 @@ export class AgentTemplateEditor {
         templateManager: AgentTemplateManager,
         templateId?: string
     ) {
-        const column = vscode.window.activeTextEditor
-            ? vscode.window.activeTextEditor.viewColumn
-            : undefined;
+        const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : undefined;
 
         if (AgentTemplateEditor.currentPanel) {
             AgentTemplateEditor.currentPanel._panel.reveal(column);
@@ -35,12 +33,7 @@ export class AgentTemplateEditor {
             }
         );
 
-        AgentTemplateEditor.currentPanel = new AgentTemplateEditor(
-            panel,
-            context,
-            templateManager,
-            templateId
-        );
+        AgentTemplateEditor.currentPanel = new AgentTemplateEditor(panel, context, templateManager, templateId);
     }
 
     private constructor(

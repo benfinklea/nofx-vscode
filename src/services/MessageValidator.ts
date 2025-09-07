@@ -1,9 +1,4 @@
-import {
-    IMessageValidator,
-    ILoggingService,
-    IEventBus,
-    ValidationResult
-} from './interfaces';
+import { IMessageValidator, ILoggingService, IEventBus, ValidationResult } from './interfaces';
 import { ORCH_EVENTS, MessageValidationFailedPayload } from './EventConstants';
 import {
     OrchestratorMessage,
@@ -136,16 +131,11 @@ export class MessageValidator implements IMessageValidator {
     }
 
     createErrorResponse(error: string, clientId: string): OrchestratorMessage {
-        return createMessage(
-            'system',
-            clientId,
-            MessageType.SYSTEM_ERROR,
-            {
-                error,
-                timestamp: new Date().toISOString(),
-                messageId: generateMessageId()
-            }
-        );
+        return createMessage('system', clientId, MessageType.SYSTEM_ERROR, {
+            error,
+            timestamp: new Date().toISOString(),
+            messageId: generateMessageId()
+        });
     }
 
     dispose(): void {
@@ -383,7 +373,6 @@ export class MessageValidator implements IMessageValidator {
         }
     }
 
-
     private isValidISOTimestamp(timestamp: string): boolean {
         try {
             const date = new Date(timestamp);
@@ -393,4 +382,3 @@ export class MessageValidator implements IMessageValidator {
         }
     }
 }
-

@@ -59,7 +59,7 @@ describe('UI Components', () => {
             {} as any, // PriorityTaskQueue
             {} as any, // CapabilityMatcher
             {} as any, // TaskDependencyManager
-            {} as any  // MetricsService
+            {} as any // MetricsService
         );
 
         container.registerInstance(SERVICE_TOKENS.AgentManager, agentManager);
@@ -173,9 +173,27 @@ describe('UI Components', () => {
 
         test('should group tasks by status', async () => {
             const mockTasks: Task[] = [
-                { id: 'task1', description: 'Ready Task', priority: 'medium', status: 'ready', createdAt: Date.now() } as Task,
-                { id: 'task2', description: 'In Progress Task', priority: 'high', status: 'inProgress', createdAt: Date.now() } as Task,
-                { id: 'task3', description: 'Completed Task', priority: 'low', status: 'completed', createdAt: Date.now() } as Task
+                {
+                    id: 'task1',
+                    description: 'Ready Task',
+                    priority: 'medium',
+                    status: 'ready',
+                    createdAt: Date.now()
+                } as Task,
+                {
+                    id: 'task2',
+                    description: 'In Progress Task',
+                    priority: 'high',
+                    status: 'inProgress',
+                    createdAt: Date.now()
+                } as Task,
+                {
+                    id: 'task3',
+                    description: 'Completed Task',
+                    priority: 'low',
+                    status: 'completed',
+                    createdAt: Date.now()
+                } as Task
             ];
 
             taskQueue.getTasks = jest.fn().mockReturnValue(mockTasks);
@@ -299,8 +317,28 @@ describe('UI Components', () => {
     describe('Status Bar', () => {
         test('should update status bar with agent count', async () => {
             const mockAgents: Agent[] = [
-                { id: 'agent1', name: 'Agent 1', type: 'frontend', status: 'idle', capabilities: [], terminal: {} as any, currentTask: null, startTime: new Date(), tasksCompleted: 0 },
-                { id: 'agent2', name: 'Agent 2', type: 'backend', status: 'working', capabilities: [], terminal: {} as any, currentTask: null, startTime: new Date(), tasksCompleted: 0 }
+                {
+                    id: 'agent1',
+                    name: 'Agent 1',
+                    type: 'frontend',
+                    status: 'idle',
+                    capabilities: [],
+                    terminal: {} as any,
+                    currentTask: null,
+                    startTime: new Date(),
+                    tasksCompleted: 0
+                },
+                {
+                    id: 'agent2',
+                    name: 'Agent 2',
+                    type: 'backend',
+                    status: 'working',
+                    capabilities: [],
+                    terminal: {} as any,
+                    currentTask: null,
+                    startTime: new Date(),
+                    tasksCompleted: 0
+                }
             ];
 
             agentManager.getAgents = jest.fn().mockReturnValue(mockAgents);
@@ -315,8 +353,20 @@ describe('UI Components', () => {
 
         test('should update status bar with task count', async () => {
             const mockTasks: Task[] = [
-                { id: 'task1', description: 'Task 1', priority: 'medium', status: 'ready', createdAt: Date.now() } as Task,
-                { id: 'task2', description: 'Task 2', priority: 'high', status: 'inProgress', createdAt: Date.now() } as Task
+                {
+                    id: 'task1',
+                    description: 'Task 1',
+                    priority: 'medium',
+                    status: 'ready',
+                    createdAt: Date.now()
+                } as Task,
+                {
+                    id: 'task2',
+                    description: 'Task 2',
+                    priority: 'high',
+                    status: 'inProgress',
+                    createdAt: Date.now()
+                } as Task
             ];
 
             taskQueue.getTasks = jest.fn().mockReturnValue(mockTasks);
@@ -377,4 +427,3 @@ describe('UI Components', () => {
         });
     });
 });
-

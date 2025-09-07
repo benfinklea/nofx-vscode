@@ -9,6 +9,7 @@ import {
     IConductorViewModel,
     SERVICE_TOKENS
 } from '../services/interfaces';
+import { TaskToolBridge } from '../services/TaskToolBridge';
 import { PickItem } from '../types/ui';
 import { AgentManager } from '../agents/AgentManager';
 import { TaskQueue } from '../tasks/TaskQueue';
@@ -35,6 +36,7 @@ export class ConductorCommands implements ICommandHandler {
     private readonly loggingService: ILoggingService;
     private readonly context: vscode.ExtensionContext;
     private readonly container: IContainer;
+    private readonly taskToolBridge?: TaskToolBridge;
 
     private conductorChat?: ConductorChat;
     private conductorWebview?: ConductorChatWebview;
@@ -51,6 +53,7 @@ export class ConductorCommands implements ICommandHandler {
         this.loggingService = container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
         this.context = container.resolve<vscode.ExtensionContext>(SERVICE_TOKENS.ExtensionContext);
         this.container = container;
+        this.taskToolBridge = container.resolveOptional<TaskToolBridge>(SERVICE_TOKENS.TaskToolBridge);
     }
 
     setAgentProvider(provider: AgentTreeProvider): void {
@@ -184,9 +187,10 @@ export class ConductorCommands implements ICommandHandler {
                 }
             }
 
-            const message = createdCount === teamAgents.length
-                ? `Team "${this.currentTeamName}" created with ${createdCount} agents`
-                : `Team "${this.currentTeamName}" created with ${createdCount} of ${teamAgents.length} agents (${teamAgents.length - createdCount} failed)`;
+            const message =
+                createdCount === teamAgents.length
+                    ? `Team "${this.currentTeamName}" created with ${createdCount} agents`
+                    : `Team "${this.currentTeamName}" created with ${createdCount} of ${teamAgents.length} agents (${teamAgents.length - createdCount} failed)`;
             await this.notificationService.showInformation(message);
         }
 
@@ -294,16 +298,19 @@ export class ConductorCommands implements ICommandHandler {
         // Open conductor terminal automatically
         await this.openConductorTerminal();
 
-        const assemblyMessage = createdCount === projectConfig.agents.length
-            ? `${projectConfig.teamName} assembled (${createdCount} agents)! Conductor terminal is ready.`
-            : `${projectConfig.teamName} partially assembled (${createdCount} of ${projectConfig.agents.length} agents)! Conductor terminal is ready.`;
+        const assemblyMessage =
+            createdCount === projectConfig.agents.length
+                ? `${projectConfig.teamName} assembled (${createdCount} agents)! Conductor terminal is ready.`
+                : `${projectConfig.teamName} partially assembled (${createdCount} of ${projectConfig.agents.length} agents)! Conductor terminal is ready.`;
         await this.notificationService.showInformation(assemblyMessage);
     }
 
     private async openConductorChat(): Promise<void> {
         if (!this.conductorWebview) {
             const loggingService = this.container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
-            const notificationService = this.container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
+            const notificationService = this.container.resolve<INotificationService>(
+                SERVICE_TOKENS.NotificationService
+            );
             this.conductorWebview = new ConductorChatWebview(
                 this.context,
                 this.agentManager,
@@ -352,14 +359,16 @@ export class ConductorCommands implements ICommandHandler {
     /**
      * Factory method to create conductor instances - allows for clean testing
      */
-    public createConductor(type: 'basic' | 'intelligent' | 'supersmart'): ConductorTerminal | IntelligentConductor | SuperSmartConductor {
+    public createConductor(
+        type: 'basic' | 'intelligent' | 'supersmart'
+    ): ConductorTerminal | IntelligentConductor | SuperSmartConductor {
         switch (type) {
             case 'supersmart':
                 return new SuperSmartConductor(this.agentManager, this.taskQueue);
             case 'intelligent':
                 return new IntelligentConductor(this.agentManager, this.taskQueue);
             default:
-                return new ConductorTerminal(this.agentManager, this.taskQueue);
+                return new ConductorTerminal(this.agentManager, this.taskQueue, this.taskToolBridge);
         }
     }
 

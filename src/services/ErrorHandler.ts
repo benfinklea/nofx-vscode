@@ -128,11 +128,7 @@ export class ErrorHandler implements IErrorHandler {
         }
     }
 
-    async withRetry<T>(
-        operation: () => Promise<T>,
-        maxRetries: number = 3,
-        context?: string
-    ): Promise<T> {
+    async withRetry<T>(operation: () => Promise<T>, maxRetries: number = 3, context?: string): Promise<T> {
         let lastError: Error | undefined;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {

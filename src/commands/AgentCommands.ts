@@ -44,20 +44,23 @@ export class AgentCommands implements ICommandHandler {
         }
 
         // Show selection between individual agent and team preset
-        const addType = await this.notificationService.showQuickPick<PickItem<string>>([
+        const addType = await this.notificationService.showQuickPick<PickItem<string>>(
+            [
+                {
+                    label: '$(person) Individual Agent',
+                    description: 'Add a single agent with specific capabilities',
+                    value: 'individual'
+                },
+                {
+                    label: '$(organization) Team Preset',
+                    description: 'Add a pre-configured team of agents',
+                    value: 'team'
+                }
+            ],
             {
-                label: '$(person) Individual Agent',
-                description: 'Add a single agent with specific capabilities',
-                value: 'individual'
-            },
-            {
-                label: '$(organization) Team Preset',
-                description: 'Add a pre-configured team of agents',
-                value: 'team'
+                placeHolder: 'How would you like to add agents?'
             }
-        ], {
-            placeHolder: 'How would you like to add agents?'
-        });
+        );
 
         if (!addType) {
             return;
@@ -85,7 +88,9 @@ export class AgentCommands implements ICommandHandler {
 
         const items: PickItem<string>[] = templates.map(template => ({
             label: `${template.icon} ${template.name}`,
-            description: Array.isArray(template.capabilities) ? template.capabilities.slice(0, 3).join(', ') : 'Custom agent',
+            description: Array.isArray(template.capabilities)
+                ? template.capabilities.slice(0, 3).join(', ')
+                : 'Custom agent',
             value: template.id
         }));
 
@@ -129,7 +134,7 @@ export class AgentCommands implements ICommandHandler {
     }
 
     private async addTeamPreset(): Promise<void> {
-        const presets: PickItem<{ agents: string[], label: string }>[] = [
+        const presets: PickItem<{ agents: string[]; label: string }>[] = [
             {
                 label: '$(rocket) Full-Stack Development Team',
                 description: 'Frontend, Backend, Database, and DevOps specialists',
@@ -211,9 +216,10 @@ export class AgentCommands implements ICommandHandler {
             }
         }
 
-        const message = createdCount === teamAgents.length
-            ? `Team "${preset.label}" created with ${createdCount} agents`
-            : `Team "${preset.label}" created with ${createdCount} of ${teamAgents.length} agents (${teamAgents.length - createdCount} failed)`;
+        const message =
+            createdCount === teamAgents.length
+                ? `Team "${preset.label}" created with ${createdCount} agents`
+                : `Team "${preset.label}" created with ${createdCount} of ${teamAgents.length} agents (${teamAgents.length - createdCount} failed)`;
         await this.notificationService.showInformation(message);
 
         // Open conductor terminal using centralized logic
@@ -335,7 +341,9 @@ export class AgentCommands implements ICommandHandler {
                 if (newCaps) {
                     // Note: capabilities are part of the template, not directly editable
                     // Would need to update template or extend Agent interface
-                    await this.notificationService.showWarning('Capabilities are defined by the agent template and cannot be directly edited.');
+                    await this.notificationService.showWarning(
+                        'Capabilities are defined by the agent template and cannot be directly edited.'
+                    );
                 }
                 break;
         }

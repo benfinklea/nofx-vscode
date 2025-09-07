@@ -27,7 +27,7 @@ export const OUTPUT_CHANNELS = {
 } as const;
 
 /** Type for output channel names */
-export type OutputChannelName = typeof OUTPUT_CHANNELS[keyof typeof OUTPUT_CHANNELS];
+export type OutputChannelName = (typeof OUTPUT_CHANNELS)[keyof typeof OUTPUT_CHANNELS];
 
 /**
  * Output channel descriptions for documentation

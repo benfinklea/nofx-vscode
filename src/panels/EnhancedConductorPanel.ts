@@ -52,9 +52,7 @@ export class EnhancedConductorPanel {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
-                localResourceRoots: [
-                    vscode.Uri.joinPath(context.extensionUri, 'webview')
-                ]
+                localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'webview')]
             }
         );
 
@@ -82,7 +80,6 @@ export class EnhancedConductorPanel {
         return EnhancedConductorPanel.create(context, viewModel, loggingService);
     }
 
-
     public reveal() {
         this.webviewHost.reveal();
     }
@@ -101,5 +98,4 @@ export class EnhancedConductorPanel {
         // Dispose webview host
         this.webviewHost.dispose();
     }
-
 }

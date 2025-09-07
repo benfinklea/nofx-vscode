@@ -72,7 +72,7 @@ describe('WorktreeManager', () => {
 
         // Mock path methods
         mockPath.join = jest.fn().mockImplementation((...args) => args.join('/'));
-        mockPath.dirname = jest.fn().mockImplementation((p) => {
+        mockPath.dirname = jest.fn().mockImplementation(p => {
             const parts = p.split('/');
             return parts.slice(0, -1).join('/');
         });
@@ -102,10 +102,7 @@ describe('WorktreeManager', () => {
 
             new WorktreeManager(workspacePath, mockLoggingService, mockNotificationService);
 
-            expect(mockFs.mkdirSync).toHaveBeenCalledWith(
-                '/test/.nofx-worktrees',
-                { recursive: true }
-            );
+            expect(mockFs.mkdirSync).toHaveBeenCalledWith('/test/.nofx-worktrees', { recursive: true });
         });
 
         it('should not create directory if it already exists', () => {
@@ -178,7 +175,7 @@ describe('WorktreeManager', () => {
 
         it('should add marker to gitignore if gitignore exists', async () => {
             const gitignoreContent = '*.log\n*.tmp\n';
-            mockFs.existsSync = jest.fn().mockImplementation((filePath) => {
+            mockFs.existsSync = jest.fn().mockImplementation(filePath => {
                 return filePath.includes('.gitignore') ? true : !filePath.includes('.nofx-worktrees');
             });
             mockFs.readFileSync = jest.fn().mockReturnValue(gitignoreContent);
@@ -193,7 +190,7 @@ describe('WorktreeManager', () => {
 
         it('should not add marker to gitignore if already present', async () => {
             const gitignoreContent = '*.log\n.nofx-agent\n';
-            mockFs.existsSync = jest.fn().mockImplementation((filePath) => {
+            mockFs.existsSync = jest.fn().mockImplementation(filePath => {
                 return filePath.includes('.gitignore') ? true : !filePath.includes('.nofx-worktrees');
             });
             mockFs.readFileSync = jest.fn().mockReturnValue(gitignoreContent);
@@ -204,7 +201,7 @@ describe('WorktreeManager', () => {
         });
 
         it('should create gitignore if it does not exist', async () => {
-            mockFs.existsSync = jest.fn().mockImplementation((filePath) => {
+            mockFs.existsSync = jest.fn().mockImplementation(filePath => {
                 return filePath.includes('.gitignore') ? false : !filePath.includes('.nofx-worktrees');
             });
 
@@ -251,15 +248,12 @@ describe('WorktreeManager', () => {
 
             await worktreeManager.createWorktreeForAgent(mockAgent);
 
-            expect(mockExecSync).toHaveBeenCalledWith(
-                expect.stringContaining(' HEAD'),
-                expect.any(Object)
-            );
+            expect(mockExecSync).toHaveBeenCalledWith(expect.stringContaining(' HEAD'), expect.any(Object));
         });
 
         it('should handle git command errors', async () => {
             const gitError = new Error('Git command failed');
-            mockExecSync.mockImplementation((command) => {
+            mockExecSync.mockImplementation(command => {
                 if (command.toString().includes('worktree add')) {
                     throw gitError;
                 }
@@ -314,10 +308,10 @@ describe('WorktreeManager', () => {
                 `Error removing worktree for ${mockAgent.id}:`,
                 gitError
             );
-            expect(mockFs.rmSync).toHaveBeenCalledWith(
-                '/test/.nofx-worktrees/test-agent-123',
-                { recursive: true, force: true }
-            );
+            expect(mockFs.rmSync).toHaveBeenCalledWith('/test/.nofx-worktrees/test-agent-123', {
+                recursive: true,
+                force: true
+            });
         });
 
         it('should handle manual cleanup errors', async () => {
@@ -372,11 +366,7 @@ branch refs/heads/another-branch
                 encoding: 'utf-8'
             });
 
-            expect(result).toEqual([
-                '/path/to/main',
-                '/path/to/worktree1',
-                '/path/to/worktree2'
-            ]);
+            expect(result).toEqual(['/path/to/main', '/path/to/worktree1', '/path/to/worktree2']);
         });
 
         it('should return empty array on git command error', () => {
@@ -387,10 +377,7 @@ branch refs/heads/another-branch
             const result = worktreeManager.listWorktrees();
 
             expect(result).toEqual([]);
-            expect(mockLoggingService.error).toHaveBeenCalledWith(
-                'Error listing worktrees:',
-                expect.any(Error)
-            );
+            expect(mockLoggingService.error).toHaveBeenCalledWith('Error listing worktrees:', expect.any(Error));
         });
 
         it('should handle empty worktree list', () => {
@@ -411,10 +398,7 @@ worktree /path/to/worktree1
 
             const result = worktreeManager.listWorktrees();
 
-            expect(result).toEqual([
-                '/path/to/main',
-                '/path/to/worktree1'
-            ]);
+            expect(result).toEqual(['/path/to/main', '/path/to/worktree1']);
         });
     });
 
@@ -426,7 +410,7 @@ worktree /path/to/worktree1
 
             jest.spyOn(worktreeManager, 'listWorktrees').mockReturnValue(mockWorktrees);
             mockFs.existsSync = jest.fn().mockReturnValue(true);
-            mockFs.readFileSync = jest.fn().mockImplementation((filePath) => {
+            mockFs.readFileSync = jest.fn().mockImplementation(filePath => {
                 if (filePath.includes('agent-1')) {
                     return JSON.stringify(mockMarkerData1);
                 }
@@ -440,21 +424,15 @@ worktree /path/to/worktree1
                 encoding: 'utf-8'
             });
 
-            expect(mockExecSync).toHaveBeenCalledWith(
-                'git worktree remove "/test/.nofx-worktrees/agent-1" --force',
-                {
-                    cwd: workspacePath,
-                    encoding: 'utf-8'
-                }
-            );
+            expect(mockExecSync).toHaveBeenCalledWith('git worktree remove "/test/.nofx-worktrees/agent-1" --force', {
+                cwd: workspacePath,
+                encoding: 'utf-8'
+            });
 
-            expect(mockExecSync).toHaveBeenCalledWith(
-                'git worktree remove "/test/.nofx-worktrees/agent-2" --force',
-                {
-                    cwd: workspacePath,
-                    encoding: 'utf-8'
-                }
-            );
+            expect(mockExecSync).toHaveBeenCalledWith('git worktree remove "/test/.nofx-worktrees/agent-2" --force', {
+                cwd: workspacePath,
+                encoding: 'utf-8'
+            });
 
             expect(mockLoggingService.info).toHaveBeenCalledWith(
                 'Found orphaned worktree for agent Orphaned Agent 1, cleaning up...'
@@ -483,7 +461,7 @@ worktree /path/to/worktree1
             jest.spyOn(worktreeManager, 'listWorktrees').mockReturnValue(mockWorktrees);
             mockFs.existsSync = jest.fn().mockReturnValue(true);
             mockFs.readFileSync = jest.fn().mockReturnValue(JSON.stringify(mockMarkerData));
-            mockExecSync.mockImplementation((command) => {
+            mockExecSync.mockImplementation(command => {
                 if (command.toString().includes('worktree remove')) {
                     throw removeError;
                 }
@@ -492,15 +470,12 @@ worktree /path/to/worktree1
 
             await worktreeManager.cleanupOrphanedWorktrees();
 
-            expect(mockLoggingService.error).toHaveBeenCalledWith(
-                'Error removing orphaned worktree:',
-                removeError
-            );
+            expect(mockLoggingService.error).toHaveBeenCalledWith('Error removing orphaned worktree:', removeError);
         });
 
         it('should handle prune command errors', async () => {
             const pruneError = new Error('Prune failed');
-            mockExecSync.mockImplementation((command) => {
+            mockExecSync.mockImplementation(command => {
                 if (command.toString().includes('prune')) {
                     throw pruneError;
                 }
@@ -509,10 +484,7 @@ worktree /path/to/worktree1
 
             await worktreeManager.cleanupOrphanedWorktrees();
 
-            expect(mockLoggingService.error).toHaveBeenCalledWith(
-                'Error cleaning up orphaned worktrees:',
-                pruneError
-            );
+            expect(mockLoggingService.error).toHaveBeenCalledWith('Error cleaning up orphaned worktrees:', pruneError);
         });
 
         it('should not remove active agent worktrees', async () => {
@@ -577,7 +549,7 @@ worktree /path/to/worktree1
         });
 
         it('should return false when git repository check fails', () => {
-            mockExecSync.mockImplementation((command) => {
+            mockExecSync.mockImplementation(command => {
                 if (command.toString().includes('rev-parse')) {
                     throw new Error('Not a git repository');
                 }
@@ -590,7 +562,7 @@ worktree /path/to/worktree1
         });
 
         it('should return false when worktree command is not available', () => {
-            mockExecSync.mockImplementation((command) => {
+            mockExecSync.mockImplementation(command => {
                 if (command.toString().includes('worktree -h')) {
                     throw new Error('Worktree command not found');
                 }
@@ -619,10 +591,10 @@ HEAD abcd1234
             const mockMarkerData2 = { agentId: 'agent-2' };
 
             mockExecSync.mockReturnValue(mockOutput as any);
-            mockFs.existsSync = jest.fn().mockImplementation((filePath) => {
+            mockFs.existsSync = jest.fn().mockImplementation(filePath => {
                 return filePath.includes('.nofx-agent');
             });
-            mockFs.readFileSync = jest.fn().mockImplementation((filePath) => {
+            mockFs.readFileSync = jest.fn().mockImplementation(filePath => {
                 if (filePath.includes('agent-1')) {
                     return JSON.stringify(mockMarkerData1);
                 }
@@ -698,10 +670,7 @@ branch refs/heads/agent-feature-1
             const result = await worktreeManager.listWorktreesInfo();
 
             expect(result).toEqual([]);
-            expect(mockLoggingService.error).toHaveBeenCalledWith(
-                'Error listing worktrees:',
-                expect.any(Error)
-            );
+            expect(mockLoggingService.error).toHaveBeenCalledWith('Error listing worktrees:', expect.any(Error));
         });
     });
 
@@ -766,7 +735,7 @@ branch refs/heads/agent-feature-1
             };
 
             mockFs.readFileSync = jest.fn().mockReturnValue(JSON.stringify(mockMarkerData));
-            mockExecSync.mockImplementation((command) => {
+            mockExecSync.mockImplementation(command => {
                 if (command.toString().includes('commit')) {
                     throw new Error('Nothing to commit');
                 }
@@ -778,15 +747,13 @@ branch refs/heads/agent-feature-1
             expect(mockLoggingService.debug).toHaveBeenCalledWith('No changes to commit in worktree');
 
             // Should still proceed with merge
-            expect(mockExecSync).toHaveBeenCalledWith(
-                expect.stringContaining('git merge'),
-                expect.any(Object)
-            );
+            expect(mockExecSync).toHaveBeenCalledWith(expect.stringContaining('git merge'), expect.any(Object));
         });
 
         it('should throw error for non-existent agent worktree', async () => {
-            await expect(worktreeManager.mergeAgentWork('non-existent-agent'))
-                .rejects.toThrow('No worktree found for agent non-existent-agent');
+            await expect(worktreeManager.mergeAgentWork('non-existent-agent')).rejects.toThrow(
+                'No worktree found for agent non-existent-agent'
+            );
         });
 
         it('should handle merge errors', async () => {
@@ -797,20 +764,16 @@ branch refs/heads/agent-feature-1
             };
 
             mockFs.readFileSync = jest.fn().mockReturnValue(JSON.stringify(mockMarkerData));
-            mockExecSync.mockImplementation((command) => {
+            mockExecSync.mockImplementation(command => {
                 if (command.toString().includes('merge')) {
                     throw new Error('Merge conflict');
                 }
                 return 'main\n' as any;
             });
 
-            await expect(worktreeManager.mergeAgentWork(mockAgent.id))
-                .rejects.toThrow('Merge conflict');
+            await expect(worktreeManager.mergeAgentWork(mockAgent.id)).rejects.toThrow('Merge conflict');
 
-            expect(mockLoggingService.error).toHaveBeenCalledWith(
-                'Error merging agent work:',
-                expect.any(Error)
-            );
+            expect(mockLoggingService.error).toHaveBeenCalledWith('Error merging agent work:', expect.any(Error));
         });
 
         it('should handle marker file read errors', async () => {
@@ -818,8 +781,7 @@ branch refs/heads/agent-feature-1
                 throw new Error('Cannot read marker file');
             });
 
-            await expect(worktreeManager.mergeAgentWork(mockAgent.id))
-                .rejects.toThrow('Cannot read marker file');
+            await expect(worktreeManager.mergeAgentWork(mockAgent.id)).rejects.toThrow('Cannot read marker file');
         });
     });
 
@@ -856,8 +818,9 @@ branch refs/heads/agent-feature-1
             });
             mockFs.existsSync = jest.fn().mockReturnValue(false);
 
-            await expect(new WorktreeManager(workspacePath, mockLoggingService, mockNotificationService))
-                .toThrow('Permission denied');
+            await expect(new WorktreeManager(workspacePath, mockLoggingService, mockNotificationService)).toThrow(
+                'Permission denied'
+            );
         });
 
         it('should handle network drive paths', async () => {
@@ -899,15 +862,14 @@ branch refs/heads/agent-feature-1
         });
 
         it('should clean up properly on partial failures', async () => {
-            mockExecSync.mockImplementation((command) => {
+            mockExecSync.mockImplementation(command => {
                 if (command.toString().includes('worktree add')) {
                     throw new Error('Worktree creation failed');
                 }
                 return 'main\n' as any;
             });
 
-            await expect(worktreeManager.createWorktreeForAgent(mockAgent))
-                .rejects.toThrow('Worktree creation failed');
+            await expect(worktreeManager.createWorktreeForAgent(mockAgent)).rejects.toThrow('Worktree creation failed');
 
             // Verify agent is not tracked in internal map
             expect(worktreeManager.getWorktreePath(mockAgent.id)).toBeUndefined();

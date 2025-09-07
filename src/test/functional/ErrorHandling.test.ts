@@ -161,9 +161,7 @@ describe('Error Handling', () => {
                 // Expected to fail
             }
 
-            expect(errorSpy).toHaveBeenCalledWith(
-                expect.stringContaining('failed')
-            );
+            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('failed'));
         });
 
         test('should handle task creation failures gracefully', async () => {
@@ -194,9 +192,7 @@ describe('Error Handling', () => {
                 // Expected to fail
             }
 
-            expect(errorSpy).toHaveBeenCalledWith(
-                expect.stringContaining('workspace')
-            );
+            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('workspace'));
 
             // Restore workspace for other tests
             setupMockWorkspace();
@@ -243,7 +239,7 @@ describe('Error Handling', () => {
             const server = require('http').createServer();
 
             // Start server on the port
-            await new Promise<void>((resolve) => {
+            await new Promise<void>(resolve => {
                 server.listen(port, () => resolve());
             });
 
@@ -306,13 +302,27 @@ describe('Error Handling', () => {
         test('should continue with reduced functionality when non-critical services fail', () => {
             // Override non-critical service with a broken one instead of resetting
             const brokenMetricsService = {
-                incrementCounter: jest.fn().mockImplementation(() => { throw new Error('Service unavailable'); }),
-                recordGauge: jest.fn().mockImplementation(() => { throw new Error('Service unavailable'); }),
-                recordHistogram: jest.fn().mockImplementation(() => { throw new Error('Service unavailable'); }),
-                getMetrics: jest.fn().mockImplementation(() => { throw new Error('Service unavailable'); }),
-                reset: jest.fn().mockImplementation(() => { throw new Error('Service unavailable'); }),
-                setEnabled: jest.fn().mockImplementation(() => { throw new Error('Service unavailable'); }),
-                isEnabled: jest.fn().mockImplementation(() => { throw new Error('Service unavailable'); })
+                incrementCounter: jest.fn().mockImplementation(() => {
+                    throw new Error('Service unavailable');
+                }),
+                recordGauge: jest.fn().mockImplementation(() => {
+                    throw new Error('Service unavailable');
+                }),
+                recordHistogram: jest.fn().mockImplementation(() => {
+                    throw new Error('Service unavailable');
+                }),
+                getMetrics: jest.fn().mockImplementation(() => {
+                    throw new Error('Service unavailable');
+                }),
+                reset: jest.fn().mockImplementation(() => {
+                    throw new Error('Service unavailable');
+                }),
+                setEnabled: jest.fn().mockImplementation(() => {
+                    throw new Error('Service unavailable');
+                }),
+                isEnabled: jest.fn().mockImplementation(() => {
+                    throw new Error('Service unavailable');
+                })
             };
             container.registerInstance(SERVICE_TOKENS.MetricsService, brokenMetricsService);
 

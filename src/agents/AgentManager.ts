@@ -1,7 +1,18 @@
 import * as vscode from 'vscode';
 import { Agent, AgentConfig, AgentStatus } from './types';
 import { AgentPersistence } from '../persistence/AgentPersistence';
-import { IAgentLifecycleManager, ITerminalManager, IWorktreeService, IConfigurationService, INotificationService, ILoggingService, IEventBus, IErrorHandler, IAgentReader, IMetricsService } from '../services/interfaces';
+import {
+    IAgentLifecycleManager,
+    ITerminalManager,
+    IWorktreeService,
+    IConfigurationService,
+    INotificationService,
+    ILoggingService,
+    IEventBus,
+    IErrorHandler,
+    IAgentReader,
+    IMetricsService
+} from '../services/interfaces';
 import { DOMAIN_EVENTS } from '../services/EventConstants';
 
 export class AgentManager implements IAgentReader {
@@ -52,7 +63,7 @@ export class AgentManager implements IAgentReader {
         this.metricsService = metricsService;
 
         // Set up terminal close event listener
-        const terminalCloseDisposable = this.terminalManager.onTerminalClosed((terminal) => {
+        const terminalCloseDisposable = this.terminalManager.onTerminalClosed(terminal => {
             // Bail out if we're already disposing to prevent double-dispose
             if (this.isDisposing) {
                 return;
@@ -69,7 +80,10 @@ export class AgentManager implements IAgentReader {
 
                     // Publish event to EventBus
                     if (this.eventBus) {
-                        this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, { agentId: agent.id, status: 'idle' });
+                        this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, {
+                            agentId: agent.id,
+                            status: 'idle'
+                        });
                         this.eventBus.publish(DOMAIN_EVENTS.AGENT_TASK_INTERRUPTED, { agentId: agent.id, task });
                     }
 
@@ -102,9 +116,9 @@ export class AgentManager implements IAgentReader {
         await this.agentLifecycleManager.initialize();
 
         // Check if Claude Code is available
-        const claudePath = this.configService.getClaudePath();
+        const aiPath = this.configService.getAiPath();
 
-        this.loggingService?.info(`AgentManager initialized. Claude path: ${claudePath}`);
+        this.loggingService?.info(`AgentManager initialized. AI path: ${aiPath}`);
 
         // Try to restore agents from persistence
         await this.restoreAgentsFromPersistence();
@@ -112,7 +126,7 @@ export class AgentManager implements IAgentReader {
         // Only show setup dialog if explicitly requested (e.g., when starting conductor)
         if (showSetupDialog) {
             const selection = await this.notificationService?.showInformation(
-                '🎸 NofX Conductor ready. Using Claude command: ' + claudePath,
+                '🎸 NofX Conductor ready. Using AI command: ' + aiPath,
                 'Test Claude',
                 'Change Path',
                 'Restore Session'
@@ -122,17 +136,17 @@ export class AgentManager implements IAgentReader {
                 const terminal = this.terminalManager?.createEphemeralTerminal('Claude Test');
                 if (terminal) {
                     terminal.show();
-                    terminal.sendText(`${claudePath} --version || echo "Claude not found. Please check installation."`);
+                    terminal.sendText(`${aiPath} --version || echo "AI CLI not found. Please check installation."`);
                 }
             } else if (selection === 'Change Path') {
                 const newPath = await this.notificationService?.showInputBox({
                     prompt: 'Enter Claude command or path',
-                    value: claudePath,
-                    placeHolder: 'e.g., claude, /usr/local/bin/claude'
+                    value: aiPath,
+                    placeHolder: 'e.g., claude, aider, /usr/local/bin/claude'
                 });
                 if (newPath) {
-                    await this.configService?.update('claudePath', newPath, vscode.ConfigurationTarget.Global);
-                    this.notificationService?.showInformation(`Claude path updated to: ${newPath}`);
+                    await this.configService?.update('aiPath', newPath, vscode.ConfigurationTarget.Global);
+                    this.notificationService?.showInformation(`AI path updated to: ${newPath}`);
                 }
             } else if (selection === 'Restore Session') {
                 await this.restoreAgentsFromPersistence(true);
@@ -166,11 +180,13 @@ export class AgentManager implements IAgentReader {
         }
 
         // Ask user if they want to restore
-        const restore = userRequested ? 'Yes, Restore' : await this.notificationService?.showInformation(
-            `Found ${savedAgents.length} saved agent(s). Restore them?`,
-            'Yes, Restore',
-            'No, Start Fresh'
-        );
+        const restore = userRequested
+            ? 'Yes, Restore'
+            : await this.notificationService?.showInformation(
+                  `Found ${savedAgents.length} saved agent(s). Restore them?`,
+                  'Yes, Restore',
+                  'No, Start Fresh'
+              );
 
         if (restore === 'Yes, Restore' || userRequested) {
             let restoredCount = 0;
@@ -240,18 +256,24 @@ export class AgentManager implements IAgentReader {
 
         // Publish event to EventBus
         if (this.eventBus) {
-            this.eventBus.publish(DOMAIN_EVENTS.AGENT_CREATED, { agentId: agent.id, name: agent.name, type: agent.type });
+            this.eventBus.publish(DOMAIN_EVENTS.AGENT_CREATED, {
+                agentId: agent.id,
+                name: agent.name,
+                type: agent.type
+            });
         }
 
         // Save agent state after adding
         await this.saveAgentState();
 
         this.loggingService?.info(`Agent ${config.name} ready. Total agents: ${this.agents.size}`);
-        this.loggingService?.debug('Agent statuses:', Array.from(this.agents.values()).map(a => `${a.name}: ${a.status}`));
+        this.loggingService?.debug(
+            'Agent statuses:',
+            Array.from(this.agents.values()).map(a => `${a.name}: ${a.status}`)
+        );
 
         return agent;
     }
-
 
     async executeTask(agentId: string, task: any) {
         this.loggingService?.debug(`Called for agent ${agentId} with task:`, task.title);
@@ -339,19 +361,19 @@ export class AgentManager implements IAgentReader {
 
         // Show notification
         if (this.notificationService) {
-            this.notificationService.showInformation(
-                `🤖 Task sent to ${agent.name}'s Claude instance. Check terminal for progress.`,
-                'View Terminal'
-            ).then(selection => {
-                if (selection === 'View Terminal') {
-                    terminal.show();
-                }
-            });
+            this.notificationService
+                .showInformation(
+                    `🤖 Task sent to ${agent.name}'s Claude instance. Check terminal for progress.`,
+                    'View Terminal'
+                )
+                .then(selection => {
+                    if (selection === 'View Terminal') {
+                        terminal.show();
+                    }
+                });
 
             // Show notification
-            this.notificationService.showInformation(
-                `🤖 ${agent.name} is working on: ${task.title}`
-            );
+            this.notificationService.showInformation(`🤖 ${agent.name} is working on: ${task.title}`);
         }
 
         // Log execution
@@ -410,7 +432,7 @@ export class AgentManager implements IAgentReader {
         prompt += '=== INSTRUCTIONS ===\n';
         prompt += 'Please complete this task following best practices.\n';
         prompt += 'Make all necessary changes to implement the requested functionality.\n';
-        prompt += 'When you\'re done, please summarize what you accomplished.';
+        prompt += "When you're done, please summarize what you accomplished.";
 
         return prompt;
     }
@@ -450,9 +472,7 @@ export class AgentManager implements IAgentReader {
 
         // Show completion message
         if (this.notificationService) {
-            this.notificationService.showInformation(
-                `✅ ${agent.name} completed: ${task.title}`
-            );
+            this.notificationService.showInformation(`✅ ${agent.name} completed: ${task.title}`);
         }
     }
 
@@ -506,7 +526,10 @@ export class AgentManager implements IAgentReader {
 
         this.loggingService?.debug(`Total agents: ${allAgents.length}, Idle: ${idleAgents.length}`);
         if (allAgents.length > 0) {
-            this.loggingService?.debug('Agent statuses:', allAgents.map(a => `${a.name}(${a.id}): ${a.status}`));
+            this.loggingService?.debug(
+                'Agent statuses:',
+                allAgents.map(a => `${a.name}(${a.id}): ${a.status}`)
+            );
         }
 
         return idleAgents;
@@ -562,17 +585,20 @@ export class AgentManager implements IAgentReader {
                 // Terminal is not active, check if it's been idle too long
                 if (currentTime - lastActivityTime > IDLE_THRESHOLD) {
                     // Prompt user to confirm if task is complete
-                    this.notificationService?.showInformation(
-                        `Is ${agent.name} done with "${task.title}"?`,
-                        'Yes, Complete', 'Still Working'
-                    ).then(selection => {
-                        if (selection === 'Yes, Complete') {
-                            this.completeTask(agentId, task);
-                            clearInterval(checkInterval);
-                        } else {
-                            lastActivityTime = Date.now(); // Reset timer
-                        }
-                    });
+                    this.notificationService
+                        ?.showInformation(
+                            `Is ${agent.name} done with "${task.title}"?`,
+                            'Yes, Complete',
+                            'Still Working'
+                        )
+                        .then(selection => {
+                            if (selection === 'Yes, Complete') {
+                                this.completeTask(agentId, task);
+                                clearInterval(checkInterval);
+                            } else {
+                                lastActivityTime = Date.now(); // Reset timer
+                            }
+                        });
                 }
             } else {
                 // Terminal is active, reset activity time
@@ -616,6 +642,14 @@ export class AgentManager implements IAgentReader {
 
     public notifyAgentUpdated(): void {
         this._onAgentUpdate.fire();
+    }
+
+    /**
+     * Get all currently active agents
+     * @returns Array of all agents
+     */
+    public getAllAgents(): Agent[] {
+        return Array.from(this.agents.values());
     }
 
     private async saveAgentState() {

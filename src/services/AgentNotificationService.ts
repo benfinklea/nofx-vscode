@@ -60,11 +60,7 @@ export class AgentNotificationService {
     /**
      * Notify user that an agent needs attention
      */
-    public async notifyUserAttention(
-        agent: Agent,
-        reason: NotificationReason,
-        event?: MonitoringEvent
-    ): Promise<void> {
+    public async notifyUserAttention(agent: Agent, reason: NotificationReason, event?: MonitoringEvent): Promise<void> {
         const notificationKey = `${agent.id}-${reason}`;
 
         // Check if we've recently shown this notification (debounce)
@@ -147,7 +143,11 @@ export class AgentNotificationService {
     /**
      * Show toast notification
      */
-    private async showToastNotification(agent: Agent, reason: NotificationReason, event?: MonitoringEvent): Promise<void> {
+    private async showToastNotification(
+        agent: Agent,
+        reason: NotificationReason,
+        event?: MonitoringEvent
+    ): Promise<void> {
         const icon = this.getStatusIcon(reason);
         const message = `${icon} ${this.getNotificationMessage(agent, reason, 'medium')}`;
 
@@ -158,33 +158,21 @@ export class AgentNotificationService {
 
         switch (reason) {
             case 'permission':
-                selectedAction = await vscode.window.showWarningMessage(
-                    message,
-                    ...actionTitles
-                );
+                selectedAction = await vscode.window.showWarningMessage(message, ...actionTitles);
                 break;
 
             case 'error':
-                selectedAction = await vscode.window.showErrorMessage(
-                    message,
-                    ...actionTitles
-                );
+                selectedAction = await vscode.window.showErrorMessage(message, ...actionTitles);
                 break;
 
             case 'completion':
                 if (this.config.level === 'verbose') {
-                    selectedAction = await vscode.window.showInformationMessage(
-                        message,
-                        ...actionTitles
-                    );
+                    selectedAction = await vscode.window.showInformationMessage(message, ...actionTitles);
                 }
                 break;
 
             default:
-                selectedAction = await vscode.window.showWarningMessage(
-                    message,
-                    ...actionTitles
-                );
+                selectedAction = await vscode.window.showWarningMessage(message, ...actionTitles);
         }
 
         // Execute selected action
@@ -199,7 +187,11 @@ export class AgentNotificationService {
     /**
      * Show modal notification for critical issues
      */
-    private async showModalNotification(agent: Agent, reason: NotificationReason, event?: MonitoringEvent): Promise<void> {
+    private async showModalNotification(
+        agent: Agent,
+        reason: NotificationReason,
+        event?: MonitoringEvent
+    ): Promise<void> {
         const icon = this.getStatusIcon(reason);
         const message = this.getNotificationMessage(agent, reason, 'long');
 
@@ -226,7 +218,11 @@ export class AgentNotificationService {
     /**
      * Get notification message based on reason and length
      */
-    private getNotificationMessage(agent: Agent, reason: NotificationReason, length: 'short' | 'medium' | 'long'): string {
+    private getNotificationMessage(
+        agent: Agent,
+        reason: NotificationReason,
+        length: 'short' | 'medium' | 'long'
+    ): string {
         const name = agent.name || agent.id;
 
         const messages: { [key in NotificationReason]: { [key in 'short' | 'medium' | 'long']: string } } = {
@@ -364,7 +360,9 @@ export class AgentNotificationService {
             require('child_process').exec('afplay /System/Library/Sounds/Glass.aiff');
         } else if (process.platform === 'win32') {
             // Windows: Use PowerShell to play sound
-            require('child_process').exec('powershell -c (New-Object Media.SoundPlayer "C:\\Windows\\Media\\notify.wav").PlaySync();');
+            require('child_process').exec(
+                'powershell -c (New-Object Media.SoundPlayer "C:\\Windows\\Media\\notify.wav").PlaySync();'
+            );
         }
         // Linux: Could use paplay or similar if available
     }
@@ -387,7 +385,7 @@ export class AgentNotificationService {
         // Open output channel with agent logs
         const outputChannel = vscode.window.createOutputChannel(`Agent Logs: ${agent.name}`);
         outputChannel.appendLine(`Logs for agent ${agent.name} (${agent.id})`);
-        outputChannel.appendLine('=' .repeat(50));
+        outputChannel.appendLine('='.repeat(50));
         // Add actual log content here
         outputChannel.show();
     }

@@ -1,5 +1,12 @@
 import * as vscode from 'vscode';
-import { IUIStateManager, ICommandService, IEventBus, ILoggingService, INotificationService, IConductorViewModel } from '../services/interfaces';
+import {
+    IUIStateManager,
+    ICommandService,
+    IEventBus,
+    ILoggingService,
+    INotificationService,
+    IConductorViewModel
+} from '../services/interfaces';
 import { ConductorViewState, WebviewCommand, WEBVIEW_COMMANDS } from '../types/ui';
 import { DOMAIN_EVENTS } from '../services/EventConstants';
 
@@ -38,7 +45,7 @@ export class ConductorViewModel implements IConductorViewModel {
 
         // Subscribe to UI state changes
         this.subscriptions.push(
-            this.uiStateManager.subscribe((state) => {
+            this.uiStateManager.subscribe(state => {
                 this.publishViewStateChange();
             })
         );
@@ -97,7 +104,9 @@ export class ConductorViewModel implements IConductorViewModel {
             this.loggingService.info('ConductorViewModel: Spawning custom agent', { templateKey });
             // Pass through the templateKey parameter to the command
             await this.commandService.execute('nofx.addAgent', { templateKey });
-            await this.notificationService.showInformation(`Custom agent with template "${templateKey}" spawned successfully`);
+            await this.notificationService.showInformation(
+                `Custom agent with template "${templateKey}" spawned successfully`
+            );
         } catch (error) {
             this.loggingService.error('ConductorViewModel: Error spawning custom agent', error);
             await this.notificationService.showError('Failed to spawn custom agent');

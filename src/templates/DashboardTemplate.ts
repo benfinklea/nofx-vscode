@@ -342,7 +342,9 @@ export class DashboardTemplate {
         if (messages.length === 0) {
             return '<p style="text-align: center; color: var(--vscode-descriptionForeground);">No messages</p>';
         }
-        return messages.map(message => `
+        return messages
+            .map(
+                message => `
             <div class="message-item ${message.type}">
                 <div class="message-header">
                     <span class="message-type">${message.type.toUpperCase()}</span>
@@ -353,14 +355,18 @@ export class DashboardTemplate {
                     From: ${message.source}${message.target ? ' → ' + message.target : ''}
                 </div>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
     }
 
     generateAgentGrid(connections: any[]): string {
         if (connections.length === 0) {
             return '<p style="text-align: center; color: var(--vscode-descriptionForeground);">No active connections</p>';
         }
-        return connections.map(conn => `
+        return connections
+            .map(
+                conn => `
             <div class="agent-card">
                 <div class="agent-info">
                     <div class="connection-status status-${conn.status}"></div>
@@ -371,13 +377,15 @@ export class DashboardTemplate {
                     </div>
                 </div>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
     }
 
     private generateSourceOptions(connections: any[]): string {
         const sources = new Set(connections.map(conn => conn.name));
-        return Array.from(sources).map(source =>
-            `<option value="${source}">${source}</option>`
-        ).join('');
+        return Array.from(sources)
+            .map(source => `<option value="${source}">${source}</option>`)
+            .join('');
     }
 }

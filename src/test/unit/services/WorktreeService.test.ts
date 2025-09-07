@@ -95,7 +95,7 @@ describe('WorktreeService', () => {
 
         // Setup mock error handler
         mockErrorHandler = {
-            handleAsync: jest.fn().mockImplementation((operation) => operation())
+            handleAsync: jest.fn().mockImplementation(operation => operation())
         };
 
         // Mock static method
@@ -123,10 +123,7 @@ describe('WorktreeService', () => {
         });
 
         it('should initialize without worktree manager', () => {
-            const serviceWithoutManager = new WorktreeService(
-                mockConfigService,
-                mockNotificationService
-            );
+            const serviceWithoutManager = new WorktreeService(mockConfigService, mockNotificationService);
 
             expect(serviceWithoutManager).toBeInstanceOf(WorktreeService);
             serviceWithoutManager.dispose();
@@ -318,7 +315,9 @@ describe('WorktreeService', () => {
             expect(result).toBe(true);
             expect(mockNotificationService.showInformation).toHaveBeenCalledWith(
                 'Agent has a worktree. Merge changes before removing?',
-                'Merge & Remove', 'Remove Without Merging', 'Cancel'
+                'Merge & Remove',
+                'Remove Without Merging',
+                'Cancel'
             );
             expect(mockWorktreeManager.mergeAgentWork).toHaveBeenCalledWith('agent-123');
             expect(mockWorktreeManager.removeWorktreeForAgent).toHaveBeenCalledWith('agent-123');
@@ -461,10 +460,7 @@ describe('WorktreeService', () => {
             const result = await worktreeService.mergeForAgent('agent-123');
 
             expect(result).toBe(false);
-            expect(mockErrorHandler.handleAsync).toHaveBeenCalledWith(
-                expect.any(Function),
-                'Error merging agent work'
-            );
+            expect(mockErrorHandler.handleAsync).toHaveBeenCalledWith(expect.any(Function), 'Error merging agent work');
         });
 
         it('should handle error handler returning undefined', async () => {
@@ -677,10 +673,7 @@ describe('WorktreeService', () => {
         });
 
         it('should handle disposal when no disposables', () => {
-            const service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService
-            );
+            const service = new WorktreeService(mockConfigService, mockNotificationService);
 
             expect(() => service.dispose()).not.toThrow();
         });
@@ -737,17 +730,21 @@ describe('WorktreeService', () => {
 
         it('should handle workspace folder with special characters', () => {
             Object.defineProperty(vscode.workspace, 'workspaceFolders', {
-                value: [{
-                    uri: { fsPath: '/test/workspace with spaces & special-chars' },
-                    name: 'special-workspace',
-                    index: 0
-                }],
+                value: [
+                    {
+                        uri: { fsPath: '/test/workspace with spaces & special-chars' },
+                        name: 'special-workspace',
+                        index: 0
+                    }
+                ],
                 configurable: true
             });
 
             const available = worktreeService.isAvailable();
 
-            expect(WorktreeManager.isWorktreeAvailable).toHaveBeenCalledWith('/test/workspace with spaces & special-chars');
+            expect(WorktreeManager.isWorktreeAvailable).toHaveBeenCalledWith(
+                '/test/workspace with spaces & special-chars'
+            );
 
             // Restore workspace folders
             Object.defineProperty(vscode.workspace, 'workspaceFolders', {

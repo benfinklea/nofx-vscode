@@ -1,4 +1,12 @@
-import { IContainer, ServiceRegistration, ServiceLifetime, ServiceNotFoundError, CircularDependencyError, IDisposable, ILoggingService } from './interfaces';
+import {
+    IContainer,
+    ServiceRegistration,
+    ServiceLifetime,
+    ServiceNotFoundError,
+    CircularDependencyError,
+    IDisposable,
+    ILoggingService
+} from './interfaces';
 
 export class Container implements IContainer {
     private static instance: Container | null = null;

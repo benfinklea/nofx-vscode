@@ -30,9 +30,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
         workspaceRoot: string
     ) {
         const configured = this.configService.getOrchestrationPersistencePath();
-        this.persistenceDir = path.isAbsolute(configured)
-            ? configured
-            : path.join(workspaceRoot, configured);
+        this.persistenceDir = path.isAbsolute(configured) ? configured : path.join(workspaceRoot, configured);
         this.messagesFile = path.join(this.persistenceDir, 'messages.jsonl');
         this.lockFile = path.join(this.persistenceDir, 'messages.lock');
         this.maxFileSize = this.configService.getOrchestrationMaxFileSize();
@@ -84,7 +82,6 @@ export class MessagePersistenceService implements IMessagePersistenceService {
                 type: message.type,
                 cacheSize: this.inMemoryCache.length
             });
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to save message to persistence', {
@@ -113,7 +110,6 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             // Read from file
             const messages = await this.readMessagesFromFile(offset, limit);
             return messages;
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to load messages from persistence', {
@@ -158,16 +154,14 @@ export class MessagePersistenceService implements IMessagePersistenceService {
 
             // Apply client ID filter
             if (filter.clientId) {
-                filteredMessages = filteredMessages.filter(msg =>
-                    msg.from === filter.clientId || msg.to === filter.clientId
+                filteredMessages = filteredMessages.filter(
+                    msg => msg.from === filter.clientId || msg.to === filter.clientId
                 );
             }
 
             // Apply message type filter
             if (filter.type) {
-                filteredMessages = filteredMessages.filter(msg =>
-                    msg.type === filter.type
-                );
+                filteredMessages = filteredMessages.filter(msg => msg.type === filter.type);
             }
 
             // Apply time range filter
@@ -196,7 +190,6 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             });
 
             return paginatedMessages;
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to get message history with filter', {
@@ -233,7 +226,6 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             this.eventBus.publish(ORCH_EVENTS.MESSAGE_STORAGE_CLEANUP, {
                 filesRemoved: messageFiles.length
             });
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to clear message persistence', {
@@ -243,7 +235,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
         }
     }
 
-    async getStats(): Promise<{totalMessages: number, oldestMessage: Date}> {
+    async getStats(): Promise<{ totalMessages: number; oldestMessage: Date }> {
         if (this.isDisposed) {
             return { totalMessages: 0, oldestMessage: new Date() };
         }
@@ -251,12 +243,12 @@ export class MessagePersistenceService implements IMessagePersistenceService {
         try {
             const messages = await this.readMessagesFromFile(0, this.historyLimit);
             const totalMessages = messages.length;
-            const oldestMessage = messages.length > 0
-                ? new Date(Math.min(...messages.map(m => new Date(m.timestamp).getTime())))
-                : new Date();
+            const oldestMessage =
+                messages.length > 0
+                    ? new Date(Math.min(...messages.map(m => new Date(m.timestamp).getTime())))
+                    : new Date();
 
             return { totalMessages, oldestMessage };
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to get persistence stats', {
@@ -355,7 +347,6 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             this.loggingService.debug('Loaded recent messages into cache', {
                 count: this.inMemoryCache.length
             });
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.warn('Failed to load recent messages into cache', {
@@ -377,7 +368,7 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             for (const filePath of files) {
                 if (collected.length >= limit) break;
 
-                await this.readFromSingleFile(filePath, (message) => {
+                await this.readFromSingleFile(filePath, message => {
                     if (skipped < offset) {
                         skipped++;
                         return;
@@ -390,7 +381,6 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             }
 
             return collected;
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to read messages from files', {
@@ -440,7 +430,6 @@ export class MessagePersistenceService implements IMessagePersistenceService {
             for (let i = messages.length - 1; i >= 0; i--) {
                 onLine(messages[i]);
             }
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to read from single file', {
@@ -514,7 +503,6 @@ export class MessagePersistenceService implements IMessagePersistenceService {
                 // Clean up old files if we have too many
                 await this.cleanupOldFiles();
             }
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to check and roll file', {
@@ -548,7 +536,6 @@ export class MessagePersistenceService implements IMessagePersistenceService {
                     filesDeleted: filesToDelete.length
                 });
             }
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to cleanup old files', {

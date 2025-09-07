@@ -4,12 +4,7 @@
  */
 
 export class DestinationUtil {
-    private static readonly VALID_DESTINATIONS = [
-        'conductor',
-        'broadcast',
-        'dashboard',
-        'all-agents'
-    ];
+    private static readonly VALID_DESTINATIONS = ['conductor', 'broadcast', 'dashboard', 'all-agents'];
 
     /**
      * Validates if a destination string is valid

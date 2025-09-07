@@ -172,9 +172,7 @@ describe('Build Validation', () => {
             const menus = packageData.contributes?.menus;
             if (menus) {
                 // Check that menu commands reference existing commands
-                const commandIds = new Set(
-                    packageData.contributes.commands.map((c: any) => c.command)
-                );
+                const commandIds = new Set(packageData.contributes.commands.map((c: any) => c.command));
 
                 Object.values(menus).forEach((menuItems: any) => {
                     if (Array.isArray(menuItems)) {
@@ -295,8 +293,7 @@ describe('Build Validation', () => {
 
     describe('Quality Checks', () => {
         it('should not have console.log in production code', () => {
-            const jsFiles = getAllFiles(outDir, '.js')
-                .filter(f => !f.includes('/test/'));
+            const jsFiles = getAllFiles(outDir, '.js').filter(f => !f.includes('/test/'));
 
             let consoleLogCount = 0;
             jsFiles.forEach(file => {

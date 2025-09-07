@@ -98,10 +98,7 @@ describe('Command Registration', () => {
 
             // Verify each command was registered
             expectedCommandIds.forEach((commandId: string) => {
-                expect(registerSpy).toHaveBeenCalledWith(
-                    commandId,
-                    expect.any(Function)
-                );
+                expect(registerSpy).toHaveBeenCalledWith(commandId, expect.any(Function));
             });
 
             // Verify total number of commands registered
@@ -152,13 +149,12 @@ describe('Command Registration', () => {
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), 'singleton');
             const mockOutputChannel = vscode.window.createOutputChannel('Test');
-            container.register(SERVICE_TOKENS.ConfigurationService, () =>
-                new ConfigurationService(), 'singleton');
-            container.register(SERVICE_TOKENS.LoggingService, (c) =>
-                new LoggingService(
-                    c.resolve(SERVICE_TOKENS.ConfigurationService),
-                    mockOutputChannel
-                ), 'singleton');
+            container.register(SERVICE_TOKENS.ConfigurationService, () => new ConfigurationService(), 'singleton');
+            container.register(
+                SERVICE_TOKENS.LoggingService,
+                c => new LoggingService(c.resolve(SERVICE_TOKENS.ConfigurationService), mockOutputChannel),
+                'singleton'
+            );
 
             // Verify services can be resolved
             expect(container.resolve(SERVICE_TOKENS.ExtensionContext)).toBe(mockContext);
@@ -171,11 +167,11 @@ describe('Command Registration', () => {
             const circularToken1 = Symbol('circular1');
             const circularToken2 = Symbol('circular2');
 
-            container.register(circularToken1, (c) => ({
+            container.register(circularToken1, c => ({
                 dep: c.resolve(circularToken2)
             }));
 
-            container.register(circularToken2, (c) => ({
+            container.register(circularToken2, c => ({
                 dep: c.resolve(circularToken1)
             }));
 
@@ -216,17 +212,17 @@ describe('Command Registration', () => {
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), 'singleton');
             const mockOutputChannel = vscode.window.createOutputChannel('Test');
-            container.register(SERVICE_TOKENS.ConfigurationService, () =>
-                new ConfigurationService(), 'singleton');
-            container.register(SERVICE_TOKENS.LoggingService, (c) =>
-                new LoggingService(
-                    c.resolve(SERVICE_TOKENS.ConfigurationService),
-                    mockOutputChannel
-                ), 'singleton');
-            container.register(SERVICE_TOKENS.AgentManager, (c) =>
-                new AgentManager(
-                    c.resolve(SERVICE_TOKENS.ExtensionContext)
-                ), 'singleton');
+            container.register(SERVICE_TOKENS.ConfigurationService, () => new ConfigurationService(), 'singleton');
+            container.register(
+                SERVICE_TOKENS.LoggingService,
+                c => new LoggingService(c.resolve(SERVICE_TOKENS.ConfigurationService), mockOutputChannel),
+                'singleton'
+            );
+            container.register(
+                SERVICE_TOKENS.AgentManager,
+                c => new AgentManager(c.resolve(SERVICE_TOKENS.ExtensionContext)),
+                'singleton'
+            );
 
             const agentCommands = new AgentCommands(
                 container.resolve(SERVICE_TOKENS.AgentManager),
@@ -278,9 +274,7 @@ describe('Command Registration', () => {
     describe('Menu and Keybinding Integration', () => {
         it('should have valid menu contributions', () => {
             const menus = packageData.contributes?.menus || {};
-            const commandIds = new Set(
-                packageData.contributes.commands.map((c: any) => c.command)
-            );
+            const commandIds = new Set(packageData.contributes.commands.map((c: any) => c.command));
 
             Object.entries(menus).forEach(([menuLocation, items]) => {
                 if (Array.isArray(items)) {
@@ -295,9 +289,7 @@ describe('Command Registration', () => {
 
         it('should have valid keybinding contributions', () => {
             const keybindings = packageData.contributes?.keybindings || [];
-            const commandIds = new Set(
-                packageData.contributes.commands.map((c: any) => c.command)
-            );
+            const commandIds = new Set(packageData.contributes.commands.map((c: any) => c.command));
 
             keybindings.forEach((binding: any) => {
                 if (binding.command) {

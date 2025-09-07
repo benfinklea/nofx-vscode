@@ -25,11 +25,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
     private conflicts: Map<string, ConflictInfo> = new Map();
     private lastConflictResolvedState: Map<string, boolean> = new Map(); // Track last published state
 
-    constructor(
-        loggingService: ILoggingService,
-        eventBus: IEventBus,
-        notificationService: INotificationService
-    ) {
+    constructor(loggingService: ILoggingService, eventBus: IEventBus, notificationService: INotificationService) {
         this.logger = loggingService;
         this.eventBus = eventBus;
         this.notificationService = notificationService;
@@ -254,7 +250,9 @@ export class TaskDependencyManager implements ITaskDependencyManager {
 
             if (intersection.size > 0) {
                 conflicts.push(activeTask.id);
-                this.logger.warn(`Conflict detected between tasks ${task.id} and ${activeTask.id} on files: ${Array.from(intersection).join(', ')}`);
+                this.logger.warn(
+                    `Conflict detected between tasks ${task.id} and ${activeTask.id} on files: ${Array.from(intersection).join(', ')}`
+                );
             }
         }
 
@@ -449,7 +447,6 @@ export class TaskDependencyManager implements ITaskDependencyManager {
         recursionStack.delete(taskId);
         return [];
     }
-
 
     /**
      * Builds precise cycle path from recursion stack

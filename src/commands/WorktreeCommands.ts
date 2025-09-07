@@ -92,47 +92,50 @@ export class WorktreeCommands implements ICommandHandler {
 
         const worktree = selected.value;
 
-        await this.notificationService.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: `Merging work from ${worktree.agentName}...`,
-            cancellable: false
-        }, async (progress) => {
-            try {
-                progress.report({ message: 'Merging agent work...', increment: 50 });
+        await this.notificationService.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: `Merging work from ${worktree.agentName}...`,
+                cancellable: false
+            },
+            async progress => {
+                try {
+                    progress.report({ message: 'Merging agent work...', increment: 50 });
 
-                // Merge the agent's work using the service
-                const success = await this.worktreeService.mergeForAgent(worktree.agentId);
+                    // Merge the agent's work using the service
+                    const success = await this.worktreeService.mergeForAgent(worktree.agentId);
 
-                if (!success) {
-                    await this.notificationService.showError('Failed to merge agent work');
-                    return;
-                }
-
-                progress.report({ message: 'Cleaning up worktree...', increment: 25 });
-
-                // Optionally remove the worktree after successful merge
-                const cleanup = await this.notificationService.confirm(
-                    'Successfully merged! Remove the agent worktree?',
-                    'Remove'
-                );
-
-                if (cleanup) {
-                    await this.worktreeService.removeForAgent(worktree.agentId);
-
-                    // Also remove the agent from the manager
-                    const agent = this.agentManager.getAgent(worktree.agentId);
-                    if (agent) {
-                        await this.agentManager.removeAgent(agent.id);
+                    if (!success) {
+                        await this.notificationService.showError('Failed to merge agent work');
+                        return;
                     }
-                }
 
-                await this.notificationService.showInformation('Agent work successfully merged!');
-            } catch (error) {
-                await this.notificationService.showError(
-                    `Failed to merge: ${error instanceof Error ? error.message : 'Unknown error'}`
-                );
+                    progress.report({ message: 'Cleaning up worktree...', increment: 25 });
+
+                    // Optionally remove the worktree after successful merge
+                    const cleanup = await this.notificationService.confirm(
+                        'Successfully merged! Remove the agent worktree?',
+                        'Remove'
+                    );
+
+                    if (cleanup) {
+                        await this.worktreeService.removeForAgent(worktree.agentId);
+
+                        // Also remove the agent from the manager
+                        const agent = this.agentManager.getAgent(worktree.agentId);
+                        if (agent) {
+                            await this.agentManager.removeAgent(agent.id);
+                        }
+                    }
+
+                    await this.notificationService.showInformation('Agent work successfully merged!');
+                } catch (error) {
+                    await this.notificationService.showError(
+                        `Failed to merge: ${error instanceof Error ? error.message : 'Unknown error'}`
+                    );
+                }
             }
-        });
+        );
     }
 
     dispose(): void {

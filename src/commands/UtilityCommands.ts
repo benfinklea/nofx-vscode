@@ -47,18 +47,18 @@ export class UtilityCommands implements ICommandHandler {
             return;
         }
 
-        const claudePath = this.configService.getClaudePath();
+        const aiPath = this.configService.getAiPath();
         const terminal = vscode.window.createTerminal('Claude Test');
         terminal.show();
 
         const testValue = testType.value;
         switch (testValue) {
             case 'simple':
-                terminal.sendText(`${claudePath} "What is 2+2?"`);
+                terminal.sendText(`${aiPath} "What is 2+2?"`);
                 break;
 
             case 'interactive':
-                terminal.sendText(claudePath);
+                terminal.sendText(aiPath);
                 await this.notificationService.showInformation(
                     'Claude started in interactive mode. Type your messages and press Enter.'
                 );
@@ -66,7 +66,7 @@ export class UtilityCommands implements ICommandHandler {
 
             case 'heredoc':
                 const heredocScript = `
-cat << 'EOF' | ${claudePath}
+cat << 'EOF' | ${aiPath}
 Please write a haiku about coding.
 EOF`;
                 terminal.sendText(heredocScript.trim());
@@ -82,7 +82,7 @@ EOF`;
 
                 const testFile = path.join(workspaceFolder.uri.fsPath, '.claude-test.txt');
                 fs.writeFileSync(testFile, 'What programming languages do you know?');
-                terminal.sendText(`${claudePath} < "${testFile}"`);
+                terminal.sendText(`${aiPath} < "${testFile}"`);
 
                 // Clean up test file after a delay
                 setTimeout(() => {
@@ -95,9 +95,7 @@ EOF`;
                 break;
         }
 
-        await this.notificationService.showInformation(
-            'Claude test started. Check the terminal for output.'
-        );
+        await this.notificationService.showInformation('Claude test started. Check the terminal for output.');
     }
 
     /**
@@ -139,7 +137,9 @@ EOF`;
             outputChannel.show();
             outputChannel.appendLine('=== NofX Command Verification ===');
             outputChannel.appendLine(`Total expected commands: ${expectedCommands.length}`);
-            outputChannel.appendLine(`Total registered commands: ${registeredCommands.filter(cmd => cmd.startsWith('nofx.')).length}`);
+            outputChannel.appendLine(
+                `Total registered commands: ${registeredCommands.filter(cmd => cmd.startsWith('nofx.')).length}`
+            );
             outputChannel.appendLine('');
 
             if (missingCommands.length > 0) {
@@ -177,7 +177,6 @@ EOF`;
 
             outputChannel.appendLine('');
             outputChannel.appendLine('=== End of Verification ===');
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService?.error('Error verifying commands', err);

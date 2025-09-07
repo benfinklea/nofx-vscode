@@ -5,11 +5,22 @@ import {
     ILoggingService,
     IEventBus,
     IErrorHandler,
-    MessageFilter
+    MessageFilter,
 } from './interfaces';
+import { TaskToolBridge } from './TaskToolBridge';
 import { OrchestratorMessage, MessageType } from '../orchestration/MessageProtocol';
 import { DestinationUtil } from '../orchestration/Destinations';
-import { ORCH_EVENTS, MessagePersistenceFailedPayload, MessageBroadcastedPayload, MessageToDashboardPayload, MessageDeliveredPayload, MessageDeliveryFailedPayload, MessageToAgentsPayload, MessageAcknowledgedPayload, MessageRoutedPayload } from './EventConstants';
+import {
+    ORCH_EVENTS,
+    MessagePersistenceFailedPayload,
+    MessageBroadcastedPayload,
+    MessageToDashboardPayload,
+    MessageDeliveredPayload,
+    MessageDeliveryFailedPayload,
+    MessageToAgentsPayload,
+    MessageAcknowledgedPayload,
+    MessageRoutedPayload
+} from './EventConstants';
 import { AgentManager } from '../agents/AgentManager';
 import { TaskQueue } from '../tasks/TaskQueue';
 
@@ -23,6 +34,7 @@ export class MessageRouter implements IMessageRouter {
     };
     private agentManager?: AgentManager;
     private taskQueue?: TaskQueue;
+    private taskToolBridge?: TaskToolBridge;
     private fallbackBuffer: OrchestratorMessage[] = [];
     private maxFallbackBufferSize = 100;
     private persistenceStatus = {
@@ -30,7 +42,8 @@ export class MessageRouter implements IMessageRouter {
         lastFailure: null as Date | null,
         failureCount: 0
     };
-    private retryQueues: Map<string, Array<{message: OrchestratorMessage, attempt: number, next: number}>> = new Map();
+    private retryQueues: Map<string, Array<{ message: OrchestratorMessage; attempt: number; next: number }>> =
+        new Map();
     private retryTimer?: NodeJS.Timeout;
     private fallbackFlushTimer?: NodeJS.Timeout;
     private maxRetries = 3;
@@ -44,10 +57,12 @@ export class MessageRouter implements IMessageRouter {
         private eventBus: IEventBus,
         private errorHandler: IErrorHandler,
         agentManager?: AgentManager,
-        taskQueue?: TaskQueue
+        taskQueue?: TaskQueue,
+        taskToolBridge?: TaskToolBridge
     ) {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
+        this.taskToolBridge = taskToolBridge;
         this.startRetryProcessor();
         this.startFallbackFlushTimer();
     }
@@ -97,7 +112,15 @@ export class MessageRouter implements IMessageRouter {
             }
 
             // Check if this is a system command first
-            if (message.type === MessageType.SPAWN_AGENT || message.type === MessageType.ASSIGN_TASK || message.type === MessageType.QUERY_STATUS || message.type === MessageType.TERMINATE_AGENT) {
+            if (
+                message.type === MessageType.SPAWN_AGENT ||
+                message.type === MessageType.ASSIGN_TASK ||
+                message.type === MessageType.QUERY_STATUS ||
+                message.type === MessageType.TERMINATE_AGENT ||
+                message.type === MessageType.SPAWN_SUB_AGENT ||
+                message.type === MessageType.CANCEL_SUB_AGENT ||
+                message.type === MessageType.SUB_AGENT_STATUS
+            ) {
                 const handled = await this.routeSystemCommand(message);
                 if (handled) {
                     return;
@@ -149,14 +172,12 @@ export class MessageRouter implements IMessageRouter {
                 success: deliverySuccess,
                 totalRouted: this.deliveryStats.totalRouted
             });
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler.handleError(err, `Failed to route message ${message.id}`);
             this.deliveryStats.failedDeliveries++;
         }
     }
-
 
     handleAcknowledgment(clientId: string, messageId: string): void {
         this.deliveryStats.acknowledgments++;
@@ -232,7 +253,7 @@ export class MessageRouter implements IMessageRouter {
                 this.loggingService.debug(`Logical ID ${target} not resolved, deferring replay until registered`);
 
                 // Subscribe to logical ID registration event
-                const subscription = this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_REGISTERED, (data) => {
+                const subscription = this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_REGISTERED, data => {
                     if (data.logicalId === target) {
                         this.loggingService.debug(`Logical ID ${target} registered, triggering deferred replay`);
                         subscription.dispose();
@@ -275,7 +296,6 @@ export class MessageRouter implements IMessageRouter {
                 target,
                 messageCount: messages.length
             });
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler.handleError(err, `Failed to replay messages to ${target}`);
@@ -347,7 +367,7 @@ export class MessageRouter implements IMessageRouter {
                     // Increment attempt and reschedule
                     item.attempt++;
                     if (item.attempt <= this.maxRetries) {
-                        item.next = now + (this.baseDelay * Math.pow(2, item.attempt - 1));
+                        item.next = now + this.baseDelay * Math.pow(2, item.attempt - 1);
                         retryQueue.push(item);
 
                         this.loggingService.debug('Retry delivery failed, rescheduling', {
@@ -433,8 +453,20 @@ export class MessageRouter implements IMessageRouter {
                 case MessageType.TERMINATE_AGENT:
                     await this.handleTerminateAgent(message);
                     return true;
+                case MessageType.SPAWN_SUB_AGENT:
+                    await this.handleSpawnSubAgent(message);
+                    return true;
+                case MessageType.CANCEL_SUB_AGENT:
+                    await this.handleCancelSubAgent(message);
+                    return true;
+                case MessageType.SUB_AGENT_STATUS:
+                    await this.handleSubAgentStatus(message);
+                    return true;
                 default:
-                    this.loggingService.warn('Unknown system command type', { messageId: message.id, type: message.type });
+                    this.loggingService.warn('Unknown system command type', {
+                        messageId: message.id,
+                        type: message.type
+                    });
                     return false;
             }
         } catch (error) {
@@ -505,7 +537,7 @@ export class MessageRouter implements IMessageRouter {
             const taskConfig = {
                 title: title || description,
                 description: description || title,
-                priority: priority || 'medium' as const,
+                priority: priority || ('medium' as const),
                 files: []
             };
 
@@ -592,6 +624,132 @@ export class MessageRouter implements IMessageRouter {
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler.handleError(err, 'Failed to terminate agent');
+        }
+    }
+
+    private async handleSpawnSubAgent(message: OrchestratorMessage): Promise<void> {
+        if (!this.taskToolBridge) {
+            this.loggingService.warn('TaskToolBridge not available for spawn sub-agent command');
+            return;
+        }
+
+        const { parentAgentId, subAgentType, description, prompt, options } = message.payload;
+
+        try {
+            // Import SubAgentType from TaskToolBridge
+            const { SubAgentType } = await import('./TaskToolBridge');
+
+            // Execute the sub-agent task
+            const result = await this.taskToolBridge.executeTaskForAgent(
+                parentAgentId,
+                subAgentType,
+                description,
+                prompt,
+                options
+            );
+
+            // Send result back to conductor
+            const resultMessage: OrchestratorMessage = {
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                from: 'system',
+                to: message.from,
+                type: MessageType.SUB_AGENT_RESULT,
+                payload: {
+                    parentAgentId,
+                    taskId: result.id,
+                    result: result.result,
+                    success: result.status === 'success',
+                    duration: result.executionTime
+                }
+            };
+
+            this.connectionPool.sendToLogical(message.from, resultMessage);
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.errorHandler.handleError(err, 'Failed to spawn sub-agent');
+
+            // Send error message
+            const errorMessage: OrchestratorMessage = {
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                from: 'system',
+                to: message.from,
+                type: MessageType.SUB_AGENT_ERROR,
+                payload: {
+                    parentAgentId,
+                    error: err.message
+                }
+            };
+
+            this.connectionPool.sendToLogical(message.from, errorMessage);
+        }
+    }
+
+    private async handleCancelSubAgent(message: OrchestratorMessage): Promise<void> {
+        if (!this.taskToolBridge) {
+            this.loggingService.warn('TaskToolBridge not available for cancel sub-agent command');
+            return;
+        }
+
+        const { parentAgentId, taskId } = message.payload;
+
+        try {
+            await this.taskToolBridge.cancelTask(taskId);
+
+            // Send confirmation
+            const confirmMessage: OrchestratorMessage = {
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                from: 'system',
+                to: message.from,
+                type: MessageType.SUB_AGENT_CANCELLED,
+                payload: {
+                    parentAgentId,
+                    taskId,
+                    status: 'cancelled'
+                }
+            };
+
+            this.connectionPool.sendToLogical(message.from, confirmMessage);
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.errorHandler.handleError(err, 'Failed to cancel sub-agent');
+        }
+    }
+
+    private async handleSubAgentStatus(message: OrchestratorMessage): Promise<void> {
+        if (!this.taskToolBridge) {
+            this.loggingService.warn('TaskToolBridge not available for sub-agent status query');
+            return;
+        }
+
+        const { parentAgentId } = message.payload;
+
+        try {
+            const statistics = this.taskToolBridge.getStatistics();
+            const agentTasks = this.taskToolBridge.getAgentTasks(parentAgentId);
+
+            // Send status response
+            const statusMessage: OrchestratorMessage = {
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                from: 'system',
+                to: message.from,
+                type: MessageType.SUB_AGENT_STATUS_RESPONSE,
+                payload: {
+                    parentAgentId,
+                    statistics,
+                    activeTasks: agentTasks,
+                    queueLength: statistics.queuedTaskCount,
+                    concurrentTasks: statistics.activeTaskCount
+                }
+            };
+
+            this.connectionPool.sendToLogical(message.from, statusMessage);
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.errorHandler.handleError(err, 'Failed to query sub-agent status');
         }
     }
 

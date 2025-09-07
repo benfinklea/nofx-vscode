@@ -35,7 +35,7 @@ describe('TerminalManager', () => {
         (vscode.window.createTerminal as jest.Mock).mockReturnValue(mockTerminal);
 
         // Mock window.onDidCloseTerminal to capture the callback
-        (vscode.window.onDidCloseTerminal as jest.Mock).mockImplementation((callback) => {
+        (vscode.window.onDidCloseTerminal as jest.Mock).mockImplementation(callback => {
             onDidCloseTerminalCallback = callback;
             return { dispose: jest.fn() };
         });
@@ -46,11 +46,11 @@ describe('TerminalManager', () => {
         };
 
         // Mock vscode.ThemeIcon
-        (vscode as any).ThemeIcon = jest.fn().mockImplementation((icon) => ({ icon }));
+        (vscode as any).ThemeIcon = jest.fn().mockImplementation(icon => ({ icon }));
 
         // Mock configuration service
         mockConfigService = {
-            getClaudePath: jest.fn().mockReturnValue('claude'),
+            getAiPath: jest.fn().mockReturnValue('claude'),
             isClaudeSkipPermissions: jest.fn().mockReturnValue(false),
             isShowAgentTerminalOnSpawn: jest.fn().mockReturnValue(true),
             get: jest.fn(),
@@ -94,12 +94,7 @@ describe('TerminalManager', () => {
             dispose: jest.fn()
         } as any;
 
-        terminalManager = new TerminalManager(
-            mockConfigService,
-            mockLoggingService,
-            mockEventBus,
-            mockErrorHandler
-        );
+        terminalManager = new TerminalManager(mockConfigService, mockLoggingService, mockEventBus, mockErrorHandler);
     });
 
     afterEach(() => {
@@ -249,9 +244,7 @@ describe('TerminalManager', () => {
 
         it('should handle non-existent terminal', () => {
             expect(() => terminalManager.disposeTerminal('non-existent')).not.toThrow();
-            expect(mockLoggingService.debug).not.toHaveBeenCalledWith(
-                expect.stringContaining('Terminal disposed')
-            );
+            expect(mockLoggingService.debug).not.toHaveBeenCalledWith(expect.stringContaining('Terminal disposed'));
         });
     });
 
@@ -278,9 +271,7 @@ describe('TerminalManager', () => {
 
             expect(mockTerminal.show).toHaveBeenCalledWith(true);
             expect(mockTerminal.sendText).toHaveBeenCalledWith('');
-            expect(mockTerminal.sendText).toHaveBeenCalledWith(
-                expect.stringContaining('claude')
-            );
+            expect(mockTerminal.sendText).toHaveBeenCalledWith(expect.stringContaining('claude'));
         });
 
         it('should set working directory if provided', async () => {
@@ -308,9 +299,7 @@ describe('TerminalManager', () => {
 
             await terminalManager.initializeAgentTerminal(agent);
 
-            expect(mockLoggingService.error).toHaveBeenCalledWith(
-                'No terminal found for agent non-existent'
-            );
+            expect(mockLoggingService.error).toHaveBeenCalledWith('No terminal found for agent non-existent');
         });
 
         it('should use skip permissions flag when configured', async () => {
@@ -351,9 +340,7 @@ describe('TerminalManager', () => {
             jest.runAllTimers();
             await promise;
 
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                expect.stringContaining('not active')
-            );
+            expect(mockLoggingService.warn).toHaveBeenCalledWith(expect.stringContaining('not active'));
             expect(mockTerminal.show).toHaveBeenCalledTimes(3); // initial + refocus + final
         });
 
@@ -370,9 +357,7 @@ describe('TerminalManager', () => {
             jest.runAllTimers();
             await promise;
 
-            expect(mockTerminal.sendText).toHaveBeenCalledWith(
-                expect.stringContaining('general purpose agent')
-            );
+            expect(mockTerminal.sendText).toHaveBeenCalledWith(expect.stringContaining('general purpose agent'));
         });
 
         it('should respect show terminal configuration', async () => {
@@ -422,9 +407,7 @@ describe('TerminalManager', () => {
             await promise;
 
             // Check that single quotes are properly escaped
-            expect(mockTerminal.sendText).toHaveBeenCalledWith(
-                expect.stringContaining("'")
-            );
+            expect(mockTerminal.sendText).toHaveBeenCalledWith(expect.stringContaining("'"));
         });
 
         it('should quote for PowerShell on Windows', async () => {
@@ -450,9 +433,7 @@ describe('TerminalManager', () => {
             await promise;
 
             // PowerShell uses double quotes
-            expect(mockTerminal.sendText).toHaveBeenCalledWith(
-                expect.stringContaining('"')
-            );
+            expect(mockTerminal.sendText).toHaveBeenCalledWith(expect.stringContaining('"'));
 
             // Reset platform
             Object.defineProperty(process, 'platform', {
@@ -483,9 +464,7 @@ describe('TerminalManager', () => {
             jest.runAllTimers();
             await promise;
 
-            expect(mockTerminal.sendText).toHaveBeenCalledWith(
-                expect.stringContaining('"')
-            );
+            expect(mockTerminal.sendText).toHaveBeenCalledWith(expect.stringContaining('"'));
 
             // Reset platform
             Object.defineProperty(process, 'platform', {
@@ -532,10 +511,7 @@ describe('TerminalManager', () => {
                 onDidCloseTerminalCallback(unknownTerminal);
             }
 
-            expect(mockEventBus.publish).not.toHaveBeenCalledWith(
-                DOMAIN_EVENTS.TERMINAL_CLOSED,
-                expect.anything()
-            );
+            expect(mockEventBus.publish).not.toHaveBeenCalledWith(DOMAIN_EVENTS.TERMINAL_CLOSED, expect.anything());
         });
     });
 
@@ -544,9 +520,7 @@ describe('TerminalManager', () => {
             const terminal1 = { ...mockTerminal, dispose: jest.fn() };
             const terminal2 = { ...mockTerminal, dispose: jest.fn() };
 
-            (vscode.window.createTerminal as jest.Mock)
-                .mockReturnValueOnce(terminal1)
-                .mockReturnValueOnce(terminal2);
+            (vscode.window.createTerminal as jest.Mock).mockReturnValueOnce(terminal1).mockReturnValueOnce(terminal2);
 
             terminalManager.createTerminal('agent-1', { name: 'Test1' });
             terminalManager.createTerminal('agent-2', { name: 'Test2' });
@@ -603,9 +577,7 @@ describe('TerminalManager', () => {
             await promise;
 
             // Should use simplified prompt for complex agents
-            expect(mockTerminal.sendText).toHaveBeenCalledWith(
-                expect.not.stringContaining(longPrompt)
-            );
+            expect(mockTerminal.sendText).toHaveBeenCalledWith(expect.not.stringContaining(longPrompt));
         });
 
         it('should handle special characters in agent names', () => {

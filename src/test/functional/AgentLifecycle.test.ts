@@ -169,20 +169,24 @@ describe('Agent Lifecycle', () => {
 
     describe('Agent Creation', () => {
         test('should create individual agent with template', async () => {
-            const quickPickSpy = jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce({
-                label: 'Individual Agent',
-                description: 'Add a single agent'
-            } as any).mockResolvedValueOnce({
-                label: 'Frontend Specialist',
-                description: 'React, Vue, CSS, UI/UX',
-                template: mockTemplates[0]
-            } as any);
+            const quickPickSpy = jest
+                .spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValueOnce({
+                    label: 'Individual Agent',
+                    description: 'Add a single agent'
+                } as any)
+                .mockResolvedValueOnce({
+                    label: 'Frontend Specialist',
+                    description: 'React, Vue, CSS, UI/UX',
+                    template: mockTemplates[0]
+                } as any);
 
             const inputBoxSpy = jest.spyOn(vscode.window, 'showInputBox').mockResolvedValue('UI Expert');
 
             await vscode.commands.executeCommand('nofx.addAgent');
 
-            expect(quickPickSpy).toHaveBeenNthCalledWith(1,
+            expect(quickPickSpy).toHaveBeenNthCalledWith(
+                1,
                 expect.arrayContaining([
                     expect.objectContaining({ label: 'Individual Agent' }),
                     expect.objectContaining({ label: 'Team Preset' })
@@ -192,7 +196,8 @@ describe('Agent Lifecycle', () => {
                 })
             );
 
-            expect(quickPickSpy).toHaveBeenNthCalledWith(2,
+            expect(quickPickSpy).toHaveBeenNthCalledWith(
+                2,
                 expect.arrayContaining([
                     expect.objectContaining({ label: 'Frontend Specialist' }),
                     expect.objectContaining({ label: 'Backend Specialist' })
@@ -217,14 +222,17 @@ describe('Agent Lifecycle', () => {
         });
 
         test('should create team preset with multiple agents', async () => {
-            const quickPickSpy = jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce({
-                label: 'Team Preset',
-                description: 'Add a predefined team'
-            } as any).mockResolvedValueOnce({
-                label: 'Full-Stack Team',
-                description: '3 agents for full-stack development',
-                agents: ['frontend-specialist', 'backend-specialist', 'testing-specialist']
-            } as any);
+            const quickPickSpy = jest
+                .spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValueOnce({
+                    label: 'Team Preset',
+                    description: 'Add a predefined team'
+                } as any)
+                .mockResolvedValueOnce({
+                    label: 'Full-Stack Team',
+                    description: '3 agents for full-stack development',
+                    agents: ['frontend-specialist', 'backend-specialist', 'testing-specialist']
+                } as any);
 
             await vscode.commands.executeCommand('nofx.addAgent');
 
@@ -239,12 +247,14 @@ describe('Agent Lifecycle', () => {
         });
 
         test('should handle agent name validation', async () => {
-            jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce({
-                label: 'Individual Agent'
-            } as any).mockResolvedValueOnce({
-                label: 'Backend Specialist',
-                template: mockTemplates[1]
-            } as any);
+            jest.spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValueOnce({
+                    label: 'Individual Agent'
+                } as any)
+                .mockResolvedValueOnce({
+                    label: 'Backend Specialist',
+                    template: mockTemplates[1]
+                } as any);
 
             // Test empty name - should use default
             jest.spyOn(vscode.window, 'showInputBox').mockResolvedValue('');
@@ -260,12 +270,14 @@ describe('Agent Lifecycle', () => {
             const eventSpy = jest.fn();
             eventBus.on(DOMAIN_EVENTS.AGENT_CREATED, eventSpy);
 
-            jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce({
-                label: 'Individual Agent'
-            } as any).mockResolvedValueOnce({
-                label: 'Testing Specialist',
-                template: mockTemplates[3]
-            } as any);
+            jest.spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValueOnce({
+                    label: 'Individual Agent'
+                } as any)
+                .mockResolvedValueOnce({
+                    label: 'Testing Specialist',
+                    template: mockTemplates[3]
+                } as any);
 
             jest.spyOn(vscode.window, 'showInputBox').mockResolvedValue('Test Engineer');
 
@@ -281,20 +293,20 @@ describe('Agent Lifecycle', () => {
 
         test('should handle template not found error', async () => {
             jest.spyOn(templateManager, 'getTemplate').mockResolvedValue(undefined);
-            jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce({
-                label: 'Individual Agent'
-            } as any).mockResolvedValueOnce({
-                label: 'Unknown Template',
-                template: { id: 'unknown' }
-            } as any);
+            jest.spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValueOnce({
+                    label: 'Individual Agent'
+                } as any)
+                .mockResolvedValueOnce({
+                    label: 'Unknown Template',
+                    template: { id: 'unknown' }
+                } as any);
 
             const warningSpy = jest.spyOn(vscode.window, 'showWarningMessage');
 
             await vscode.commands.executeCommand('nofx.addAgent');
 
-            expect(warningSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Template unknown not found')
-            );
+            expect(warningSpy).toHaveBeenCalledWith(expect.stringContaining('Template unknown not found'));
         });
     });
 
@@ -331,21 +343,23 @@ describe('Agent Lifecycle', () => {
         });
 
         test('should edit agent name', async () => {
-            const quickPickSpy = jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce({
-                label: testAgent.name,
-                agent: testAgent
-            } as any).mockResolvedValueOnce({
-                label: 'Rename Agent'
-            } as any);
+            const quickPickSpy = jest
+                .spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValueOnce({
+                    label: testAgent.name,
+                    agent: testAgent
+                } as any)
+                .mockResolvedValueOnce({
+                    label: 'Rename Agent'
+                } as any);
 
             const inputBoxSpy = jest.spyOn(vscode.window, 'showInputBox').mockResolvedValue('Renamed Agent');
 
             await vscode.commands.executeCommand('nofx.editAgent');
 
-            expect(quickPickSpy).toHaveBeenNthCalledWith(1,
-                expect.arrayContaining([
-                    expect.objectContaining({ label: testAgent.name })
-                ]),
+            expect(quickPickSpy).toHaveBeenNthCalledWith(
+                1,
+                expect.arrayContaining([expect.objectContaining({ label: testAgent.name })]),
                 expect.objectContaining({
                     placeHolder: 'Select an agent to edit'
                 })
@@ -363,15 +377,18 @@ describe('Agent Lifecycle', () => {
         });
 
         test('should edit agent type/role', async () => {
-            jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce({
-                label: testAgent.name,
-                agent: testAgent
-            } as any).mockResolvedValueOnce({
-                label: 'Change Agent Type'
-            } as any).mockResolvedValueOnce({
-                label: 'Backend Specialist',
-                template: mockTemplates[1]
-            } as any);
+            jest.spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValueOnce({
+                    label: testAgent.name,
+                    agent: testAgent
+                } as any)
+                .mockResolvedValueOnce({
+                    label: 'Change Agent Type'
+                } as any)
+                .mockResolvedValueOnce({
+                    label: 'Backend Specialist',
+                    template: mockTemplates[1]
+                } as any);
 
             await vscode.commands.executeCommand('nofx.editAgent');
 
@@ -381,20 +398,20 @@ describe('Agent Lifecycle', () => {
         });
 
         test('should show warning when editing capabilities', async () => {
-            jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce({
-                label: testAgent.name,
-                agent: testAgent
-            } as any).mockResolvedValueOnce({
-                label: 'Edit Capabilities'
-            } as any);
+            jest.spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValueOnce({
+                    label: testAgent.name,
+                    agent: testAgent
+                } as any)
+                .mockResolvedValueOnce({
+                    label: 'Edit Capabilities'
+                } as any);
 
             const warningSpy = jest.spyOn(vscode.window, 'showWarningMessage');
 
             await vscode.commands.executeCommand('nofx.editAgent');
 
-            expect(warningSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Capability')
-            );
+            expect(warningSpy).toHaveBeenCalledWith(expect.stringContaining('Capability'));
         });
 
         test('should handle edit with agentId parameter', async () => {
@@ -409,9 +426,7 @@ describe('Agent Lifecycle', () => {
             // Should skip agent selection when ID is provided
             expect(quickPickSpy).toHaveBeenCalledTimes(1);
             expect(quickPickSpy).toHaveBeenCalledWith(
-                expect.arrayContaining([
-                    expect.objectContaining({ label: 'Rename Agent' })
-                ]),
+                expect.arrayContaining([expect.objectContaining({ label: 'Rename Agent' })]),
                 expect.any(Object)
             );
 
@@ -437,9 +452,21 @@ describe('Agent Lifecycle', () => {
         beforeEach(async () => {
             // Create multiple test agents
             testAgents = [
-                await agentManager.spawnAgent({ name: 'Frontend Dev', type: mockTemplates[0].id, template: mockTemplates[0] }),
-                await agentManager.spawnAgent({ name: 'Backend Dev', type: mockTemplates[1].id, template: mockTemplates[1] }),
-                await agentManager.spawnAgent({ name: 'Full-Stack Dev', type: mockTemplates[2].id, template: mockTemplates[2] })
+                await agentManager.spawnAgent({
+                    name: 'Frontend Dev',
+                    type: mockTemplates[0].id,
+                    template: mockTemplates[0]
+                }),
+                await agentManager.spawnAgent({
+                    name: 'Backend Dev',
+                    type: mockTemplates[1].id,
+                    template: mockTemplates[1]
+                }),
+                await agentManager.spawnAgent({
+                    name: 'Full-Stack Dev',
+                    type: mockTemplates[2].id,
+                    template: mockTemplates[2]
+                })
             ];
         });
 
@@ -464,11 +491,7 @@ describe('Agent Lifecycle', () => {
                 })
             );
 
-            expect(warningMessageSpy).toHaveBeenCalledWith(
-                expect.stringContaining('delete agent'),
-                'Yes',
-                'No'
-            );
+            expect(warningMessageSpy).toHaveBeenCalledWith(expect.stringContaining('delete agent'), 'Yes', 'No');
 
             const agents = agentManager.getActiveAgents();
             expect(agents).toHaveLength(2);
@@ -540,8 +563,16 @@ describe('Agent Lifecycle', () => {
 
         beforeEach(async () => {
             testAgents = [
-                await agentManager.spawnAgent({ name: 'Agent 1', type: mockTemplates[0].id, template: mockTemplates[0] }),
-                await agentManager.spawnAgent({ name: 'Agent 2', type: mockTemplates[1].id, template: mockTemplates[1] })
+                await agentManager.spawnAgent({
+                    name: 'Agent 1',
+                    type: mockTemplates[0].id,
+                    template: mockTemplates[0]
+                }),
+                await agentManager.spawnAgent({
+                    name: 'Agent 2',
+                    type: mockTemplates[1].id,
+                    template: mockTemplates[1]
+                })
             ];
         });
 
@@ -592,7 +623,11 @@ describe('Agent Lifecycle', () => {
 
         test('should handle missing terminal gracefully', async () => {
             // Mock agent without terminal
-            const agentWithoutTerminal = await agentManager.spawnAgent({ name: 'No Terminal', type: mockTemplates[2].id, template: mockTemplates[2] });
+            const agentWithoutTerminal = await agentManager.spawnAgent({
+                name: 'No Terminal',
+                type: mockTemplates[2].id,
+                template: mockTemplates[2]
+            });
             agentWithoutTerminal.terminal = undefined as any;
 
             jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue({
@@ -604,9 +639,7 @@ describe('Agent Lifecycle', () => {
 
             await vscode.commands.executeCommand('nofx.focusAgentTerminal');
 
-            expect(errorSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Terminal')
-            );
+            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Terminal'));
         });
     });
 
@@ -728,19 +761,29 @@ describe('Agent Lifecycle', () => {
         test('should persist agents on creation', async () => {
             const saveSpy = jest.spyOn(agentPersistence, 'saveAgents');
 
-            await agentManager.spawnAgent({ name: 'Persist Test', type: mockTemplates[0].id, template: mockTemplates[0] });
+            await agentManager.spawnAgent({
+                name: 'Persist Test',
+                type: mockTemplates[0].id,
+                template: mockTemplates[0]
+            });
 
             expect(saveSpy).toHaveBeenCalledWith(
-                expect.arrayContaining([
-                    expect.objectContaining({ name: 'Persist Test' })
-                ])
+                expect.arrayContaining([expect.objectContaining({ name: 'Persist Test' })])
             );
         });
 
         test('should handle concurrent agent operations', async () => {
             const promises = [
-                agentManager.spawnAgent({ name: 'Concurrent 1', type: mockTemplates[0].id, template: mockTemplates[0] }),
-                agentManager.spawnAgent({ name: 'Concurrent 2', type: mockTemplates[1].id, template: mockTemplates[1] }),
+                agentManager.spawnAgent({
+                    name: 'Concurrent 1',
+                    type: mockTemplates[0].id,
+                    template: mockTemplates[0]
+                }),
+                agentManager.spawnAgent({
+                    name: 'Concurrent 2',
+                    type: mockTemplates[1].id,
+                    template: mockTemplates[1]
+                }),
                 agentManager.spawnAgent({ name: 'Concurrent 3', type: mockTemplates[2].id, template: mockTemplates[2] })
             ];
 
@@ -773,7 +816,11 @@ describe('Agent Lifecycle', () => {
         });
 
         test('should handle agent terminal lifecycle', async () => {
-            const agent = await agentManager.spawnAgent({ name: 'Terminal Test', type: mockTemplates[0].id, template: mockTemplates[0] });
+            const agent = await agentManager.spawnAgent({
+                name: 'Terminal Test',
+                type: mockTemplates[0].id,
+                template: mockTemplates[0]
+            });
 
             expect(agent.terminal).toBeDefined();
 

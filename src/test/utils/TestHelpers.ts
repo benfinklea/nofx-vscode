@@ -1,6 +1,22 @@
-import { IContainer, SERVICE_TOKENS, IMetricsService, IConfigurationService, ILoggingService, IEventBus, IConfigurationValidator, INotificationService } from '../../services/interfaces';
+import {
+    IContainer,
+    SERVICE_TOKENS,
+    IMetricsService,
+    IConfigurationService,
+    ILoggingService,
+    IEventBus,
+    IConfigurationValidator,
+    INotificationService
+} from '../../services/interfaces';
 import { Agent, Task, TaskConfig } from '../../agents/types';
-import { createMockAgent, createMockTask, createMockConfiguration, createTestContainer, waitForEvent, measureTime } from '../setup';
+import {
+    createMockAgent,
+    createMockTask,
+    createMockConfiguration,
+    createTestContainer,
+    waitForEvent,
+    measureTime
+} from '../setup';
 import * as vscode from 'vscode';
 
 // Re-export commonly used test utilities
@@ -54,7 +70,7 @@ export const createMockTaskWithOverrides = (overrides: Partial<Task> = {}): Task
 
 export const createMockConfigurationWithOverrides = (overrides: Record<string, any> = {}): Record<string, any> => ({
     maxAgents: 3,
-    claudePath: 'claude',
+    aiPath: 'claude',
     autoAssignTasks: true,
     useWorktrees: true,
     logLevel: 'info',
@@ -81,7 +97,7 @@ export const createTestContainerWithMocks = (): IContainer => {
         onDidChange: jest.fn(() => ({ dispose: jest.fn() })),
         validateAll: jest.fn(() => ({ isValid: true, errors: [] })),
         getMaxAgents: jest.fn(() => 3),
-        getClaudePath: jest.fn(() => 'claude'),
+        getAiPath: jest.fn(() => 'claude'),
         isAutoAssignTasks: jest.fn(() => true),
         isUseWorktrees: jest.fn(() => true),
         isShowAgentTerminalOnSpawn: jest.fn(() => true),
@@ -217,10 +233,7 @@ export const createIntegrationContainer = (): IContainer => {
     };
     container.registerInstance(SERVICE_TOKENS.OutputChannel, mockOutputChannel);
 
-    const configValidator = new ConfigurationValidator(
-        createMockLoggingService(),
-        notificationService
-    );
+    const configValidator = new ConfigurationValidator(createMockLoggingService(), notificationService);
     container.registerInstance(SERVICE_TOKENS.ConfigurationValidator, configValidator);
 
     const configService = new ConfigurationService(configValidator, eventBus);
@@ -335,25 +348,13 @@ export const createIntegrationContainer = (): IContainer => {
     // Register real orchestration services instead of mocks
     const errorHandler = createMockErrorHandler();
 
-    const connectionPoolService = new ConnectionPoolService(
-        loggingService,
-        eventBus,
-        errorHandler,
-        configService
-    );
+    const connectionPoolService = new ConnectionPoolService(loggingService, eventBus, errorHandler, configService);
     container.registerInstance(SERVICE_TOKENS.ConnectionPoolService, connectionPoolService);
 
-    const messageValidator = new MessageValidator(
-        loggingService,
-        eventBus
-    );
+    const messageValidator = new MessageValidator(loggingService, eventBus);
     container.registerInstance(SERVICE_TOKENS.MessageValidator, messageValidator);
 
-    const messagePersistenceService = new InMemoryMessagePersistenceService(
-        loggingService,
-        configService,
-        eventBus
-    );
+    const messagePersistenceService = new InMemoryMessagePersistenceService(loggingService, configService, eventBus);
     container.registerInstance(SERVICE_TOKENS.MessagePersistenceService, messagePersistenceService);
 
     const messageRouter = new MessageRouter(
@@ -406,9 +407,9 @@ function createMockLoggingService() {
 function createMockErrorHandler() {
     return {
         handleError: jest.fn(),
-        handleAsync: jest.fn().mockImplementation(async (op) => await op()),
-        wrapSync: jest.fn().mockImplementation((op) => op()),
-        withRetry: jest.fn().mockImplementation(async (op) => await op()),
+        handleAsync: jest.fn().mockImplementation(async op => await op()),
+        wrapSync: jest.fn().mockImplementation(op => op()),
+        withRetry: jest.fn().mockImplementation(async op => await op()),
         dispose: jest.fn()
     };
 }
@@ -558,7 +559,10 @@ export const createTempWorkspace = async (): Promise<{ path: string; cleanup: ()
     });
 };
 
-export const createTempFile = async (content: string, extension: string = '.txt'): Promise<{ path: string; cleanup: () => void }> => {
+export const createTempFile = async (
+    content: string,
+    extension: string = '.txt'
+): Promise<{ path: string; cleanup: () => void }> => {
     const tmp = require('tmp');
     return new Promise((resolve, reject) => {
         tmp.file({ postfix: extension }, (err: any, path: string, fd: number, cleanup: () => void) => {
@@ -597,7 +601,10 @@ export const expectTaskState = (task: Task, expectedState: Partial<Task>) => {
     }
 };
 
-export const expectMetricsRecorded = (metricsService: IMetricsService, expectedMetrics: Array<{ name: string; type?: string; value?: number }>) => {
+export const expectMetricsRecorded = (
+    metricsService: IMetricsService,
+    expectedMetrics: Array<{ name: string; type?: string; value?: number }>
+) => {
     const metrics = metricsService.getMetrics();
 
     expectedMetrics.forEach(expected => {
@@ -618,7 +625,10 @@ export const expectConfigurationValid = (configService: IConfigurationService, k
     expect(result).toBe(value);
 };
 
-export const expectValidationErrors = (validator: IConfigurationValidator, expectedErrors: Array<{ field: string; message: string }>) => {
+export const expectValidationErrors = (
+    validator: IConfigurationValidator,
+    expectedErrors: Array<{ field: string; message: string }>
+) => {
     const errors = validator.getValidationErrors();
 
     expectedErrors.forEach(expected => {
@@ -629,7 +639,11 @@ export const expectValidationErrors = (validator: IConfigurationValidator, expec
 };
 
 // Async testing utilities
-export const waitForCondition = async (condition: () => boolean, timeout: number = 5000, interval: number = 100): Promise<void> => {
+export const waitForCondition = async (
+    condition: () => boolean,
+    timeout: number = 5000,
+    interval: number = 100
+): Promise<void> => {
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeout) {
@@ -642,7 +656,11 @@ export const waitForCondition = async (condition: () => boolean, timeout: number
     throw new Error(`Condition not met within ${timeout}ms`);
 };
 
-export const waitForMetrics = async (metricsService: IMetricsService, expectedCount: number, timeout: number = 5000): Promise<void> => {
+export const waitForMetrics = async (
+    metricsService: IMetricsService,
+    expectedCount: number,
+    timeout: number = 5000
+): Promise<void> => {
     await waitForCondition(() => {
         const metrics = metricsService.getMetrics();
         return metrics.length >= expectedCount;
@@ -671,7 +689,9 @@ export const retryOperation = async <T>(
 };
 
 // Performance testing utilities
-export const measureExecutionTime = async <T>(operation: () => Promise<T>): Promise<{ result: T; duration: number }> => {
+export const measureExecutionTime = async <T>(
+    operation: () => Promise<T>
+): Promise<{ result: T; duration: number }> => {
     const start = process.hrtime.bigint();
     const result = await operation();
     const end = process.hrtime.bigint();
@@ -689,7 +709,11 @@ export const measureMemoryUsage = (): { heapUsed: number; heapTotal: number; ext
     };
 };
 
-export const generateLoad = async (operation: () => Promise<void>, concurrency: number = 10, duration: number = 1000): Promise<void> => {
+export const generateLoad = async (
+    operation: () => Promise<void>,
+    concurrency: number = 10,
+    duration: number = 1000
+): Promise<void> => {
     const startTime = Date.now();
     const promises: Promise<void>[] = [];
 
@@ -698,7 +722,10 @@ export const generateLoad = async (operation: () => Promise<void>, concurrency: 
             promises.push(operation());
         } else {
             await Promise.race(promises);
-            promises.splice(promises.findIndex(p => p === Promise.race(promises)), 1);
+            promises.splice(
+                promises.findIndex(p => p === Promise.race(promises)),
+                1
+            );
         }
     }
 
@@ -726,21 +753,25 @@ export const inspectObject = (obj: any, maxDepth: number = 3): string => {
 
 // Test data generators
 export const generateTestAgents = (count: number): Agent[] => {
-    return Array.from({ length: count }, (_, i) => createMockAgentWithOverrides({
-        id: `agent-${i}`,
-        name: `Test Agent ${i}`,
-        type: i % 2 === 0 ? 'Frontend Specialist' : 'Backend Specialist'
-    }));
+    return Array.from({ length: count }, (_, i) =>
+        createMockAgentWithOverrides({
+            id: `agent-${i}`,
+            name: `Test Agent ${i}`,
+            type: i % 2 === 0 ? 'Frontend Specialist' : 'Backend Specialist'
+        })
+    );
 };
 
 export const generateTestTasks = (count: number): Task[] => {
-    return Array.from({ length: count }, (_, i) => createMockTaskWithOverrides({
-        id: `task-${i}`,
-        title: `Test Task ${i}`,
-        description: `Description for task ${i}`,
-        priority: i % 3 === 0 ? 'high' : i % 3 === 1 ? 'medium' : 'low',
-        numericPriority: i % 3 === 0 ? 8 : i % 3 === 1 ? 5 : 2
-    }));
+    return Array.from({ length: count }, (_, i) =>
+        createMockTaskWithOverrides({
+            id: `task-${i}`,
+            title: `Test Task ${i}`,
+            description: `Description for task ${i}`,
+            priority: i % 3 === 0 ? 'high' : i % 3 === 1 ? 'medium' : 'low',
+            numericPriority: i % 3 === 0 ? 8 : i % 3 === 1 ? 5 : 2
+        })
+    );
 };
 
 export const generateTestConfiguration = (overrides: Record<string, any> = {}): Record<string, any> => {

@@ -28,7 +28,11 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
     private taskStateMachine?: ITaskStateMachine;
     private depthHistory: number[] = []; // Ring buffer of recent queue sizes
 
-    constructor(loggingService: ILoggingService, dependencyManager?: ITaskDependencyManager, taskStateMachine?: ITaskStateMachine) {
+    constructor(
+        loggingService: ILoggingService,
+        dependencyManager?: ITaskDependencyManager,
+        taskStateMachine?: ITaskStateMachine
+    ) {
         this.logger = loggingService;
         this.dependencyManager = dependencyManager;
         this.taskStateMachine = taskStateMachine;
@@ -256,7 +260,14 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
     /**
      * Gets queue statistics
      */
-    getStats(): { size: number, averagePriority: number, oldestTask?: Task, newestTask?: Task, averageWaitMs: number, depthHistory: number[] } {
+    getStats(): {
+        size: number;
+        averagePriority: number;
+        oldestTask?: Task;
+        newestTask?: Task;
+        averageWaitMs: number;
+        depthHistory: number[];
+    } {
         const totalSize = this.readyHeap.length + this.validatedHeap.length;
         if (totalSize === 0) {
             return { size: 0, averagePriority: 0, averageWaitMs: 0, depthHistory: [] };
@@ -340,7 +351,6 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
         const softDepAdjustment = this.calculateSoftDependencyAdjustmentWithTasks(task, allTasks);
         return basePriority + softDepAdjustment;
     }
-
 
     /**
      * Calculates soft dependency adjustment with access to all tasks
@@ -426,13 +436,11 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
             const leftChild = 2 * index + 1;
             const rightChild = 2 * index + 2;
 
-            if (leftChild < heap.length &&
-                this.compare(heap[leftChild], heap[maxIndex]) > 0) {
+            if (leftChild < heap.length && this.compare(heap[leftChild], heap[maxIndex]) > 0) {
                 maxIndex = leftChild;
             }
 
-            if (rightChild < heap.length &&
-                this.compare(heap[rightChild], heap[maxIndex]) > 0) {
+            if (rightChild < heap.length && this.compare(heap[rightChild], heap[maxIndex]) > 0) {
                 maxIndex = rightChild;
             }
 

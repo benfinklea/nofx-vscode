@@ -303,15 +303,9 @@ describe('TerminalOutputMonitor', () => {
                 handler('Line 1: Processing request\nLine 2: Task complete\nLine 3: Error: Something failed');
 
                 expect(activitySpy).toHaveBeenCalledTimes(3);
-                expect(activitySpy).toHaveBeenCalledWith(
-                    expect.objectContaining({ pattern: 'thinking' })
-                );
-                expect(activitySpy).toHaveBeenCalledWith(
-                    expect.objectContaining({ pattern: 'completion' })
-                );
-                expect(activitySpy).toHaveBeenCalledWith(
-                    expect.objectContaining({ pattern: 'error' })
-                );
+                expect(activitySpy).toHaveBeenCalledWith(expect.objectContaining({ pattern: 'thinking' }));
+                expect(activitySpy).toHaveBeenCalledWith(expect.objectContaining({ pattern: 'completion' }));
+                expect(activitySpy).toHaveBeenCalledWith(expect.objectContaining({ pattern: 'error' }));
             });
 
             it('should skip empty lines', () => {
@@ -335,12 +329,8 @@ describe('TerminalOutputMonitor', () => {
                 // Both patterns match, so we get 2 events
                 expect(activitySpy).toHaveBeenCalledTimes(2);
                 // Should match both patterns
-                expect(activitySpy).toHaveBeenCalledWith(
-                    expect.objectContaining({ pattern: 'completion' })
-                );
-                expect(activitySpy).toHaveBeenCalledWith(
-                    expect.objectContaining({ pattern: 'thinking' })
-                );
+                expect(activitySpy).toHaveBeenCalledWith(expect.objectContaining({ pattern: 'completion' }));
+                expect(activitySpy).toHaveBeenCalledWith(expect.objectContaining({ pattern: 'thinking' }));
             });
 
             it('should not match non-pattern text', () => {

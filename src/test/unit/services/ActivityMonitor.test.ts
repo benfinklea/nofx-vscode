@@ -110,10 +110,10 @@ describe('ActivityMonitor', () => {
     });
 
     describe('Event Emission', () => {
-        it('should emit monitoring events', (done) => {
+        it('should emit monitoring events', done => {
             let eventReceived = false;
 
-            monitor.on('monitoring-event', (event) => {
+            monitor.on('monitoring-event', event => {
                 if (!eventReceived) {
                     eventReceived = true;
                     expect(event.agentId).toBe(mockAgent.id);
@@ -125,10 +125,10 @@ describe('ActivityMonitor', () => {
             monitor.startMonitoring(mockAgent, mockTerminal);
         });
 
-        it('should emit agent status change events', (done) => {
+        it('should emit agent status change events', done => {
             let eventReceived = false;
 
-            monitor.on('agent-status-changed', (data) => {
+            monitor.on('agent-status-changed', data => {
                 if (!eventReceived && data.newStatus === 'active') {
                     eventReceived = true;
                     expect(data.agentId).toBe(mockAgent.id);

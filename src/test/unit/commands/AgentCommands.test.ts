@@ -4,7 +4,13 @@ import { AgentManager } from '../../../agents/AgentManager';
 import { PickItem } from '../../../types/ui';
 
 // Import actual interfaces
-import { IContainer, ICommandService, INotificationService, IConfigurationService, SERVICE_TOKENS } from '../../../services/interfaces';
+import {
+    IContainer,
+    ICommandService,
+    INotificationService,
+    IConfigurationService,
+    SERVICE_TOKENS
+} from '../../../services/interfaces';
 import { Agent } from '../../../agents/types';
 
 interface AgentTemplate {
@@ -153,7 +159,7 @@ describe('AgentCommands', () => {
             onDidChange: jest.fn().mockReturnValue({ dispose: jest.fn() }),
             validateAll: jest.fn().mockReturnValue({ isValid: true, errors: [] }),
             getMaxAgents: jest.fn().mockReturnValue(5),
-            getClaudePath: jest.fn().mockReturnValue('claude'),
+            getAiPath: jest.fn().mockReturnValue('claude'),
             isAutoAssignTasks: jest.fn().mockReturnValue(true),
             isUseWorktrees: jest.fn().mockReturnValue(true),
             isShowAgentTerminalOnSpawn: jest.fn().mockReturnValue(false),
@@ -279,7 +285,8 @@ describe('AgentCommands', () => {
 
             expect(mockNotificationService.showQuickPick).toHaveBeenCalledTimes(2);
             // Second call should be for template selection
-            expect(mockNotificationService.showQuickPick).toHaveBeenNthCalledWith(2,
+            expect(mockNotificationService.showQuickPick).toHaveBeenNthCalledWith(
+                2,
                 expect.arrayContaining([
                     expect.objectContaining({
                         label: '🎨 Frontend Specialist',
@@ -299,12 +306,18 @@ describe('AgentCommands', () => {
 
             expect(mockNotificationService.showQuickPick).toHaveBeenCalledTimes(2);
             // Second call should be for team preset selection
-            expect(mockNotificationService.showQuickPick).toHaveBeenNthCalledWith(2,
+            expect(mockNotificationService.showQuickPick).toHaveBeenNthCalledWith(
+                2,
                 expect.arrayContaining([
                     expect.objectContaining({
                         label: '$(rocket) Full-Stack Development Team',
                         value: expect.objectContaining({
-                            agents: ['frontend-specialist', 'backend-specialist', 'database-architect', 'devops-engineer']
+                            agents: [
+                                'frontend-specialist',
+                                'backend-specialist',
+                                'database-architect',
+                                'devops-engineer'
+                            ]
                         })
                     })
                 ]),
@@ -421,7 +434,9 @@ describe('AgentCommands', () => {
                     name: 'Frontend Specialist'
                 })
             });
-            expect(mockNotificationService.showInformation).toHaveBeenCalledWith('Agent "My Frontend Agent" created successfully');
+            expect(mockNotificationService.showInformation).toHaveBeenCalledWith(
+                'Agent "My Frontend Agent" created successfully'
+            );
         });
 
         it('should handle template not found', async () => {
@@ -466,7 +481,12 @@ describe('AgentCommands', () => {
                         label: '$(rocket) Full-Stack Development Team',
                         description: 'Frontend, Backend, Database, and DevOps specialists',
                         value: expect.objectContaining({
-                            agents: ['frontend-specialist', 'backend-specialist', 'database-architect', 'devops-engineer']
+                            agents: [
+                                'frontend-specialist',
+                                'backend-specialist',
+                                'database-architect',
+                                'devops-engineer'
+                            ]
                         })
                     }),
                     expect.objectContaining({
@@ -684,7 +704,8 @@ describe('AgentCommands', () => {
 
             await (agentCommands as any).editAgent();
 
-            expect(mockNotificationService.showQuickPick).toHaveBeenNthCalledWith(1,
+            expect(mockNotificationService.showQuickPick).toHaveBeenNthCalledWith(
+                1,
                 [
                     expect.objectContaining({
                         label: 'Test Agent',

@@ -50,10 +50,10 @@ export class CapabilityMatcher implements ICapabilityMatcher {
 
         // Initialize with default weights
         this.weights = {
-            capabilityMatch: 0.40,
+            capabilityMatch: 0.4,
             specializationMatch: 0.25,
-            typeMatch: 0.20,
-            workloadFactor: 0.10,
+            typeMatch: 0.2,
+            workloadFactor: 0.1,
             performanceFactor: 0.05
         };
 
@@ -127,11 +127,15 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         // Check minimum score threshold (configurable, default 0)
         const minScore = this.configService?.get<number>('nofx.matcher.minScore', 0) || 0;
         if (bestAgent.score < minScore) {
-            this.logger.warn(`Best agent ${bestAgent.agent.id} score ${bestAgent.score.toFixed(2)} below minimum threshold ${minScore} for task ${task.id}`);
+            this.logger.warn(
+                `Best agent ${bestAgent.agent.id} score ${bestAgent.score.toFixed(2)} below minimum threshold ${minScore} for task ${task.id}`
+            );
             return null;
         }
 
-        this.logger.info(`Best agent for task ${task.id}: ${bestAgent.agent.id} (score: ${bestAgent.score.toFixed(2)})`);
+        this.logger.info(
+            `Best agent for task ${task.id}: ${bestAgent.agent.id} (score: ${bestAgent.score.toFixed(2)})`
+        );
 
         return bestAgent.agent;
     }
@@ -139,7 +143,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
     /**
      * Ranks all agents by their suitability for a task
      */
-    rankAgents(agents: Agent[], task: Task): Array<{agent: Agent, score: number}> {
+    rankAgents(agents: Agent[], task: Task): Array<{ agent: Agent; score: number }> {
         return agents
             .map(agent => ({
                 agent,
@@ -281,7 +285,11 @@ export class CapabilityMatcher implements ICapabilityMatcher {
     /**
      * Calculates specialization match score
      */
-    private calculateSpecializationMatch(specialization: string | undefined, taskDescription: string, taskTags: string[]): number {
+    private calculateSpecializationMatch(
+        specialization: string | undefined,
+        taskDescription: string,
+        taskTags: string[]
+    ): number {
         // Treat missing specialization as neutral (return 0)
         if (!specialization || typeof specialization !== 'string') {
             return 0;
@@ -469,11 +477,26 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         if (!this.configService) return;
 
         // Use proper IConfigurationService API with get<T>(key, default?)
-        this.weights.capabilityMatch = this.configService.get<number>('nofx.matcher.weights.capabilityMatch', this.weights.capabilityMatch);
-        this.weights.specializationMatch = this.configService.get<number>('nofx.matcher.weights.specializationMatch', this.weights.specializationMatch);
-        this.weights.typeMatch = this.configService.get<number>('nofx.matcher.weights.typeMatch', this.weights.typeMatch);
-        this.weights.workloadFactor = this.configService.get<number>('nofx.matcher.weights.workloadFactor', this.weights.workloadFactor);
-        this.weights.performanceFactor = this.configService.get<number>('nofx.matcher.weights.performanceFactor', this.weights.performanceFactor);
+        this.weights.capabilityMatch = this.configService.get<number>(
+            'nofx.matcher.weights.capabilityMatch',
+            this.weights.capabilityMatch
+        );
+        this.weights.specializationMatch = this.configService.get<number>(
+            'nofx.matcher.weights.specializationMatch',
+            this.weights.specializationMatch
+        );
+        this.weights.typeMatch = this.configService.get<number>(
+            'nofx.matcher.weights.typeMatch',
+            this.weights.typeMatch
+        );
+        this.weights.workloadFactor = this.configService.get<number>(
+            'nofx.matcher.weights.workloadFactor',
+            this.weights.workloadFactor
+        );
+        this.weights.performanceFactor = this.configService.get<number>(
+            'nofx.matcher.weights.performanceFactor',
+            this.weights.performanceFactor
+        );
 
         this.logger.info('CapabilityMatcher weights loaded from configuration', this.weights);
     }

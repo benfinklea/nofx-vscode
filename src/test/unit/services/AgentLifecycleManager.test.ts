@@ -166,7 +166,7 @@ describe('AgentLifecycleManager', () => {
 
         // Setup mock error handler
         mockErrorHandler = {
-            handleAsync: jest.fn().mockImplementation(async (operation) => {
+            handleAsync: jest.fn().mockImplementation(async operation => {
                 try {
                     return await operation();
                 } catch (error) {
@@ -332,18 +332,18 @@ describe('AgentLifecycleManager', () => {
         it('should publish lifecycle events', async () => {
             const agent = await lifecycleManager.spawnAgent(mockAgentConfig);
 
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                DOMAIN_EVENTS.AGENT_LIFECYCLE_SPAWNING,
-                { agentId: agent.id, config: mockAgentConfig }
-            );
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                DOMAIN_EVENTS.AGENT_LIFECYCLE_SPAWNED,
-                { agentId: agent.id, agent }
-            );
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                DOMAIN_EVENTS.AGENT_STATUS_CHANGED,
-                { agentId: agent.id, status: 'idle' }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(DOMAIN_EVENTS.AGENT_LIFECYCLE_SPAWNING, {
+                agentId: agent.id,
+                config: mockAgentConfig
+            });
+            expect(mockEventBus.publish).toHaveBeenCalledWith(DOMAIN_EVENTS.AGENT_LIFECYCLE_SPAWNED, {
+                agentId: agent.id,
+                agent
+            });
+            expect(mockEventBus.publish).toHaveBeenCalledWith(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, {
+                agentId: agent.id,
+                status: 'idle'
+            });
         });
 
         it('should start activity monitoring', async () => {
@@ -357,7 +357,9 @@ describe('AgentLifecycleManager', () => {
 
             expect(mockLoggingService.debug).toHaveBeenCalledWith(`Created agent ${agent.id} with status: offline`);
             expect(mockLoggingService.info).toHaveBeenCalledWith('Agent Test Agent ready.');
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('✅ Agent Test Agent (frontend-specialist) initialized');
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
+                '✅ Agent Test Agent (frontend-specialist) initialized'
+            );
         });
 
         it('should delay terminal initialization to avoid connection issues', async () => {
@@ -388,18 +390,16 @@ describe('AgentLifecycleManager', () => {
             const result = await lifecycleManager.removeAgent(testAgent.id);
 
             expect(result).toBe(true);
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                DOMAIN_EVENTS.AGENT_LIFECYCLE_REMOVING,
-                { agentId: testAgent.id }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(DOMAIN_EVENTS.AGENT_LIFECYCLE_REMOVING, {
+                agentId: testAgent.id
+            });
             expect(mockActivityMonitorInstance.stopMonitoring).toHaveBeenCalledWith(testAgent.id);
             expect(mockAgentNotificationServiceInstance.clearNotification).toHaveBeenCalledWith(testAgent.id);
             expect(mockWorktreeService.removeForAgent).toHaveBeenCalledWith(testAgent.id);
             expect(mockTerminalManager.disposeTerminal).toHaveBeenCalledWith(testAgent.id);
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                DOMAIN_EVENTS.AGENT_LIFECYCLE_REMOVED,
-                { agentId: testAgent.id }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(DOMAIN_EVENTS.AGENT_LIFECYCLE_REMOVED, {
+                agentId: testAgent.id
+            });
             expect(mockNotificationService.showInformation).toHaveBeenCalledWith('Agent removed successfully');
             expect(mockLoggingService.info).toHaveBeenCalledWith(`Agent ${testAgent.id} removed successfully`);
         });
@@ -594,14 +594,11 @@ describe('AgentLifecycleManager', () => {
 
             expect(mockOnAgentUpdate).toHaveBeenCalled();
             expect(mockAgentNotificationServiceInstance.updateStatusBar).toHaveBeenCalledWith([]);
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                DOMAIN_EVENTS.AGENT_STATUS_CHANGED,
-                {
-                    agentId: testAgent.id,
-                    status: testAgent.status,
-                    activityStatus: 'working'
-                }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, {
+                agentId: testAgent.id,
+                status: testAgent.status,
+                activityStatus: 'working'
+            });
         });
 
         it('should ignore status changes for unknown agents', () => {

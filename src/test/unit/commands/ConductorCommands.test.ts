@@ -1,6 +1,13 @@
 import * as vscode from 'vscode';
 import { ConductorCommands } from '../../../commands/ConductorCommands';
-import { IContainer, INotificationService, ICommandService, IConfigurationService, ILoggingService, SERVICE_TOKENS } from '../../../services/interfaces';
+import {
+    IContainer,
+    INotificationService,
+    ICommandService,
+    IConfigurationService,
+    ILoggingService,
+    SERVICE_TOKENS
+} from '../../../services/interfaces';
 import { AgentManager } from '../../../agents/AgentManager';
 import { TaskQueue } from '../../../tasks/TaskQueue';
 import { AgentTreeProvider } from '../../../views/AgentTreeProvider';
@@ -189,7 +196,10 @@ describe('ConductorCommands', () => {
             expect(mockCommandService.register).toHaveBeenCalledWith('nofx.startConductor', expect.any(Function));
             expect(mockCommandService.register).toHaveBeenCalledWith('nofx.quickStartChat', expect.any(Function));
             expect(mockCommandService.register).toHaveBeenCalledWith('nofx.openConductorChat', expect.any(Function));
-            expect(mockCommandService.register).toHaveBeenCalledWith('nofx.openConductorTerminal', expect.any(Function));
+            expect(mockCommandService.register).toHaveBeenCalledWith(
+                'nofx.openConductorTerminal',
+                expect.any(Function)
+            );
             expect(mockCommandService.register).toHaveBeenCalledWith('nofx.openSimpleConductor', expect.any(Function));
             expect(mockCommandService.register).toHaveBeenCalledWith('nofx.openConductorPanel', expect.any(Function));
         });
@@ -212,9 +222,7 @@ describe('ConductorCommands', () => {
             await (conductorCommands as any).startConductor();
 
             expect(mockNotificationService.showQuickPick).toHaveBeenCalledWith(
-                expect.arrayContaining([
-                    expect.objectContaining({ label: '$(rocket) Full-Stack Development Team' })
-                ]),
+                expect.arrayContaining([expect.objectContaining({ label: '$(rocket) Full-Stack Development Team' })]),
                 expect.objectContaining({ placeHolder: 'Select a team configuration' })
             );
 

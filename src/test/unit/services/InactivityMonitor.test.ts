@@ -125,12 +125,16 @@ describe('InactivityMonitor', () => {
 
         it('should log activity with type', () => {
             monitor.recordActivity('agent-1', 'code-completion');
-            expect(consoleLogSpy).toHaveBeenCalledWith('[InactivityMonitor] Activity recorded for agent agent-1: code-completion');
+            expect(consoleLogSpy).toHaveBeenCalledWith(
+                '[InactivityMonitor] Activity recorded for agent agent-1: code-completion'
+            );
         });
 
         it('should log activity without type', () => {
             monitor.recordActivity('agent-1');
-            expect(consoleLogSpy).toHaveBeenCalledWith('[InactivityMonitor] Activity recorded for agent agent-1: general');
+            expect(consoleLogSpy).toHaveBeenCalledWith(
+                '[InactivityMonitor] Activity recorded for agent agent-1: general'
+            );
         });
 
         it('should re-setup timers after recording activity', () => {

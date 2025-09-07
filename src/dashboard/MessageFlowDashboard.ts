@@ -33,19 +33,12 @@ export class MessageFlowDashboard {
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
-                localResourceRoots: [
-                    vscode.Uri.joinPath(context.extensionUri, 'webview')
-                ]
+                localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'webview')]
             }
         );
 
         const webviewHost = webviewHostFactory(panel, loggingService);
-        MessageFlowDashboard.currentPanel = new MessageFlowDashboard(
-            webviewHost,
-            context,
-            viewModel,
-            loggingService
-        );
+        MessageFlowDashboard.currentPanel = new MessageFlowDashboard(webviewHost, context, viewModel, loggingService);
         MessageFlowDashboard.currentPanel.show();
 
         return MessageFlowDashboard.currentPanel;
@@ -67,21 +60,23 @@ export class MessageFlowDashboard {
     public async show() {
         // Subscribe to view model state changes
         this.disposables.push(
-            this.viewModel.subscribe((state) => {
-                this.webviewHost?.postMessage({
-                    command: 'updateState',
-                    state
-                }).then(success => {
-                    if (!success) {
-                        this.loggingService.error('Failed to post message to webview');
-                    }
-                });
+            this.viewModel.subscribe(state => {
+                this.webviewHost
+                    ?.postMessage({
+                        command: 'updateState',
+                        state
+                    })
+                    .then(success => {
+                        if (!success) {
+                            this.loggingService.error('Failed to post message to webview');
+                        }
+                    });
             })
         );
 
         // Handle messages from webview
         this.disposables.push(
-            this.webviewHost.onDidReceiveMessage((message) => {
+            this.webviewHost.onDidReceiveMessage(message => {
                 this.viewModel.handleCommand(message.command, message.data);
             })
         );

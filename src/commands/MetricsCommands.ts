@@ -1,5 +1,14 @@
 import * as vscode from 'vscode';
-import { IContainer, SERVICE_TOKENS, IMetricsService, INotificationService, IConfigurationService, ICommandService, IEventBus, CONFIG_KEYS } from '../services/interfaces';
+import {
+    IContainer,
+    SERVICE_TOKENS,
+    IMetricsService,
+    INotificationService,
+    IConfigurationService,
+    ICommandService,
+    IEventBus,
+    CONFIG_KEYS
+} from '../services/interfaces';
 
 export class MetricsCommands {
     private container: IContainer;
@@ -67,19 +76,13 @@ export class MetricsCommands {
         );
 
         // Export metrics data
-        this.disposables.push(
-            this.commandService.register('nofx.exportMetrics', this.exportMetrics.bind(this))
-        );
+        this.disposables.push(this.commandService.register('nofx.exportMetrics', this.exportMetrics.bind(this)));
 
         // Reset metrics data
-        this.disposables.push(
-            this.commandService.register('nofx.resetMetrics', this.resetMetrics.bind(this))
-        );
+        this.disposables.push(this.commandService.register('nofx.resetMetrics', this.resetMetrics.bind(this)));
 
         // Toggle metrics collection
-        this.disposables.push(
-            this.commandService.register('nofx.toggleMetrics', this.toggleMetrics.bind(this))
-        );
+        this.disposables.push(this.commandService.register('nofx.toggleMetrics', this.toggleMetrics.bind(this)));
     }
 
     private async showMetricsDashboard(): Promise<void> {
@@ -102,27 +105,25 @@ export class MetricsCommands {
             this.metricsPanel.webview.html = this.getMetricsDashboardHtml();
 
             // Handle messages from webview
-            this.metricsPanel.webview.onDidReceiveMessage(
-                async (message) => {
-                    switch (message.command) {
-                        case 'refresh':
-                            this.refreshMetricsDashboard(message.filters);
-                            break;
-                        case 'export':
-                            await this.exportMetricsFromDashboard(message.format);
-                            break;
-                        case 'reset':
-                            await this.resetMetricsFromDashboard();
-                            break;
-                        case 'toggle':
-                            await this.toggleMetricsFromDashboard();
-                            break;
-                        case 'setAutoRefresh':
-                            this.setAutoRefresh(message.enabled);
-                            break;
-                    }
+            this.metricsPanel.webview.onDidReceiveMessage(async message => {
+                switch (message.command) {
+                    case 'refresh':
+                        this.refreshMetricsDashboard(message.filters);
+                        break;
+                    case 'export':
+                        await this.exportMetricsFromDashboard(message.format);
+                        break;
+                    case 'reset':
+                        await this.resetMetricsFromDashboard();
+                        break;
+                    case 'toggle':
+                        await this.toggleMetricsFromDashboard();
+                        break;
+                    case 'setAutoRefresh':
+                        this.setAutoRefresh(message.enabled);
+                        break;
                 }
-            );
+            });
 
             // Update dashboard periodically
             const updateInterval = setInterval(() => {
@@ -137,7 +138,6 @@ export class MetricsCommands {
                 clearInterval(updateInterval);
                 this.metricsPanel = undefined;
             });
-
         } catch (error) {
             this.notificationService.showError(`Failed to show metrics dashboard: ${error}`);
         }
@@ -195,24 +195,18 @@ export class MetricsCommands {
             }
 
             // Filter recent metrics by time
-            filteredRecent = filteredRecent.filter((metric: any) =>
-                new Date(metric.timestamp) >= cutoffTime
-            );
+            filteredRecent = filteredRecent.filter((metric: any) => new Date(metric.timestamp) >= cutoffTime);
         }
 
         // Apply metric type filter
         if (filters.metricType && filters.metricType !== 'all') {
-            filteredRecent = filteredRecent.filter((metric: any) =>
-                metric.type === filters.metricType
-            );
+            filteredRecent = filteredRecent.filter((metric: any) => metric.type === filters.metricType);
         }
 
         // Apply search filter
         if (filters.searchFilter && filters.searchFilter.trim()) {
             const searchTerm = filters.searchFilter.toLowerCase();
-            filteredRecent = filteredRecent.filter((metric: any) =>
-                metric.name.toLowerCase().includes(searchTerm)
-            );
+            filteredRecent = filteredRecent.filter((metric: any) => metric.name.toLowerCase().includes(searchTerm));
         }
 
         // Update the filtered data with recomputed metrics from filtered recent array
@@ -698,7 +692,9 @@ export class MetricsCommands {
             const data = this.metricsService.exportMetrics(format.label.toLowerCase() as 'json' | 'csv');
 
             const uri = await vscode.window.showSaveDialog({
-                defaultUri: vscode.Uri.file(`nofx-metrics-${new Date().toISOString().split('T')[0]}.${format.label.toLowerCase()}`),
+                defaultUri: vscode.Uri.file(
+                    `nofx-metrics-${new Date().toISOString().split('T')[0]}.${format.label.toLowerCase()}`
+                ),
                 filters: {
                     'Data Files': [format.label.toLowerCase()]
                 }

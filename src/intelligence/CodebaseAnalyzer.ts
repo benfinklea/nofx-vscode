@@ -33,8 +33,14 @@ export class CodebaseAnalyzer {
     // Common file extensions for dependency resolution
     private readonly FILE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts', '.json'];
     private readonly INDEX_EXTENSIONS = [
-        '/index.ts', '/index.tsx', '/index.js', '/index.jsx',
-        '/index.mjs', '/index.cjs', '/index.mts', '/index.cts'
+        '/index.ts',
+        '/index.tsx',
+        '/index.js',
+        '/index.jsx',
+        '/index.mjs',
+        '/index.cjs',
+        '/index.mts',
+        '/index.cts'
     ];
 
     constructor(outputChannel?: vscode.OutputChannel) {
@@ -91,9 +97,7 @@ export class CodebaseAnalyzer {
             const allExclusions = [...defaultExclusions, ...additionalExclusions];
 
             // Use glob patterns directly instead of combining them
-            const exclude = allExclusions.length > 0
-                ? `{${allExclusions.join(',')}}`
-                : undefined;
+            const exclude = allExclusions.length > 0 ? `{${allExclusions.join(',')}}` : undefined;
 
             const files = await vscode.workspace.findFiles(pattern, exclude);
 
@@ -165,21 +169,14 @@ export class CodebaseAnalyzer {
         try {
             const content = await fs.promises.readFile(filePath, 'utf-8');
             const stats = await fs.promises.stat(filePath);
-            const sourceFile = ts.createSourceFile(
-                filePath,
-                content,
-                ts.ScriptTarget.Latest,
-                true
-            );
+            const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true);
 
             // Extract imports and exports
             const imports = this.extractImports(sourceFile);
             const exports = this.extractExports(sourceFile);
 
             // Collect re-export sources to include in dependencies
-            const reExportSources = exports
-                .filter(e => e.type === 're-export' && e.source)
-                .map(e => e.source!);
+            const reExportSources = exports.filter(e => e.type === 're-export' && e.source).map(e => e.source!);
 
             // Calculate complexity
             const complexity = this.calculateComplexity(sourceFile);
@@ -257,21 +254,14 @@ export class CodebaseAnalyzer {
         }
 
         try {
-            const sourceFile = ts.createSourceFile(
-                filePath,
-                content,
-                ts.ScriptTarget.Latest,
-                true
-            );
+            const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true);
 
             // Extract imports and exports
             const imports = this.extractImports(sourceFile);
             const exports = this.extractExports(sourceFile);
 
             // Collect re-export sources to include in dependencies
-            const reExportSources = exports
-                .filter(e => e.type === 're-export' && e.source)
-                .map(e => e.source!);
+            const reExportSources = exports.filter(e => e.type === 're-export' && e.source).map(e => e.source!);
 
             // Calculate complexity
             const complexity = this.calculateComplexity(sourceFile);
@@ -354,7 +344,9 @@ export class CodebaseAnalyzer {
         // Find and update files that depend on this file
         const dependents = this.reverseDependencyGraph.get(filePath);
         if (dependents && dependents.size > 0) {
-            this.outputChannel.appendLine(`File ${filePath} has ${dependents.size} dependents that may need re-analysis`);
+            this.outputChannel.appendLine(
+                `File ${filePath} has ${dependents.size} dependents that may need re-analysis`
+            );
 
             // Optionally re-analyze dependent files if incremental update is enabled
             if (options.incrementalUpdate) {
@@ -716,11 +708,10 @@ export class CodebaseAnalyzer {
         const safeVolume = Math.max(1, volume);
         const safeLoc = Math.max(1, loc);
 
-        const maintainabilityIndex =
-            171 - 5.2 * Math.log(safeVolume) - 0.23 * cyclomatic - 16.2 * Math.log(safeLoc);
+        const maintainabilityIndex = 171 - 5.2 * Math.log(safeVolume) - 0.23 * cyclomatic - 16.2 * Math.log(safeLoc);
 
         // Clamp maintainability to [0, 100] range
-        const maintainability = Math.max(0, Math.min(100, maintainabilityIndex * 100 / 171));
+        const maintainability = Math.max(0, Math.min(100, (maintainabilityIndex * 100) / 171));
 
         return {
             cyclomatic,
@@ -813,9 +804,10 @@ export class CodebaseAnalyzer {
         const cyclomaticScore = Math.max(0, Math.min(100, 100 - complexity.cyclomatic * 5));
         const cognitiveScore = Math.max(0, Math.min(100, 100 - complexity.cognitive * 2));
         // Ensure maintainability is a valid number, default to 50 if NaN/undefined
-        const maintainabilityScore = isFinite(complexity.maintainability) ?
-            Math.max(0, Math.min(100, complexity.maintainability)) : 50;
-        const sizeScore = Math.max(0, Math.min(100, 100 - (complexity.loc / 10)));
+        const maintainabilityScore = isFinite(complexity.maintainability)
+            ? Math.max(0, Math.min(100, complexity.maintainability))
+            : 50;
+        const sizeScore = Math.max(0, Math.min(100, 100 - complexity.loc / 10));
 
         const score =
             cyclomaticScore * weights.cyclomatic +
@@ -894,11 +886,7 @@ export class CodebaseAnalyzer {
                 return null;
             }
 
-            const parsedConfig = ts.parseJsonConfigFileContent(
-                configFile.config,
-                ts.sys,
-                path.dirname(configPath)
-            );
+            const parsedConfig = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath));
 
             this.tsConfigCache.set(cacheKey, parsedConfig);
             return parsedConfig;
@@ -1266,10 +1254,7 @@ export class CodebaseAnalyzer {
                 }
             }
             // Rotate cycle to start with smallest element
-            const normalized = [
-                ...uniqueCycle.slice(minIndex),
-                ...uniqueCycle.slice(0, minIndex)
-            ];
+            const normalized = [...uniqueCycle.slice(minIndex), ...uniqueCycle.slice(0, minIndex)];
             return normalized.join('->');
         };
 
@@ -1608,20 +1593,20 @@ export class CodebaseAnalyzer {
         const watcher = vscode.workspace.createFileSystemWatcher('**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}');
 
         // Handle file changes
-        watcher.onDidChange(async (uri) => {
+        watcher.onDidChange(async uri => {
             this.outputChannel.appendLine(`File changed: ${uri.fsPath}`);
             await this.updateFile(uri.fsPath, { incrementalUpdate: true });
         });
 
         // Handle file creation
-        watcher.onDidCreate(async (uri) => {
+        watcher.onDidCreate(async uri => {
             this.outputChannel.appendLine(`File created: ${uri.fsPath}`);
             await this.analyzeFile(uri.fsPath);
             this.updateDependencyGraphsForFile(uri.fsPath, this.components.get(uri.fsPath)?.dependencies || []);
         });
 
         // Handle file deletion
-        watcher.onDidDelete((uri) => {
+        watcher.onDidDelete(uri => {
             this.outputChannel.appendLine(`File deleted: ${uri.fsPath}`);
             this.removeFile(uri.fsPath);
         });

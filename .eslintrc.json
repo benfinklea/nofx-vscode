@@ -7,11 +7,14 @@
     "project": "./tsconfig.json"
   },
   "plugins": [
-    "@typescript-eslint"
+    "@typescript-eslint",
+    "prettier"
   ],
   "extends": [
     "eslint:recommended",
-    "plugin:@typescript-eslint/recommended"
+    "plugin:@typescript-eslint/recommended",
+    "prettier",
+    "plugin:prettier/recommended"
   ],
   "rules": {
     "@typescript-eslint/no-explicit-any": "warn",
@@ -33,22 +36,7 @@
         "allow": ["warn", "error"]
       }
     ],
-    "semi": ["error", "always"],
-    "quotes": ["error", "single", { "avoidEscape": true }],
-    "indent": ["error", 4, { "SwitchCase": 1 }],
-    "comma-dangle": ["error", "never"],
-    "no-trailing-spaces": "error",
-    "eol-last": ["error", "always"],
-    "max-len": [
-      "warn",
-      {
-        "code": 120,
-        "ignoreStrings": true,
-        "ignoreTemplateLiterals": true,
-        "ignoreComments": true,
-        "ignoreRegExpLiterals": true
-      }
-    ]
+    "prettier/prettier": "error"
   },
   "ignorePatterns": [
     "out/**",

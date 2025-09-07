@@ -29,7 +29,7 @@ export async function setupExtension(): Promise<vscode.ExtensionContext> {
             }
 
             // Get the real extension context
-            extensionContext = (ext as any).extensionContext || ext.extensionPath as any;
+            extensionContext = (ext as any).extensionContext || (ext.extensionPath as any);
 
             // If we have exports with a __getContainerForTests method, use it
             if (extensionExports?.__getContainerForTests) {

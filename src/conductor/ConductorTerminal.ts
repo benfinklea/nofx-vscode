@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { AgentManager } from '../agents/AgentManager';
 import { TaskQueue } from '../tasks/TaskQueue';
+import { TaskToolBridge, SubAgentType } from '../services/TaskToolBridge';
 
 /**
  * Simple terminal-based conductor that works like regular agents
@@ -9,12 +10,14 @@ export class ConductorTerminal {
     private terminal: vscode.Terminal | undefined;
     private agentManager: AgentManager;
     private taskQueue: TaskQueue;
-    private claudePath: string;
+    private taskToolBridge?: TaskToolBridge;
+    private aiPath: string;
 
-    constructor(agentManager: AgentManager, taskQueue: TaskQueue) {
+    constructor(agentManager: AgentManager, taskQueue: TaskQueue, taskToolBridge?: TaskToolBridge) {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
-        this.claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
+        this.taskToolBridge = taskToolBridge;
+        this.aiPath = vscode.workspace.getConfiguration('nofx').get<string>('aiPath') || 'claude';
     }
 
     async start() {
@@ -22,7 +25,7 @@ export class ConductorTerminal {
         if (!this.terminal) {
             this.terminal = vscode.window.createTerminal({
                 name: '🎸 NofX Conductor',
-                iconPath: new vscode.ThemeIcon('audio')  // Music/audio icon (closest to guitar)
+                iconPath: new vscode.ThemeIcon('audio') // Music/audio icon (closest to guitar)
             });
         }
 
@@ -41,7 +44,7 @@ export class ConductorTerminal {
         const escapedPrompt = systemPrompt.replace(/'/g, "'\\''");
 
         // Start Claude with --append-system-prompt flag
-        const command = `${this.claudePath} --append-system-prompt '${escapedPrompt}'`;
+        const command = `${this.aiPath} --append-system-prompt '${escapedPrompt}'`;
 
         // Show the user what we're doing (simplified message)
         this.terminal.sendText('echo "Running: claude --append-system-prompt \'<conductor system prompt>\'"');
@@ -79,6 +82,18 @@ To query agent status:
 To terminate an agent:
 {"type": "terminate", "agentId": "agent-1"}
 
+SUB-AGENT COMMANDS:
+Agents can spawn sub-agents for parallel task execution:
+
+To spawn a sub-agent from an agent:
+{"type": "spawn_sub_agent", "parentAgentId": "agent-1", "subAgentType": "general-purpose", "description": "Research API patterns", "prompt": "Find best REST API patterns..."}
+
+To check sub-agent status:
+{"type": "sub_agent_status", "parentAgentId": "agent-1"}
+
+To cancel a sub-agent:
+{"type": "cancel_sub_agent", "parentAgentId": "agent-1", "taskId": "task-123"}
+
 Current agents:
 ${agentList || 'No agents active yet'}
 
@@ -93,7 +108,13 @@ Available agent types:
 - security-expert: Security audits, penetration testing
 - database-architect: Schema design, optimization
 
-You are a VP-level technical leader. Make architectural decisions, enforce quality standards, and ensure exceptional software delivery.`;
+You are a VP-level technical leader. Make architectural decisions, enforce quality standards, and ensure exceptional software delivery.
+
+SUB-AGENT ORCHESTRATION:
+Agents can spawn sub-agents for parallel task execution. Monitor sub-agent progress and ensure efficient task delegation.
+Available sub-agent types: general-purpose, code-lead-reviewer
+Max concurrent sub-agents per agent: 3
+Total system limit: 10 concurrent sub-agents`;
     }
 
     stop() {

@@ -13,11 +13,7 @@ async function main() {
         await runTests({
             extensionDevelopmentPath,
             extensionTestsPath,
-            launchArgs: [
-                '--disable-extensions',
-                '--disable-workspace-trust',
-                '--new-window'
-            ]
+            launchArgs: ['--disable-extensions', '--disable-workspace-trust', '--new-window']
         });
     } catch (err) {
         console.error('Failed to run functional tests');

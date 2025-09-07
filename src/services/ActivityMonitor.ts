@@ -23,14 +23,14 @@ export interface MonitoringEvent {
 }
 
 export type AgentActivityStatus =
-    | 'active'      // 🟢 Currently working (output detected)
-    | 'waiting'     // 🟡 Awaiting user input/permission
-    | 'thinking'    // 🔵 No output but recently active
-    | 'inactive'    // 🟠 No activity for 30+ seconds
-    | 'stuck'       // 🔴 Needs immediate attention (2+ minutes)
-    | 'permission'  // ⚠️ Claude asking for permission
-    | 'completed'   // ✅ Task completed
-    | 'error';      // ❌ Error detected
+    | 'active' // 🟢 Currently working (output detected)
+    | 'waiting' // 🟡 Awaiting user input/permission
+    | 'thinking' // 🔵 No output but recently active
+    | 'inactive' // 🟠 No activity for 30+ seconds
+    | 'stuck' // 🔴 Needs immediate attention (2+ minutes)
+    | 'permission' // ⚠️ Claude asking for permission
+    | 'completed' // ✅ Task completed
+    | 'error'; // ❌ Error detected
 
 export class ActivityMonitor extends EventEmitter {
     private terminalMonitor: TerminalOutputMonitor;
@@ -287,11 +287,11 @@ export class ActivityMonitor extends EventEmitter {
 
         // Map inactivity status to activity status
         const statusMap: { [key: string]: AgentActivityStatus } = {
-            'active': 'active',
-            'thinking': 'thinking',
-            'inactive': 'inactive',
-            'stuck': 'stuck',
-            'waiting': 'waiting'
+            active: 'active',
+            thinking: 'thinking',
+            inactive: 'inactive',
+            stuck: 'stuck',
+            waiting: 'waiting'
         };
 
         const mappedStatus = statusMap[newStatus] || 'active';

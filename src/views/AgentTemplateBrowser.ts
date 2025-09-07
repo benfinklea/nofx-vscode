@@ -129,10 +129,7 @@ export class AgentTemplateBrowser {
             template
         });
 
-        vscode.window.showInformationMessage(
-            `✅ Spawned ${template.icon} ${name}`,
-            'View Agent'
-        ).then(selection => {
+        vscode.window.showInformationMessage(`✅ Spawned ${template.icon} ${name}`, 'View Agent').then(selection => {
             if (selection === 'View Agent') {
                 vscode.commands.executeCommand('nofx.agents.focus');
             }
@@ -150,10 +147,7 @@ export class AgentTemplateBrowser {
 
         const success = await this.templateManager.duplicateTemplate(template.id, newName);
         if (success) {
-            vscode.window.showInformationMessage(
-                `✅ Template duplicated as "${newName}"`,
-                'Edit'
-            ).then(selection => {
+            vscode.window.showInformationMessage(`✅ Template duplicated as "${newName}"`, 'Edit').then(selection => {
                 if (selection === 'Edit') {
                     const newId = newName.toLowerCase().replace(/\s+/g, '-');
                     this.templateManager.editTemplate(`custom-${newId}`);
@@ -199,14 +193,22 @@ ${template.capabilities.specialties.map(s => `- ${s}`).join('\n')}
 ${template.systemPrompt}
 \`\`\`
 
-${template.filePatterns ? `## File Patterns
+${
+    template.filePatterns
+        ? `## File Patterns
 **Watch:** ${template.filePatterns.watch.join(', ')}
-**Ignore:** ${template.filePatterns.ignore.join(', ')}` : ''}
+**Ignore:** ${template.filePatterns.ignore.join(', ')}`
+        : ''
+}
 
-${template.commands ? `## Commands
+${
+    template.commands
+        ? `## Commands
 \`\`\`json
 ${JSON.stringify(template.commands, null, 2)}
-\`\`\`` : ''}
+\`\`\``
+        : ''
+}
 
 ---
 *Template ID: ${template.id}*

@@ -58,7 +58,7 @@ describe('TaskTreeProvider', () => {
         mockUIStateManager = {
             getState: jest.fn(),
             getTasksByStatus: jest.fn(),
-            subscribe: jest.fn().mockImplementation((callback) => {
+            subscribe: jest.fn().mockImplementation(callback => {
                 const disposable = { dispose: jest.fn() };
                 mockDisposables.push(disposable);
                 return disposable;

@@ -79,32 +79,35 @@ export class PersistenceCommands implements ICommandHandler {
             return;
         }
 
-        await this.notificationService.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: 'Archiving sessions...',
-            cancellable: false
-        }, async (progress) => {
-            try {
-                const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
-                const archivePath = await persistence.archiveSessions(archiveName);
+        await this.notificationService.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: 'Archiving sessions...',
+                cancellable: false
+            },
+            async progress => {
+                try {
+                    const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
+                    const archivePath = await persistence.archiveSessions(archiveName);
 
-                progress.report({ increment: 100 });
+                    progress.report({ increment: 100 });
 
-                const selection = await this.notificationService.showInformation(
-                    `Sessions archived to: ${archivePath}`,
-                    'Show in Explorer'
-                );
+                    const selection = await this.notificationService.showInformation(
+                        `Sessions archived to: ${archivePath}`,
+                        'Show in Explorer'
+                    );
 
-                if (selection === 'Show in Explorer') {
-                    const uri = vscode.Uri.file(path.dirname(archivePath));
-                    await vscode.commands.executeCommand('revealInExplorer', uri);
+                    if (selection === 'Show in Explorer') {
+                        const uri = vscode.Uri.file(path.dirname(archivePath));
+                        await vscode.commands.executeCommand('revealInExplorer', uri);
+                    }
+                } catch (error) {
+                    await this.notificationService.showError(
+                        `Failed to archive sessions: ${error instanceof Error ? error.message : 'Unknown error'}`
+                    );
                 }
-            } catch (error) {
-                await this.notificationService.showError(
-                    `Failed to archive sessions: ${error instanceof Error ? error.message : 'Unknown error'}`
-                );
             }
-        });
+        );
     }
 
     private async clearPersistence(): Promise<void> {
@@ -123,42 +126,45 @@ export class PersistenceCommands implements ICommandHandler {
             return;
         }
 
-        await this.notificationService.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: 'Clearing persistence data...',
-            cancellable: false
-        }, async (progress) => {
-            try {
-                const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
-
-                // Clear agent data
-                progress.report({ message: 'Clearing agent data...', increment: 33 });
-                await persistence.clearAll();
-
-                // Clear .nofx directory
-                progress.report({ message: 'Clearing .nofx directory...', increment: 33 });
-                const nofxDir = path.join(workspaceFolder.uri.fsPath, '.nofx');
+        await this.notificationService.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: 'Clearing persistence data...',
+                cancellable: false
+            },
+            async progress => {
                 try {
-                    await fsPromises.access(nofxDir);
-                    await this.clearDirectory(nofxDir);
+                    const persistence = new AgentPersistence(workspaceFolder.uri.fsPath);
+
+                    // Clear agent data
+                    progress.report({ message: 'Clearing agent data...', increment: 33 });
+                    await persistence.clearAll();
+
+                    // Clear .nofx directory
+                    progress.report({ message: 'Clearing .nofx directory...', increment: 33 });
+                    const nofxDir = path.join(workspaceFolder.uri.fsPath, '.nofx');
+                    try {
+                        await fsPromises.access(nofxDir);
+                        await this.clearDirectory(nofxDir);
+                    } catch (error) {
+                        // Directory doesn't exist, ignore
+                    }
+
+                    // Clear active agents
+                    progress.report({ message: 'Clearing active agents...', increment: 34 });
+                    const agents = this.agentManager.getActiveAgents();
+                    for (const agent of agents) {
+                        await this.agentManager.removeAgent(agent.id);
+                    }
+
+                    await this.notificationService.showInformation('All persistence data cleared');
                 } catch (error) {
-                    // Directory doesn't exist, ignore
+                    await this.notificationService.showError(
+                        `Failed to clear persistence: ${error instanceof Error ? error.message : 'Unknown error'}`
+                    );
                 }
-
-                // Clear active agents
-                progress.report({ message: 'Clearing active agents...', increment: 34 });
-                const agents = this.agentManager.getActiveAgents();
-                for (const agent of agents) {
-                    await this.agentManager.removeAgent(agent.id);
-                }
-
-                await this.notificationService.showInformation('All persistence data cleared');
-            } catch (error) {
-                await this.notificationService.showError(
-                    `Failed to clear persistence: ${error instanceof Error ? error.message : 'Unknown error'}`
-                );
             }
-        });
+        );
     }
 
     private async clearDirectory(dirPath: string): Promise<void> {

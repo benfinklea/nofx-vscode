@@ -1,9 +1,5 @@
 // Re-export agent types from the agents module
-export {
-    Agent,
-    AgentStatus,
-    AgentConfig
-} from '../agents/types';
+export { Agent, AgentStatus, AgentConfig } from '../agents/types';
 
 // Re-export AgentTemplate from AgentTemplateManager
 export { AgentTemplate } from '../agents/AgentTemplateManager';
@@ -29,14 +25,14 @@ export interface TestAgent extends Agent {
 
 // Activity monitoring types
 export type AgentActivityStatus =
-    | 'active'      // 🟢 Currently working (output detected)
-    | 'waiting'     // 🟡 Awaiting user input/permission
-    | 'thinking'    // 🔵 No output but recently active
-    | 'inactive'    // 🟠 No activity for 30+ seconds
-    | 'stuck'       // 🔴 Needs immediate attention (2+ minutes)
-    | 'permission'  // ⚠️ Claude asking for permission
-    | 'completed'   // ✅ Task completed
-    | 'error';      // ❌ Error detected
+    | 'active' // 🟢 Currently working (output detected)
+    | 'waiting' // 🟡 Awaiting user input/permission
+    | 'thinking' // 🔵 No output but recently active
+    | 'inactive' // 🟠 No activity for 30+ seconds
+    | 'stuck' // 🔴 Needs immediate attention (2+ minutes)
+    | 'permission' // ⚠️ Claude asking for permission
+    | 'completed' // ✅ Task completed
+    | 'error'; // ❌ Error detected
 
 export interface AgentMonitoringState {
     agentId: string;
@@ -52,10 +48,10 @@ export interface AgentMonitoringState {
 }
 
 export interface MonitoringConfig {
-    inactivityWarning: number;      // seconds (default: 30)
-    inactivityAlert: number;        // seconds (default: 120)
-    autoComplete: boolean;          // auto-mark tasks complete
+    inactivityWarning: number; // seconds (default: 30)
+    inactivityAlert: number; // seconds (default: 120)
+    autoComplete: boolean; // auto-mark tasks complete
     notificationLevel: 'minimal' | 'normal' | 'verbose';
-    soundAlerts: boolean;           // audio notifications
-    autoApprove: string[];          // list of safe operations
+    soundAlerts: boolean; // audio notifications
+    autoApprove: string[]; // list of safe operations
 }

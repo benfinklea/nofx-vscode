@@ -86,9 +86,7 @@ describe('Command Smoke Tests', () => {
     // Dynamically determine based on known patterns
     const UI_COMMANDS = () => {
         const patterns = ['add', 'create', 'edit', 'browse', 'import', 'start', 'quickStart'];
-        return expected.filter(cmd =>
-            patterns.some(pattern => cmd.toLowerCase().includes(pattern.toLowerCase()))
-        );
+        return expected.filter(cmd => patterns.some(pattern => cmd.toLowerCase().includes(pattern.toLowerCase())));
     };
 
     // Commands that are interactive/external and should be skipped or mocked
@@ -274,9 +272,7 @@ describe('Command Smoke Tests', () => {
                         'Claude CLI not found'
                     ];
 
-                    const isExpectedError = expectedErrors.some(msg =>
-                        error!.message.includes(msg)
-                    );
+                    const isExpectedError = expectedErrors.some(msg => error!.message.includes(msg));
 
                     expect(isExpectedError).toBe(true);
                 }
@@ -287,11 +283,7 @@ describe('Command Smoke Tests', () => {
             // Clear mock workspace to simulate no workspace
             clearMockWorkspace();
 
-            const workspaceCommands = [
-                'nofx.addAgent',
-                'nofx.startConductor',
-                'nofx.createTask'
-            ];
+            const workspaceCommands = ['nofx.addAgent', 'nofx.startConductor', 'nofx.createTask'];
 
             for (const command of workspaceCommands) {
                 const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
@@ -312,9 +304,7 @@ describe('Command Smoke Tests', () => {
 
             for (const command of UI_COMMANDS) {
                 // Should not throw when user cancels
-                await expect(
-                    vscode.commands.executeCommand(command)
-                ).resolves.not.toThrow();
+                await expect(vscode.commands.executeCommand(command)).resolves.not.toThrow();
             }
         });
     });
@@ -369,16 +359,11 @@ describe('Command Smoke Tests', () => {
             expect(config.get('testMode')).toBe(true);
 
             // Verify orchestration server doesn't start in test mode
-            const orchestrationCommands = [
-                'nofx.showOrchestrator',
-                'nofx.openMessageFlow'
-            ];
+            const orchestrationCommands = ['nofx.showOrchestrator', 'nofx.openMessageFlow'];
 
             for (const command of orchestrationCommands) {
                 // Should execute without starting actual servers
-                await expect(
-                    vscode.commands.executeCommand(command)
-                ).resolves.not.toThrow();
+                await expect(vscode.commands.executeCommand(command)).resolves.not.toThrow();
             }
         });
 
@@ -390,9 +375,7 @@ describe('Command Smoke Tests', () => {
             ];
 
             for (const command of externalCommands) {
-                await expect(
-                    vscode.commands.executeCommand(command)
-                ).resolves.not.toThrow();
+                await expect(vscode.commands.executeCommand(command)).resolves.not.toThrow();
             }
         });
 

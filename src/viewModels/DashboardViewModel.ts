@@ -1,5 +1,13 @@
 import * as vscode from 'vscode';
-import { IUIStateManager, IEventBus, ILoggingService, IDashboardViewModel, IMessagePersistenceService, IConnectionPoolService, MessageFilter } from '../services/interfaces';
+import {
+    IUIStateManager,
+    IEventBus,
+    ILoggingService,
+    IDashboardViewModel,
+    IMessagePersistenceService,
+    IConnectionPoolService,
+    MessageFilter
+} from '../services/interfaces';
 import { DashboardViewState, WebviewCommand, WEBVIEW_COMMANDS } from '../types/ui';
 import { OrchestrationServer } from '../orchestration/OrchestrationServer';
 import { OrchestratorMessage, MessageType } from '../orchestration/MessageProtocol';
@@ -22,9 +30,9 @@ export class DashboardViewModel implements IDashboardViewModel {
         limit?: number;
         offset?: number;
     } = {
-            limit: 100,
-            offset: 0
-        };
+        limit: 100,
+        offset: 0
+    };
     private connectionStatus: Map<string, 'connected' | 'disconnected'> = new Map();
     private clientToLogical = new Map<string, string>();
     private statistics: {
@@ -33,11 +41,11 @@ export class DashboardViewModel implements IDashboardViewModel {
         averageResponseTime: number;
         activeConnections: number;
     } = {
-            totalMessages: 0,
-            successRate: 0,
-            averageResponseTime: 0,
-            activeConnections: 0
-        };
+        totalMessages: 0,
+        successRate: 0,
+        averageResponseTime: 0,
+        activeConnections: 0
+    };
 
     // Event subscriptions
     private subscriptions: vscode.Disposable[] = [];
@@ -68,21 +76,23 @@ export class DashboardViewModel implements IDashboardViewModel {
 
         // Subscribe to orchestration events
         this.subscriptions.push(
-            this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_RECEIVED, (data) => this.handleNewMessage(data.message)),
-            this.eventBus.subscribe(ORCH_EVENTS.CLIENT_CONNECTED, (data) => this.updateConnectionStatus(data)),
-            this.eventBus.subscribe(ORCH_EVENTS.CLIENT_DISCONNECTED, (data) => {
+            this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_RECEIVED, data => this.handleNewMessage(data.message)),
+            this.eventBus.subscribe(ORCH_EVENTS.CLIENT_CONNECTED, data => this.updateConnectionStatus(data)),
+            this.eventBus.subscribe(ORCH_EVENTS.CLIENT_DISCONNECTED, data => {
                 this.connectionStatus.set(data.clientId, 'disconnected');
                 this.publishStateChange();
             }),
-            this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_REGISTERED, (data) => this.handleLogicalIdRegistered(data)),
-            this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_UNREGISTERED, (data) => this.handleLogicalIdUnregistered(data)),
+            this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_REGISTERED, data => this.handleLogicalIdRegistered(data)),
+            this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_UNREGISTERED, data =>
+                this.handleLogicalIdUnregistered(data)
+            ),
             // Subscribe to persistence events for real-time updates
             this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_PERSISTED, () => this.handlePersistenceUpdate()),
             this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_STORAGE_CLEANUP, () => this.handlePersistenceUpdate())
         );
 
         // Register dashboard callback with orchestration server
-        this.orchestrationServer.setDashboardCallback((message) => {
+        this.orchestrationServer.setDashboardCallback(message => {
             this.handleNewMessage(message);
         });
     }
@@ -191,7 +201,12 @@ export class DashboardViewModel implements IDashboardViewModel {
         }
     }
 
-    calculateMessageStats(): { totalMessages: number; successRate: number; averageResponseTime: number; activeConnections: number } {
+    calculateMessageStats(): {
+        totalMessages: number;
+        successRate: number;
+        averageResponseTime: number;
+        activeConnections: number;
+    } {
         // Use cached history for synchronous access
         const history = this.messageBuffer;
         const connections = this.connectionPool?.getAllConnections() || new Map();
@@ -203,7 +218,7 @@ export class DashboardViewModel implements IDashboardViewModel {
 
         // Count agent connections from metadata
         let agentCount = 0;
-        connections.forEach((conn) => {
+        connections.forEach(conn => {
             if (conn.metadata.isAgent) {
                 agentCount++;
             }
@@ -319,7 +334,7 @@ export class DashboardViewModel implements IDashboardViewModel {
             if (this.activeFilters.timeRange) {
                 const now = new Date();
                 const rangeMinutes = parseInt(this.activeFilters.timeRange);
-                const fromTime = new Date(now.getTime() - (rangeMinutes * 60 * 1000));
+                const fromTime = new Date(now.getTime() - rangeMinutes * 60 * 1000);
                 filter.timeRange = {
                     from: fromTime,
                     to: now
@@ -347,14 +362,16 @@ export class DashboardViewModel implements IDashboardViewModel {
         } catch (error) {
             this.loggingService.error('Failed to get filtered messages from persistence', error);
             // Fallback to in-memory buffer
-            return this.messageBuffer.map(msg => ({
-                id: msg.id,
-                timestamp: new Date(msg.timestamp),
-                type: msg.type,
-                content: msg.payload,
-                source: msg.from,
-                target: msg.to
-            })).slice(-100);
+            return this.messageBuffer
+                .map(msg => ({
+                    id: msg.id,
+                    timestamp: new Date(msg.timestamp),
+                    type: msg.type,
+                    content: msg.payload,
+                    source: msg.from,
+                    target: msg.to
+                }))
+                .slice(-100);
         }
     }
 
@@ -364,7 +381,7 @@ export class DashboardViewModel implements IDashboardViewModel {
 
         // Count agent connections from metadata
         let agentCount = 0;
-        connections.forEach((conn) => {
+        connections.forEach(conn => {
             if (conn.metadata.isAgent) {
                 agentCount++;
             }

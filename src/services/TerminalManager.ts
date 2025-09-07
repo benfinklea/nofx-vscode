@@ -23,7 +23,7 @@ export class TerminalManager implements ITerminalManager {
 
         // Listen for terminal close events
         this.disposables.push(
-            vscode.window.onDidCloseTerminal((terminal) => {
+            vscode.window.onDidCloseTerminal(terminal => {
                 // Check if this is one of our agent terminals
                 for (const [agentId, agentTerminal] of this.terminals.entries()) {
                     if (agentTerminal === terminal) {
@@ -49,19 +49,20 @@ export class TerminalManager implements ITerminalManager {
 
     createTerminal(agentId: string, agentConfig: any): vscode.Terminal {
         // Use terminal icon from template, config, or fallback
-        const terminalIcon = agentConfig.template?.terminalIcon ??
-                            agentConfig.terminalIcon ??
-                            (agentConfig.type === 'conductor' ? 'terminal' : 'robot');
+        const terminalIcon =
+            agentConfig.template?.terminalIcon ??
+            agentConfig.terminalIcon ??
+            (agentConfig.type === 'conductor' ? 'terminal' : 'robot');
 
         // Get the user's default shell or use bash as fallback
         const shellPath = vscode.env.shell || '/bin/bash';
 
         // Create a dedicated terminal for this agent with explicit shell
         const terminal = vscode.window.createTerminal({
-            name: `${agentConfig.template?.icon || '🤖'} ${agentConfig.name}`,
+            name: agentConfig.name, // Just use the agent name, icon is shown separately
             iconPath: new vscode.ThemeIcon(terminalIcon),
             shellPath: shellPath,
-            shellArgs: [],  // Empty array for default shell args
+            shellArgs: [], // Empty array for default shell args
             env: {
                 NOFX_AGENT_ID: agentId,
                 NOFX_AGENT_TYPE: agentConfig.type,
@@ -139,39 +140,56 @@ export class TerminalManager implements ITerminalManager {
         terminal.sendText('echo ""');
 
         // Start Claude with --append-system-prompt flag
-        const claudePath = this.configService.getClaudePath();
+        const aiPath = this.configService.getAiPath();
 
         // Check if we should add the --dangerously-skip-permissions flag
         const skipPermissions = this.configService.isClaudeSkipPermissions();
         const permissionsFlag = skipPermissions ? '--dangerously-skip-permissions ' : '';
 
         if (agent.template && agent.template.systemPrompt) {
-            this.loggingService?.debug(`Starting ${agent.name} with system prompt`);
+            this.loggingService?.debug(`Starting ${agent.name} with simplified prompt, then injecting full template`);
 
-            // For complex agents with templates, use a simplified prompt
-            // The full prompt is too long for terminal.sendText() to handle reliably
-            // Clean up the type name (remove hyphens, make it readable)
-            const cleanType = agent.type.replace(/-/g, ' ').replace(/specialist/g, 'expert');
+            // Use a simplified prompt to launch Claude safely
+            const cleanType = agent.type.replace(/-/g, ' ');
             const simplePrompt = `You are ${agent.name}. You are an expert in ${cleanType}. You are part of a NofX.dev coding team. Please wait for instructions.`;
 
-            // Escape the prompt for shell
+            // Escape the simple prompt for shell
             const escapedPrompt = this.quotePromptForShell(simplePrompt);
 
-            // Log the full command for debugging
+            // Log the launch strategy
             this.loggingService?.info(`Starting agent: ${agent.name} (${agent.type})`);
-            this.loggingService?.debug(`Claude command: ${claudePath} ${permissionsFlag}--append-system-prompt ${escapedPrompt}`);
+            this.loggingService?.debug(`Using simplified launch prompt, will inject full template after launch`);
 
             // Show what we're about to execute
-            terminal.sendText(`echo "Executing: claude ${permissionsFlag}--append-system-prompt '...'"`);
+            terminal.sendText(
+                `echo "Executing: claude ${permissionsFlag}--append-system-prompt with simplified prompt"`
+            );
 
-            // Send the command with optional permissions flag
-            terminal.sendText(`${claudePath} ${permissionsFlag}--append-system-prompt ${escapedPrompt}`);
+            // Launch Claude with the simple prompt
+            terminal.sendText(`${aiPath} ${permissionsFlag}--append-system-prompt ${escapedPrompt}`);
+
+            // Wait for Claude to fully initialize
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            // Now inject the full template as the first message
+            terminal.sendText(`echo ""`);
+            terminal.sendText(`echo "🎯 Loading full agent template..."`);
+            terminal.sendText(`echo ""`);
+
+            // Send the full template as the first instruction
+            const fullPrompt = agent.template.systemPrompt;
+            terminal.sendText(
+                `That is you. ${fullPrompt} Explain who you are in 5 bullet points and then await instructions.`
+            );
+
+            this.loggingService?.debug(`Full template injected (${fullPrompt.length} chars)`);
         } else {
             // No template, just basic prompt
-            const basicPrompt = 'You are a general purpose agent, part of a NofX.dev coding team. Please wait for instructions.';
+            const basicPrompt =
+                'You are a general purpose agent, part of a NofX.dev coding team. Please wait for instructions.';
             // For simple prompts without newlines, we can use direct quoting
             const quotedPrompt = this.quotePromptForShell(basicPrompt);
-            terminal.sendText(`${claudePath} ${permissionsFlag}--append-system-prompt ${quotedPrompt}`);
+            terminal.sendText(`${aiPath} ${permissionsFlag}--append-system-prompt ${quotedPrompt}`);
         }
 
         // Show terminal if configured to do so (already shown above, but may need to focus)

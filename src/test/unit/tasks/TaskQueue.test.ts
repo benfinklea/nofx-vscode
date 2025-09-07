@@ -94,7 +94,7 @@ describe('TaskQueue', () => {
             onDidChange: jest.fn((callback: any) => ({ dispose: jest.fn() })),
             validateAll: jest.fn(() => ({ isValid: true, errors: [] })),
             getMaxAgents: jest.fn(() => 3),
-            getClaudePath: jest.fn(() => 'claude'),
+            getAiPath: jest.fn(() => 'claude'),
             isAutoAssignTasks: jest.fn(() => true),
             isUseWorktrees: jest.fn(() => true),
             isShowAgentTerminalOnSpawn: jest.fn(() => true),
@@ -112,7 +112,7 @@ describe('TaskQueue', () => {
             validateTransition: jest.fn((currentState: any, nextState: any) => true),
             transition: jest.fn((task: any, nextState: any) => []),
             getValidTransitions: jest.fn((currentState: any) => ['ready', 'assigned', 'in-progress']),
-            isTerminalState: jest.fn((state) => ['completed', 'failed'].includes(state)),
+            isTerminalState: jest.fn(state => ['completed', 'failed'].includes(state)),
             setTaskReader: jest.fn(),
             dispose: jest.fn()
         };
@@ -392,7 +392,9 @@ describe('TaskQueue', () => {
             const result = taskQueue.completeTask('non-existent');
 
             expect(result).toBe(false);
-            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('tasks_completion_failed', { reason: 'task_not_found' });
+            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('tasks_completion_failed', {
+                reason: 'task_not_found'
+            });
         });
 
         it('should handle transition errors', () => {
@@ -405,7 +407,9 @@ describe('TaskQueue', () => {
             const result = taskQueue.completeTask('task-1');
 
             expect(result).toBe(false);
-            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('tasks_completion_failed', { reason: 'transition_error' });
+            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('tasks_completion_failed', {
+                reason: 'transition_error'
+            });
         });
     });
 
@@ -417,7 +421,9 @@ describe('TaskQueue', () => {
             taskQueue.failTask('task-1', 'Test failure reason');
 
             expect(mockTaskStateMachine.transition).toHaveBeenCalledWith(task, 'failed');
-            expect(mockNotificationService.showError).toHaveBeenCalledWith('❌ Task failed: Test Task - Test failure reason');
+            expect(mockNotificationService.showError).toHaveBeenCalledWith(
+                '❌ Task failed: Test Task - Test failure reason'
+            );
         });
 
         it('should handle non-existent task gracefully', () => {
@@ -525,13 +531,8 @@ describe('TaskQueue', () => {
 
         it('should get dependent tasks', () => {
             mockDependencyManager.getDependentTasks.mockReturnValue(['dependent-1', 'dependent-2']);
-            const tasks = [
-                createMockTask({ id: 'dependent-1' }),
-                createMockTask({ id: 'dependent-2' })
-            ];
-            jest.spyOn(taskQueue, 'getTask').mockImplementation((id) =>
-                tasks.find(t => t.id === id)
-            );
+            const tasks = [createMockTask({ id: 'dependent-1' }), createMockTask({ id: 'dependent-2' })];
+            jest.spyOn(taskQueue, 'getTask').mockImplementation(id => tasks.find(t => t.id === id));
 
             const dependentTasks = taskQueue.getDependentTasks('parent-task');
 
@@ -703,4 +704,3 @@ describe('TaskQueue', () => {
         });
     });
 });
-

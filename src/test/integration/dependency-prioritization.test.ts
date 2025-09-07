@@ -192,8 +192,8 @@ describe('Dependency-Aware Prioritization Integration Tests', () => {
     });
 
     describe('Edge Cases', () => {
-    // Note: These tests now use the real DI container and exercise actual code paths
-    // including TaskDependencyManager, PriorityTaskQueue, and TaskQueue integration
+        // Note: These tests now use the real DI container and exercise actual code paths
+        // including TaskDependencyManager, PriorityTaskQueue, and TaskQueue integration
         it('should handle missing preferred tasks gracefully', async () => {
             const deployConfig: TaskConfig = {
                 title: 'Deploy to Production',
@@ -330,7 +330,9 @@ describe('Dependency-Aware Prioritization Integration Tests', () => {
 
             // Initially, low priority should be first in queue
             const queuedTasks = taskQueue.getQueuedTasks();
-            const sortedTasks = queuedTasks.sort((a: any, b: any) => (b.numericPriority || 0) - (a.numericPriority || 0));
+            const sortedTasks = queuedTasks.sort(
+                (a: any, b: any) => (b.numericPriority || 0) - (a.numericPriority || 0)
+            );
             expect(sortedTasks[0].id).toBe(highTask.id); // High priority first
 
             // Complete low priority task
@@ -338,7 +340,9 @@ describe('Dependency-Aware Prioritization Integration Tests', () => {
 
             // Now high priority should be boosted and still first
             const updatedQueuedTasks = taskQueue.getQueuedTasks();
-            const updatedSortedTasks = updatedQueuedTasks.sort((a: any, b: any) => (b.numericPriority || 0) - (a.numericPriority || 0));
+            const updatedSortedTasks = updatedQueuedTasks.sort(
+                (a: any, b: any) => (b.numericPriority || 0) - (a.numericPriority || 0)
+            );
             expect(updatedSortedTasks[0].id).toBe(highTask.id);
             expect(updatedSortedTasks[0].numericPriority).toBe(priorityToNumeric('high') + 5);
         });

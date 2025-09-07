@@ -143,10 +143,7 @@ describe('EventBus', () => {
             const testData = { test: true };
             eventBus.publish('debug.event', testData);
 
-            expect(mockLoggingService.debug).toHaveBeenCalledWith(
-                "EventBus: publish event 'debug.event'",
-                testData
-            );
+            expect(mockLoggingService.debug).toHaveBeenCalledWith("EventBus: publish event 'debug.event'", testData);
         });
     });
 
@@ -188,9 +185,7 @@ describe('EventBus', () => {
             const handler = jest.fn();
             eventBus.subscribe('debug.event', handler);
 
-            expect(mockLoggingService.debug).toHaveBeenCalledWith(
-                "EventBus: subscribe event 'debug.event'"
-            );
+            expect(mockLoggingService.debug).toHaveBeenCalledWith("EventBus: subscribe event 'debug.event'");
         });
 
         it('should handle pattern subscriptions for existing events', () => {
@@ -284,10 +279,9 @@ describe('EventBus', () => {
             const handler = jest.fn();
             eventBus.once('debug.event', handler);
 
-            expect(mockLoggingService.debug).toHaveBeenCalledWith(
-                "EventBus: subscribe event 'debug.event'",
-                { once: true }
-            );
+            expect(mockLoggingService.debug).toHaveBeenCalledWith("EventBus: subscribe event 'debug.event'", {
+                once: true
+            });
         });
 
         it('should handle disposal correctly', () => {
@@ -336,10 +330,9 @@ describe('EventBus', () => {
             const predicate = jest.fn().mockReturnValue(true);
             eventBus.filter('debug.event', predicate);
 
-            expect(mockLoggingService.debug).toHaveBeenCalledWith(
-                "EventBus: subscribe event 'debug.event'",
-                { filter: true }
-            );
+            expect(mockLoggingService.debug).toHaveBeenCalledWith("EventBus: subscribe event 'debug.event'", {
+                filter: true
+            });
         });
     });
 
@@ -383,9 +376,7 @@ describe('EventBus', () => {
             const handler = jest.fn();
             eventBus.subscribePattern('debug.*', handler);
 
-            expect(mockLoggingService.debug).toHaveBeenCalledWith(
-                "EventBus: Subscribing to pattern 'debug.*'"
-            );
+            expect(mockLoggingService.debug).toHaveBeenCalledWith("EventBus: Subscribing to pattern 'debug.*'");
         });
 
         it('should dispose all pattern subscriptions', () => {
@@ -545,7 +536,7 @@ describe('EventBus', () => {
             const mockConfigDisposable = { dispose: jest.fn() };
             let configChangeCallback: (() => void) | undefined;
 
-            mockLoggingService.onDidChangeConfiguration = jest.fn().mockImplementation((callback) => {
+            mockLoggingService.onDidChangeConfiguration = jest.fn().mockImplementation(callback => {
                 configChangeCallback = callback;
                 return mockConfigDisposable;
             });

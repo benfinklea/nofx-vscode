@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import { EventEmitter } from 'events';
 
 export interface InactivityConfig {
-    warningThreshold: number;  // seconds (default: 30)
-    alertThreshold: number;    // seconds (default: 120)
+    warningThreshold: number; // seconds (default: 30)
+    alertThreshold: number; // seconds (default: 120)
     heartbeatInterval: number; // seconds (default: 15)
 }
 

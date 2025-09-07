@@ -126,24 +126,14 @@ describe('MessageFlowDashboard', () => {
 
     describe('constructor', () => {
         it('should initialize with webview host, context, view model, and logging service', () => {
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
 
             expect(dashboard).toBeDefined();
             expect(DashboardTemplate).toHaveBeenCalledWith(mockContext);
         });
 
         it('should create DashboardTemplate instance', () => {
-            new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
 
             expect(DashboardTemplate).toHaveBeenCalledWith(mockContext);
         });
@@ -160,9 +150,7 @@ describe('MessageFlowDashboard', () => {
                 {
                     enableScripts: true,
                     retainContextWhenHidden: true,
-                    localResourceRoots: [
-                        vscode.Uri.joinPath(mockContext.extensionUri, 'webview')
-                    ]
+                    localResourceRoots: [vscode.Uri.joinPath(mockContext.extensionUri, 'webview')]
                 }
             );
         });
@@ -235,12 +223,7 @@ describe('MessageFlowDashboard', () => {
         let dashboard: MessageFlowDashboard;
 
         beforeEach(async () => {
-            dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
         });
 
@@ -301,12 +284,7 @@ describe('MessageFlowDashboard', () => {
 
     describe('reveal method', () => {
         it('should call webview host reveal', () => {
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
 
             dashboard.reveal();
 
@@ -316,12 +294,7 @@ describe('MessageFlowDashboard', () => {
 
     describe('dispose method', () => {
         it('should dispose all resources and clear current panel', async () => {
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             dashboard.dispose();
@@ -335,12 +308,7 @@ describe('MessageFlowDashboard', () => {
         });
 
         it('should handle multiple dispose calls gracefully', async () => {
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             dashboard.dispose();
@@ -351,12 +319,7 @@ describe('MessageFlowDashboard', () => {
         });
 
         it('should dispose disposables in correct order', async () => {
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             const disposeOrder: string[] = [];
@@ -373,12 +336,7 @@ describe('MessageFlowDashboard', () => {
         });
 
         it('should handle dispose when already disposed', async () => {
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             dashboard.dispose();
@@ -394,12 +352,7 @@ describe('MessageFlowDashboard', () => {
 
     describe('state management integration', () => {
         it('should handle dashboard state updates with complex data', async () => {
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             const complexState: DashboardViewState = {
@@ -447,12 +400,7 @@ describe('MessageFlowDashboard', () => {
         });
 
         it('should handle webview commands with different data types', async () => {
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             const messageHandler = (mockWebviewHost.onDidReceiveMessage as jest.Mock).mock.calls[0][0];
@@ -477,12 +425,7 @@ describe('MessageFlowDashboard', () => {
             const error = new Error('Failed to get dashboard state');
             mockViewModel.getDashboardState.mockRejectedValue(error);
 
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
 
             await expect(dashboard.show()).rejects.toThrow('Failed to get dashboard state');
         });
@@ -492,12 +435,7 @@ describe('MessageFlowDashboard', () => {
                 throw new Error('Template generation failed');
             });
 
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
 
             await expect(dashboard.show()).rejects.toThrow('Template generation failed');
         });
@@ -505,12 +443,7 @@ describe('MessageFlowDashboard', () => {
         it('should handle webview host postMessage failures', async () => {
             mockWebviewHost.postMessage.mockRejectedValue(new Error('Post message failed'));
 
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             const stateUpdateCallback = (mockViewModel.subscribe as jest.Mock).mock.calls[0][0];
@@ -525,12 +458,7 @@ describe('MessageFlowDashboard', () => {
                 throw error;
             });
 
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             // Should handle dispose errors gracefully
@@ -543,12 +471,7 @@ describe('MessageFlowDashboard', () => {
                 throw error;
             });
 
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             expect(() => dashboard.dispose()).not.toThrow();
@@ -557,12 +480,7 @@ describe('MessageFlowDashboard', () => {
 
     describe('memory management', () => {
         it('should clean up all subscriptions on dispose', async () => {
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             // Verify subscriptions are created
@@ -577,12 +495,7 @@ describe('MessageFlowDashboard', () => {
         });
 
         it('should prevent memory leaks from state updates after disposal', async () => {
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             const stateUpdateCallback = (mockViewModel.subscribe as jest.Mock).mock.calls[0][0];
@@ -601,20 +514,21 @@ describe('MessageFlowDashboard', () => {
 
     describe('concurrent operations', () => {
         it('should handle multiple simultaneous state updates', async () => {
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             const stateUpdateCallback = (mockViewModel.subscribe as jest.Mock).mock.calls[0][0];
 
             // Simulate multiple concurrent state updates
             const updatePromises = [
-                stateUpdateCallback({ ...mockDashboardState, stats: { ...mockDashboardState.stats, totalMessages: 1 } }),
-                stateUpdateCallback({ ...mockDashboardState, stats: { ...mockDashboardState.stats, totalMessages: 2 } }),
+                stateUpdateCallback({
+                    ...mockDashboardState,
+                    stats: { ...mockDashboardState.stats, totalMessages: 1 }
+                }),
+                stateUpdateCallback({
+                    ...mockDashboardState,
+                    stats: { ...mockDashboardState.stats, totalMessages: 2 }
+                }),
                 stateUpdateCallback({ ...mockDashboardState, stats: { ...mockDashboardState.stats, totalMessages: 3 } })
             ];
 
@@ -625,18 +539,13 @@ describe('MessageFlowDashboard', () => {
 
         it('should handle disposal during state update', async () => {
             let resolvePostMessage: (value: boolean) => void;
-            const postMessagePromise = new Promise<boolean>((resolve) => {
+            const postMessagePromise = new Promise<boolean>(resolve => {
                 resolvePostMessage = resolve;
             });
 
             mockWebviewHost.postMessage.mockReturnValue(postMessagePromise);
 
-            const dashboard = new MessageFlowDashboard(
-                mockWebviewHost,
-                mockContext,
-                mockViewModel,
-                mockLoggingService
-            );
+            const dashboard = new MessageFlowDashboard(mockWebviewHost, mockContext, mockViewModel, mockLoggingService);
             await dashboard.show();
 
             const stateUpdateCallback = (mockViewModel.subscribe as jest.Mock).mock.calls[0][0];

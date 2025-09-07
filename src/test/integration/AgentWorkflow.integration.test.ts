@@ -1,4 +1,10 @@
-import { createIntegrationContainer, createMockAgent, createMockTask, waitForEvent, measureTime } from '../utils/TestHelpers';
+import {
+    createIntegrationContainer,
+    createMockAgent,
+    createMockTask,
+    waitForEvent,
+    measureTime
+} from '../utils/TestHelpers';
 import { IContainer, SERVICE_TOKENS } from '../../services/interfaces';
 import { createMessage, MessageType } from '../../orchestration/MessageProtocol';
 
@@ -226,7 +232,7 @@ describe('Agent Workflow Integration Tests', () => {
             const WebSocket = require('ws');
             const client = new WebSocket(`ws://localhost:${port}`);
 
-            await new Promise((resolve) => {
+            await new Promise(resolve => {
                 client.on('open', resolve);
             });
 
@@ -239,7 +245,7 @@ describe('Agent Workflow Integration Tests', () => {
             client.send(JSON.stringify(msg));
 
             // Wait for response
-            const response = await new Promise((resolve) => {
+            const response = await new Promise(resolve => {
                 client.on('message', (data: string) => {
                     const message = JSON.parse(data);
                     if (message.type === MessageType.AGENT_READY) {
@@ -273,7 +279,7 @@ describe('Agent Workflow Integration Tests', () => {
             const WebSocket = require('ws');
             const client = new WebSocket(`ws://localhost:${port}`);
 
-            await new Promise((resolve) => {
+            await new Promise(resolve => {
                 client.on('open', resolve);
             });
 
@@ -290,7 +296,7 @@ describe('Agent Workflow Integration Tests', () => {
             client.send(JSON.stringify(assignTaskMsg));
 
             // Wait for task acceptance response
-            const taskResponse = await new Promise((resolve) => {
+            const taskResponse = await new Promise(resolve => {
                 client.on('message', (data: string) => {
                     const message = JSON.parse(data);
                     if (message.type === MessageType.TASK_ACCEPTED) {
@@ -317,7 +323,7 @@ describe('Agent Workflow Integration Tests', () => {
             const WebSocket = require('ws');
             const client = new WebSocket(`ws://localhost:${port}`);
 
-            await new Promise((resolve) => {
+            await new Promise(resolve => {
                 client.on('open', resolve);
             });
 
@@ -331,7 +337,7 @@ describe('Agent Workflow Integration Tests', () => {
             client.send(JSON.stringify(invalidMessage));
 
             // Wait for error response
-            const errorResponse = await new Promise((resolve) => {
+            const errorResponse = await new Promise(resolve => {
                 client.on('message', (data: string) => {
                     const message = JSON.parse(data);
                     if (message.type === MessageType.SYSTEM_ERROR) {
@@ -383,7 +389,7 @@ describe('Agent Workflow Integration Tests', () => {
             const WebSocket = require('ws');
             const client = new WebSocket(`ws://localhost:${port}`);
 
-            await new Promise((resolve) => {
+            await new Promise(resolve => {
                 client.on('open', resolve);
             });
 
@@ -440,9 +446,7 @@ describe('Agent Workflow Integration Tests', () => {
                 expect(agents).toHaveLength(10);
 
                 // Clean up all agents
-                const cleanupPromises = agents.map(agent =>
-                    agentManager.removeAgent(agent.id)
-                );
+                const cleanupPromises = agents.map(agent => agentManager.removeAgent(agent.id));
                 await Promise.all(cleanupPromises);
             });
 
@@ -473,8 +477,9 @@ describe('Agent Workflow Integration Tests', () => {
             const configService = container.resolve(SERVICE_TOKENS.ConfigurationService);
 
             // Try to set invalid configuration
-            await expect((configService as any).update('maxAgents', 15))
-                .rejects.toThrow('Configuration validation failed');
+            await expect((configService as any).update('maxAgents', 15)).rejects.toThrow(
+                'Configuration validation failed'
+            );
         });
     });
 });

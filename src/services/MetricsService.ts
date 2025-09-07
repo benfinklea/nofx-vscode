@@ -1,4 +1,12 @@
-import { IMetricsService, MetricType, MetricData, IConfigurationService, ILoggingService, IEventBus, METRICS_CONFIG_KEYS } from './interfaces';
+import {
+    IMetricsService,
+    MetricType,
+    MetricData,
+    IConfigurationService,
+    ILoggingService,
+    IEventBus,
+    METRICS_CONFIG_KEYS
+} from './interfaces';
 
 export class MetricsService implements IMetricsService {
     private metrics: MetricData[] = [];
@@ -38,24 +46,32 @@ export class MetricsService implements IMetricsService {
     private initializeConfiguration(): void {
         try {
             this.isEnabled = this.configService.get<boolean>(METRICS_CONFIG_KEYS.ENABLE_METRICS, false);
-            this.outputLevel = this.configService.get<'none' | 'basic' | 'detailed'>(METRICS_CONFIG_KEYS.METRICS_OUTPUT_LEVEL, 'basic');
+            this.outputLevel = this.configService.get<'none' | 'basic' | 'detailed'>(
+                METRICS_CONFIG_KEYS.METRICS_OUTPUT_LEVEL,
+                'basic'
+            );
             this.retentionHours = this.configService.get<number>(METRICS_CONFIG_KEYS.METRICS_RETENTION_HOURS, 24);
         } catch (error) {
-            this.logger.warn('Failed to initialize configuration, using defaults', { error: error instanceof Error ? error.message : String(error) });
+            this.logger.warn('Failed to initialize configuration, using defaults', {
+                error: error instanceof Error ? error.message : String(error)
+            });
             this.isEnabled = false;
             this.outputLevel = 'basic';
             this.retentionHours = 24;
         }
 
         // Listen for configuration changes
-        this.configChangeDisposable = this.configService.onDidChange((e) => {
+        this.configChangeDisposable = this.configService.onDidChange(e => {
             if (e.affectsConfiguration('nofx.enableMetrics')) {
                 this.isEnabled = this.configService.get<boolean>(METRICS_CONFIG_KEYS.ENABLE_METRICS, false);
                 this.logger.debug('Metrics collection toggled', { enabled: this.isEnabled });
                 this.updateCleanupTimer();
             }
             if (e.affectsConfiguration('nofx.metricsOutputLevel')) {
-                this.outputLevel = this.configService.get<'none' | 'basic' | 'detailed'>(METRICS_CONFIG_KEYS.METRICS_OUTPUT_LEVEL, 'basic');
+                this.outputLevel = this.configService.get<'none' | 'basic' | 'detailed'>(
+                    METRICS_CONFIG_KEYS.METRICS_OUTPUT_LEVEL,
+                    'basic'
+                );
                 this.logger.debug('Metrics output level changed', { level: this.outputLevel });
             }
             if (e.affectsConfiguration('nofx.metricsRetentionHours')) {
@@ -79,7 +95,9 @@ export class MetricsService implements IMetricsService {
         try {
             this.eventBus?.publish('metrics.counter.incremented', { name, tags });
         } catch (error) {
-            this.logger.warn('Failed to publish counter event', { error: error instanceof Error ? error.message : String(error) });
+            this.logger.warn('Failed to publish counter event', {
+                error: error instanceof Error ? error.message : String(error)
+            });
         }
     }
 
@@ -97,7 +115,9 @@ export class MetricsService implements IMetricsService {
         try {
             this.eventBus?.publish('metrics.duration.recorded', { name, duration, tags });
         } catch (error) {
-            this.logger.warn('Failed to publish duration event', { error: error instanceof Error ? error.message : String(error) });
+            this.logger.warn('Failed to publish duration event', {
+                error: error instanceof Error ? error.message : String(error)
+            });
         }
     }
 
@@ -115,7 +135,9 @@ export class MetricsService implements IMetricsService {
         try {
             this.eventBus?.publish('metrics.gauge.set', { name, value, tags });
         } catch (error) {
-            this.logger.warn('Failed to publish gauge event', { error: error instanceof Error ? error.message : String(error) });
+            this.logger.warn('Failed to publish gauge event', {
+                error: error instanceof Error ? error.message : String(error)
+            });
         }
     }
 
@@ -158,17 +180,23 @@ export class MetricsService implements IMetricsService {
         try {
             this.eventBus?.publish('metrics.reset', {});
         } catch (error) {
-            this.logger.warn('Failed to publish reset event', { error: error instanceof Error ? error.message : String(error) });
+            this.logger.warn('Failed to publish reset event', {
+                error: error instanceof Error ? error.message : String(error)
+            });
         }
     }
 
     exportMetrics(format: 'json' | 'csv' = 'json'): string {
         if (format === 'json') {
-            return JSON.stringify({
-                timestamp: new Date().toISOString(),
-                metrics: this.metrics,
-                summary: this.getMetricsSummary()
-            }, null, 2);
+            return JSON.stringify(
+                {
+                    timestamp: new Date().toISOString(),
+                    metrics: this.metrics,
+                    summary: this.getMetricsSummary()
+                },
+                null,
+                2
+            );
         } else {
             return this.exportAsCSV();
         }
@@ -199,7 +227,9 @@ export class MetricsService implements IMetricsService {
         try {
             this.eventBus?.publish('metrics.recorded', metric);
         } catch (error) {
-            this.logger.warn('Failed to publish metric event', { error: error instanceof Error ? error.message : String(error) });
+            this.logger.warn('Failed to publish metric event', {
+                error: error instanceof Error ? error.message : String(error)
+            });
         }
     }
 
@@ -259,10 +289,12 @@ export class MetricsService implements IMetricsService {
         }
 
         const headers = 'timestamp,name,type,value,tags\n';
-        const rows = this.metrics.map(metric => {
-            const tags = metric.tags ? JSON.stringify(metric.tags) : '';
-            return `${metric.timestamp.toISOString()},${metric.name},${metric.type},${metric.value},"${tags}"`;
-        }).join('\n');
+        const rows = this.metrics
+            .map(metric => {
+                const tags = metric.tags ? JSON.stringify(metric.tags) : '';
+                return `${metric.timestamp.toISOString()},${metric.name},${metric.type},${metric.value},"${tags}"`;
+            })
+            .join('\n');
 
         return headers + rows;
     }
@@ -315,15 +347,18 @@ export class MetricsService implements IMetricsService {
 
     private startCleanupTimer(): void {
         // Clean up old metrics every hour
-        this.cleanupInterval = setInterval(() => {
-            this.cleanupOldMetrics();
-            // Also collect system metrics during cleanup
-            this.collectSystemMetrics();
-        }, 60 * 60 * 1000); // 1 hour
+        this.cleanupInterval = setInterval(
+            () => {
+                this.cleanupOldMetrics();
+                // Also collect system metrics during cleanup
+                this.collectSystemMetrics();
+            },
+            60 * 60 * 1000
+        ); // 1 hour
     }
 
     private cleanupOldMetrics(): void {
-        const cutoffTime = new Date(Date.now() - (this.retentionHours * 60 * 60 * 1000));
+        const cutoffTime = new Date(Date.now() - this.retentionHours * 60 * 60 * 1000);
         const initialCount = this.metrics.length;
 
         this.metrics = this.metrics.filter(metric => metric.timestamp > cutoffTime);

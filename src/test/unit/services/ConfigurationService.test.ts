@@ -107,14 +107,14 @@ describe('ConfigurationService', () => {
         mockConfigurationChangeEvent.affectsConfiguration.mockReturnValue(true);
         mockWorkspaceConfiguration.get.mockImplementation((key: string) => {
             const values: Record<string, any> = {
-                'maxAgents': 3,
-                'claudePath': 'claude',
-                'autoAssignTasks': true,
-                'useWorktrees': true,
-                'logLevel': 'info',
-                'showAgentTerminalOnSpawn': false,
-                'templatesPath': '.nofx/templates',
-                'persistAgents': true
+                maxAgents: 3,
+                aiPath: 'claude',
+                autoAssignTasks: true,
+                useWorktrees: true,
+                logLevel: 'info',
+                showAgentTerminalOnSpawn: false,
+                templatesPath: '.nofx/templates',
+                persistAgents: true
             };
             return values[key];
         });
@@ -147,10 +147,7 @@ describe('ConfigurationService', () => {
             changeHandler(mockConfigurationChangeEvent);
 
             expect(mockConfigurationChangeEvent.affectsConfiguration).toHaveBeenCalledWith('nofx');
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                CONFIG_EVENTS.CONFIG_CHANGED,
-                { section: 'nofx' }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(CONFIG_EVENTS.CONFIG_CHANGED, { section: 'nofx' });
         });
 
         it('should not publish config change event for unrelated sections', () => {
@@ -159,10 +156,7 @@ describe('ConfigurationService', () => {
             const changeHandler = mockOnDidChangeConfiguration.mock.calls[0][0];
             changeHandler(mockConfigurationChangeEvent);
 
-            expect(mockEventBus.publish).not.toHaveBeenCalledWith(
-                CONFIG_EVENTS.CONFIG_CHANGED,
-                expect.anything()
-            );
+            expect(mockEventBus.publish).not.toHaveBeenCalledWith(CONFIG_EVENTS.CONFIG_CHANGED, expect.anything());
         });
     });
 
@@ -188,10 +182,10 @@ describe('ConfigurationService', () => {
             const value = configurationService.get('maxAgents', 1);
 
             expect(mockValidator.validateConfigurationKey).toHaveBeenCalledWith('maxAgents', 3);
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                CONFIG_EVENTS.CONFIG_VALIDATION_FAILED,
-                { key: 'maxAgents', errors: [mockValidationError] }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(CONFIG_EVENTS.CONFIG_VALIDATION_FAILED, {
+                key: 'maxAgents',
+                errors: [mockValidationError]
+            });
             expect(value).toBe(1); // Should return default value for invalid cached value
         });
 
@@ -203,14 +197,11 @@ describe('ConfigurationService', () => {
             const value = configurationService.get('errorKey', 'fallback');
 
             expect(value).toBe('fallback');
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                CONFIG_EVENTS.CONFIG_API_ERROR,
-                {
-                    key: 'errorKey',
-                    error: 'VS Code API error',
-                    operation: 'get'
-                }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(CONFIG_EVENTS.CONFIG_API_ERROR, {
+                key: 'errorKey',
+                error: 'VS Code API error',
+                operation: 'get'
+            });
         });
     });
 
@@ -218,13 +209,15 @@ describe('ConfigurationService', () => {
         it('should return all known configuration values', () => {
             const allConfig = configurationService.getAll();
 
-            expect(allConfig).toEqual(expect.objectContaining({
-                'maxAgents': 3,
-                'claudePath': 'claude',
-                'autoAssignTasks': true,
-                'useWorktrees': true,
-                'logLevel': 'info'
-            }));
+            expect(allConfig).toEqual(
+                expect.objectContaining({
+                    maxAgents: 3,
+                    aiPath: 'claude',
+                    autoAssignTasks: true,
+                    useWorktrees: true,
+                    logLevel: 'info'
+                })
+            );
         });
 
         it('should exclude undefined values from result', () => {
@@ -239,7 +232,7 @@ describe('ConfigurationService', () => {
 
             const allConfig = configurationService.getAll();
 
-            expect(allConfig).toEqual({ 'maxAgents': 3 });
+            expect(allConfig).toEqual({ maxAgents: 3 });
         });
     });
 
@@ -250,11 +243,16 @@ describe('ConfigurationService', () => {
             await configurationService.update('maxAgents', 5);
 
             expect(mockValidator.validateConfigurationKey).toHaveBeenCalledWith('maxAgents', 5);
-            expect(mockWorkspaceConfiguration.update).toHaveBeenCalledWith('maxAgents', 5, vscode.ConfigurationTarget.Workspace);
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                CONFIG_EVENTS.CONFIG_UPDATED,
-                { key: 'maxAgents', value: 5, target: vscode.ConfigurationTarget.Workspace }
+            expect(mockWorkspaceConfiguration.update).toHaveBeenCalledWith(
+                'maxAgents',
+                5,
+                vscode.ConfigurationTarget.Workspace
             );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(CONFIG_EVENTS.CONFIG_UPDATED, {
+                key: 'maxAgents',
+                value: 5,
+                target: vscode.ConfigurationTarget.Workspace
+            });
         });
 
         it('should validate before updating', async () => {
@@ -264,7 +262,7 @@ describe('ConfigurationService', () => {
             });
 
             await expect(configurationService.update('maxAgents', 15)).rejects.toThrow(
-                'Configuration validation failed for key \'maxAgents\': Must be between 1 and 10'
+                "Configuration validation failed for key 'maxAgents': Must be between 1 and 10"
             );
 
             expect(mockWorkspaceConfiguration.update).not.toHaveBeenCalled();
@@ -274,18 +272,15 @@ describe('ConfigurationService', () => {
             mockWorkspaceConfiguration.update.mockRejectedValue(new Error('Update failed'));
 
             await expect(configurationService.update('maxAgents', 5)).rejects.toThrow(
-                'Failed to update configuration key \'maxAgents\': Update failed'
+                "Failed to update configuration key 'maxAgents': Update failed"
             );
 
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                CONFIG_EVENTS.CONFIG_UPDATE_FAILED,
-                {
-                    key: 'maxAgents',
-                    value: 5,
-                    target: vscode.ConfigurationTarget.Workspace,
-                    error: 'Update failed'
-                }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(CONFIG_EVENTS.CONFIG_UPDATE_FAILED, {
+                key: 'maxAgents',
+                value: 5,
+                target: vscode.ConfigurationTarget.Workspace,
+                error: 'Update failed'
+            });
         });
     });
 
@@ -294,8 +289,8 @@ describe('ConfigurationService', () => {
             expect(configurationService.getMaxAgents()).toBe(3);
         });
 
-        it('should get Claude path with default value', () => {
-            expect(configurationService.getClaudePath()).toBe('claude');
+        it('should get AI path with default value', () => {
+            expect(configurationService.getAiPath()).toBe('claude');
         });
 
         it('should get auto assign tasks setting', () => {
@@ -337,7 +332,9 @@ describe('ConfigurationService', () => {
 
         it('should return validation errors', () => {
             const schemaErrors = [mockValidationError];
-            const nofxErrors = [{ key: 'claudePath', message: 'Invalid path', severity: 'error', value: '' } as ValidationError];
+            const nofxErrors = [
+                { key: 'aiPath', message: 'Invalid path', severity: 'error', value: '' } as ValidationError
+            ];
 
             mockValidator.validateConfiguration.mockReturnValue({ isValid: false, errors: schemaErrors });
             mockValidator.validateNofXConfiguration.mockReturnValue({ isValid: false, errors: nofxErrors });
@@ -363,7 +360,7 @@ describe('ConfigurationService', () => {
             const flatConfig = {
                 'orchestration.heartbeatInterval': 5000,
                 'orchestration.persistence.path': '/custom/path',
-                'maxAgents': 5
+                maxAgents: 5
             };
 
             const nested = configurationService.getNestedConfig(flatConfig);
@@ -384,25 +381,26 @@ describe('ConfigurationService', () => {
         it('should backup configuration successfully', async () => {
             const backup = await configurationService.backupConfiguration();
 
-            expect(backup).toEqual(expect.objectContaining({
-                'maxAgents': 3,
-                'claudePath': 'claude',
-                'autoAssignTasks': true,
-                'useWorktrees': true,
-                'logLevel': 'info'
-            }));
-
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                CONFIG_EVENTS.CONFIG_BACKED_UP,
-                { keys: Object.keys(backup) }
+            expect(backup).toEqual(
+                expect.objectContaining({
+                    maxAgents: 3,
+                    aiPath: 'claude',
+                    autoAssignTasks: true,
+                    useWorktrees: true,
+                    logLevel: 'info'
+                })
             );
+
+            expect(mockEventBus.publish).toHaveBeenCalledWith(CONFIG_EVENTS.CONFIG_BACKED_UP, {
+                keys: Object.keys(backup)
+            });
         });
 
         it('should restore configuration successfully', async () => {
             const backupData = {
-                'maxAgents': 5,
-                'claudePath': '/custom/claude',
-                'logLevel': 'debug'
+                maxAgents: 5,
+                aiPath: '/custom/claude',
+                logLevel: 'debug'
             };
 
             mockWorkspaceConfiguration.update.mockResolvedValue(undefined);
@@ -411,17 +409,20 @@ describe('ConfigurationService', () => {
 
             expect(mockValidator.validateConfiguration).toHaveBeenCalled();
             Object.entries(backupData).forEach(([key, value]) => {
-                expect(mockWorkspaceConfiguration.update).toHaveBeenCalledWith(key, value, vscode.ConfigurationTarget.Workspace);
+                expect(mockWorkspaceConfiguration.update).toHaveBeenCalledWith(
+                    key,
+                    value,
+                    vscode.ConfigurationTarget.Workspace
+                );
             });
 
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                CONFIG_EVENTS.CONFIG_RESTORED,
-                { keys: Object.keys(backupData) }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(CONFIG_EVENTS.CONFIG_RESTORED, {
+                keys: Object.keys(backupData)
+            });
         });
 
         it('should validate backup before restoring', async () => {
-            const invalidBackup = { 'maxAgents': -1 };
+            const invalidBackup = { maxAgents: -1 };
 
             mockValidator.validateConfiguration.mockReturnValue({
                 isValid: false,
@@ -441,7 +442,7 @@ describe('ConfigurationService', () => {
             const complexFlat = {
                 'a.b.c.d.e': 'deep',
                 'a.b.f': 'shallow',
-                'g': 'root'
+                g: 'root'
             };
 
             const nested = configurationService.getNestedConfig(complexFlat);

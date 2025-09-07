@@ -41,9 +41,19 @@ export interface Task {
     requiredCapabilities?: string[];
     conflictsWith?: string[];
     agentMatchScore?: number; // Transient field for UI display
+    parallelGroup?: string; // Group ID for tasks that can run in parallel
+    canRunInParallel?: boolean; // Whether this task can run parallel with others
 }
 
-export type TaskStatus = 'queued' | 'validated' | 'ready' | 'assigned' | 'in-progress' | 'completed' | 'failed' | 'blocked';
+export type TaskStatus =
+    | 'queued'
+    | 'validated'
+    | 'ready'
+    | 'assigned'
+    | 'in-progress'
+    | 'completed'
+    | 'failed'
+    | 'blocked';
 
 export interface TaskValidationError {
     field: string;
@@ -68,4 +78,5 @@ export interface TaskConfig {
     estimatedDuration?: number;
     requiredCapabilities?: string[];
     capabilities?: string[]; // Deprecated: use requiredCapabilities instead
+    maxParallelAgents?: number; // Maximum number of agents that can work on parallel tasks
 }

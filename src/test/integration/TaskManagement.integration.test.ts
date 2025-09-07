@@ -85,7 +85,7 @@ describe('Task Management Integration Tests', () => {
             onDidChange: jest.fn() as any,
             validateAll: jest.fn(() => ({ isValid: true, errors: [] })),
             getMaxAgents: jest.fn(() => 3),
-            getClaudePath: jest.fn(() => 'claude'),
+            getAiPath: jest.fn(() => 'claude'),
             isAutoAssignTasks: jest.fn(() => true),
             isUseWorktrees: jest.fn(() => true),
             isShowAgentTerminalOnSpawn: jest.fn(() => true),
@@ -618,9 +618,7 @@ describe('Task Management Integration Tests', () => {
                 }
 
                 (agentManager as any).getIdleAgents.mockReturnValue(agents);
-                (agentManager as any).getAgent.mockImplementation((id: string) =>
-                    agents.find((a: any) => a.id === id)
-                );
+                (agentManager as any).getAgent.mockImplementation((id: string) => agents.find((a: any) => a.id === id));
                 (agentManager as any).executeTask.mockResolvedValue(undefined);
 
                 // Assign tasks concurrently

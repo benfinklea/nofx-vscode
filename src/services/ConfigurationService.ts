@@ -70,7 +70,10 @@ export class ConfigurationService implements IConfigurationService {
                 if (this.validator) {
                     const validation = this.validateConfigurationKey(key, value);
                     if (!validation.isValid) {
-                        this.eventBus?.publish(CONFIG_EVENTS.CONFIG_VALIDATION_FAILED, { key, errors: validation.errors });
+                        this.eventBus?.publish(CONFIG_EVENTS.CONFIG_VALIDATION_FAILED, {
+                            key,
+                            errors: validation.errors
+                        });
                         // Don't cache invalid values, return default
                         return defaultValue as T;
                     }
@@ -106,7 +109,11 @@ export class ConfigurationService implements IConfigurationService {
         return result;
     }
 
-    async update(key: string, value: any, target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Workspace): Promise<void> {
+    async update(
+        key: string,
+        value: any,
+        target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Workspace
+    ): Promise<void> {
         // Validate the new value before applying
         if (this.validator) {
             const validation = this.validateConfigurationKey(key, value);
@@ -151,8 +158,12 @@ export class ConfigurationService implements IConfigurationService {
         return this.get<number>(CONFIG_KEYS.MAX_AGENTS, 3);
     }
 
-    getClaudePath(): string {
-        return this.get<string>(CONFIG_KEYS.CLAUDE_PATH, 'claude');
+    getAiProvider(): string {
+        return this.get<string>(CONFIG_KEYS.AI_PROVIDER, 'claude');
+    }
+
+    getAiPath(): string {
+        return this.get<string>(CONFIG_KEYS.AI_PATH, 'claude');
     }
 
     isAutoAssignTasks(): boolean {

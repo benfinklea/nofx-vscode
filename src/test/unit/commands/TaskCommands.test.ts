@@ -1,6 +1,12 @@
 import * as vscode from 'vscode';
 import { TaskCommands } from '../../../commands/TaskCommands';
-import { IContainer, INotificationService, ICommandService, IConfigurationService, SERVICE_TOKENS } from '../../../services/interfaces';
+import {
+    IContainer,
+    INotificationService,
+    ICommandService,
+    IConfigurationService,
+    SERVICE_TOKENS
+} from '../../../services/interfaces';
 import { AgentManager } from '../../../agents/AgentManager';
 import { TaskQueue } from '../../../tasks/TaskQueue';
 import { Task, TaskConfig } from '../../../agents/types';
@@ -141,16 +147,18 @@ describe('TaskCommands', () => {
             // Execute the createTask method directly
             await (taskCommands as any).createTask();
 
-            expect(mockTaskQueue.addTask).toHaveBeenCalledWith(expect.objectContaining({
-                title: 'Fix authentication bug',
-                description: 'Fix authentication bug',
-                priority: 'high',
-                files: ['src/test.ts'],
-                tags: ['frontend', 'bug'],
-                requiredCapabilities: ['React', 'TypeScript'],
-                estimatedDuration: 30,
-                dependsOn: []
-            }));
+            expect(mockTaskQueue.addTask).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    title: 'Fix authentication bug',
+                    description: 'Fix authentication bug',
+                    priority: 'high',
+                    files: ['src/test.ts'],
+                    tags: ['frontend', 'bug'],
+                    requiredCapabilities: ['React', 'TypeScript'],
+                    estimatedDuration: 30,
+                    dependsOn: []
+                })
+            );
 
             expect(mockNotificationService.showInformation).toHaveBeenCalledWith('Task created and added to queue');
         });
@@ -172,11 +180,13 @@ describe('TaskCommands', () => {
 
             await (taskCommands as any).createTask();
 
-            expect(mockTaskQueue.addTask).toHaveBeenCalledWith(expect.objectContaining({
-                title: 'New task',
-                priority: 'medium',
-                dependsOn: ['task-0']
-            }));
+            expect(mockTaskQueue.addTask).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    title: 'New task',
+                    priority: 'medium',
+                    dependsOn: ['task-0']
+                })
+            );
         });
 
         it('should handle cancellation', async () => {
@@ -283,7 +293,9 @@ describe('TaskCommands', () => {
 
             await (taskCommands as any).addTaskDependency();
 
-            expect(mockNotificationService.showError).toHaveBeenCalledWith('Failed to add dependency: Circular dependency detected');
+            expect(mockNotificationService.showError).toHaveBeenCalledWith(
+                'Failed to add dependency: Circular dependency detected'
+            );
         });
     });
 
@@ -308,7 +320,11 @@ describe('TaskCommands', () => {
 
     describe('resolveTaskConflict', () => {
         it('should resolve conflicts for blocked tasks', async () => {
-            const blockedTask = { ...mockTask, status: 'blocked' as any, blockingReason: { type: 'dependency' as any, details: 'Waiting for task-2' } };
+            const blockedTask = {
+                ...mockTask,
+                status: 'blocked' as any,
+                blockingReason: { type: 'dependency' as any, details: 'Waiting for task-2' }
+            };
             mockTaskQueue.getBlockedTasks.mockReturnValue([blockedTask]);
 
             mockNotificationService.showQuickPick

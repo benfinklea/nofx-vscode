@@ -11,7 +11,7 @@ export class AgentPersistence extends BaseAgentPersistence {
         return state as Agent[];
     }
 
-    // Add alias for saveAgentState  
+    // Add alias for saveAgentState
     async saveAgents(agents: Agent[]): Promise<void> {
         await this.saveAgentState(agents);
     }
@@ -20,13 +20,13 @@ export class AgentPersistence extends BaseAgentPersistence {
     async saveAgent(agent: Agent): Promise<void> {
         const state = await this.loadAgentState();
         const existingIndex = state.findIndex((a: any) => a.id === agent.id);
-        
+
         if (existingIndex >= 0) {
             state[existingIndex] = agent;
         } else {
             state.push(agent);
         }
-        
+
         await this.saveAgentState(state);
     }
 }

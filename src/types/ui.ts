@@ -12,12 +12,16 @@ export interface PickItem<T = string> extends vscode.QuickPickItem {
 /**
  * Helper function to create a PickItem
  */
-export function createPickItem<T>(label: string, value: T, options?: {
-    description?: string;
-    detail?: string;
-    picked?: boolean;
-    alwaysShow?: boolean;
-}): PickItem<T> {
+export function createPickItem<T>(
+    label: string,
+    value: T,
+    options?: {
+        description?: string;
+        detail?: string;
+        picked?: boolean;
+        alwaysShow?: boolean;
+    }
+): PickItem<T> {
     return {
         label,
         value,
@@ -103,8 +107,8 @@ export interface ConductorViewState {
     };
     agents: AgentDTO[];
     tasks: TaskDTO[];
-    dependencyGraph: {taskId: string, dependencies: string[], softDependencies: string[]}[];
-    conflicts: {taskId: string, conflictsWith: string[], reason: string}[];
+    dependencyGraph: { taskId: string; dependencies: string[]; softDependencies: string[] }[];
+    conflicts: { taskId: string; conflictsWith: string[]; reason: string }[];
     blockedTasks: TaskDTO[];
     readyTasks: TaskDTO[];
     theme: 'light' | 'dark';
@@ -196,7 +200,12 @@ export function toAgentDTO(agent: Agent): AgentDTO {
     };
 }
 
-export function toTaskDTO(task: Task, dependencyStatus?: 'ready' | 'waiting' | 'blocked', agentMatchScore?: number, allTasks?: Task[]): TaskDTO {
+export function toTaskDTO(
+    task: Task,
+    dependencyStatus?: 'ready' | 'waiting' | 'blocked',
+    agentMatchScore?: number,
+    allTasks?: Task[]
+): TaskDTO {
     // Compute dependency status if not provided
     let computedDependencyStatus: 'ready' | 'waiting' | 'blocked';
     if (dependencyStatus) {
@@ -375,10 +384,14 @@ export function formatPriority(numericPriority: number): string {
  */
 export function getPriorityColor(priority: 'high' | 'medium' | 'low'): string {
     switch (priority) {
-        case 'high': return '#ff4444';
-        case 'medium': return '#ffaa00';
-        case 'low': return '#44aa44';
-        default: return '#888888';
+        case 'high':
+            return '#ff4444';
+        case 'medium':
+            return '#ffaa00';
+        case 'low':
+            return '#44aa44';
+        default:
+            return '#888888';
     }
 }
 
@@ -387,15 +400,24 @@ export function getPriorityColor(priority: 'high' | 'medium' | 'low'): string {
  */
 export function getStatusIcon(status: TaskStatus): string {
     switch (status) {
-        case 'queued': return '⏳';
-        case 'validated': return '✓';
-        case 'ready': return '🟢';
-        case 'assigned': return '👤';
-        case 'in-progress': return '🔄';
-        case 'completed': return '✅';
-        case 'failed': return '❌';
-        case 'blocked': return '🔴';
-        default: return '❓';
+        case 'queued':
+            return '⏳';
+        case 'validated':
+            return '✓';
+        case 'ready':
+            return '🟢';
+        case 'assigned':
+            return '👤';
+        case 'in-progress':
+            return '🔄';
+        case 'completed':
+            return '✅';
+        case 'failed':
+            return '❌';
+        case 'blocked':
+            return '🔴';
+        default:
+            return '❓';
     }
 }
 

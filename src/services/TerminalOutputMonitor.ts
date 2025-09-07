@@ -20,7 +20,8 @@ export interface TerminalActivity {
 export class TerminalOutputMonitor extends EventEmitter {
     private patterns: TerminalPattern = {
         completion: /task complete|finished|done|completed successfully|successfully completed|all tests pass/i,
-        permission: /would you like|permission to|may i|should i|can i proceed|waiting for approval|need permission|confirm|approve/i,
+        permission:
+            /would you like|permission to|may i|should i|can i proceed|waiting for approval|need permission|confirm|approve/i,
         waiting: /press enter|\[y\/n\]|continue\?|waiting for|please respond|awaiting input|your choice/i,
         error: /error:|failed:|exception:|permission denied|cannot|unable to|failure|crash/i,
         thinking: /analyzing|processing|thinking|calculating|searching|looking|examining|reviewing/i

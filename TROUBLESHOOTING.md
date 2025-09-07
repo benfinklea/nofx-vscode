@@ -872,7 +872,7 @@ Cmd+Shift+P → "Preferences: Open Settings (JSON)"
 {
   "nofx.maxAgents": 3,
   "nofx.autoAssignTasks": true,
-  "nofx.claudePath": "claude",
+  "nofx.aiPath": "claude",
   "nofx.useWorktrees": false
 }
 ```

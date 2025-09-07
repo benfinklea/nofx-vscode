@@ -61,7 +61,7 @@ npm install -g @anthropic-ai/claude-code
 3. Or enter a different command that works on your system
 
 ### Option 3: Use Alternative Commands
-In VS Code settings (Cmd+,), search for "nofx.claudePath" and set it to:
+In VS Code settings (Cmd+,), search for "nofx.aiPath" and set it to:
 - `cursor` - if using Cursor's AI
 - `/usr/local/bin/claude` - full path
 - Custom script that accepts prompts

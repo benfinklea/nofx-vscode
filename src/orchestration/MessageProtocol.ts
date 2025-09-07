@@ -21,6 +21,17 @@ export enum MessageType {
     AGENT_STATUS = 'agent_status',
     AGENT_QUERY = 'agent_query',
 
+    // Sub-agent messages (NEW)
+    SPAWN_SUB_AGENT = 'spawn_sub_agent',
+    SUB_AGENT_STARTED = 'sub_agent_started',
+    SUB_AGENT_PROGRESS = 'sub_agent_progress',
+    SUB_AGENT_RESULT = 'sub_agent_result',
+    SUB_AGENT_ERROR = 'sub_agent_error',
+    CANCEL_SUB_AGENT = 'cancel_sub_agent',
+    SUB_AGENT_CANCELLED = 'sub_agent_cancelled',
+    SUB_AGENT_STATUS = 'sub_agent_status',
+    SUB_AGENT_STATUS_RESPONSE = 'sub_agent_status_response',
+
     // System messages
     CONNECTION_ESTABLISHED = 'connection_established',
     CONNECTION_LOST = 'connection_lost',
@@ -31,52 +42,53 @@ export enum MessageType {
 }
 
 export interface OrchestratorMessage {
-    id: string;                    // Unique message ID (UUID)
-    timestamp: string;             // ISO 8601 timestamp
-    from: string;                  // conductor | agent-{id} | system
-    to: string;                    // conductor | agent-{id} | broadcast | dashboard
-    type: MessageType;             // Message type enum
-    payload: any;                  // Message-specific payload
-    correlationId?: string;        // For request-response correlation
-    requiresAck?: boolean;         // Whether acknowledgment is required
+    id: string; // Unique message ID (UUID)
+    timestamp: string; // ISO 8601 timestamp
+    from: string; // conductor | agent-{id} | system
+    to: string; // conductor | agent-{id} | broadcast | dashboard
+    type: MessageType; // Message type enum
+    payload: any; // Message-specific payload
+    correlationId?: string; // For request-response correlation
+    requiresAck?: boolean; // Whether acknowledgment is required
 }
 
 // Specific payload interfaces
 
 export interface SpawnAgentPayload {
-    role: string;                  // frontend-specialist, backend-specialist, etc.
-    name: string;                  // Display name
-    template?: string;             // Template ID to use
-    autoStart?: boolean;           // Start immediately after spawn
+    role: string; // frontend-specialist, backend-specialist, etc.
+    name: string; // Display name
+    template?: string; // Template ID to use
+    autoStart?: boolean; // Start immediately after spawn
 }
 
 export interface AssignTaskPayload {
-    agentId: string;              // Target agent ID
-    taskId: string;               // Unique task ID
-    title: string;                // Task title
-    description: string;          // Detailed task description
+    agentId: string; // Target agent ID
+    taskId: string; // Unique task ID
+    title: string; // Task title
+    description: string; // Detailed task description
     priority: 'low' | 'medium' | 'high' | 'critical';
-    dependencies?: string[];      // Task IDs this depends on
-    deadline?: string;            // ISO 8601 deadline
-    context?: any;                // Additional context data
+    dependencies?: string[]; // Task IDs this depends on
+    deadline?: string; // ISO 8601 deadline
+    context?: any; // Additional context data
 }
 
 export interface TaskProgressPayload {
-    taskId: string;               // Task being worked on
-    progress: number;             // 0-100 percentage
+    taskId: string; // Task being worked on
+    progress: number; // 0-100 percentage
     status: 'starting' | 'in_progress' | 'reviewing' | 'testing' | 'finalizing';
-    message?: string;             // Progress message
-    eta?: string;                 // Estimated completion time
+    message?: string; // Progress message
+    eta?: string; // Estimated completion time
 }
 
 export interface TaskCompletePayload {
-    taskId: string;               // Completed task ID
-    success: boolean;             // Whether task succeeded
-    output?: string;              // Task output/result
-    filesCreated?: string[];      // Files created
-    filesModified?: string[];     // Files modified
-    metrics?: {                   // Performance metrics
-        duration: number;         // Time taken in ms
+    taskId: string; // Completed task ID
+    success: boolean; // Whether task succeeded
+    output?: string; // Task output/result
+    filesCreated?: string[]; // Files created
+    filesModified?: string[]; // Files modified
+    metrics?: {
+        // Performance metrics
+        duration: number; // Time taken in ms
         linesAdded?: number;
         linesRemoved?: number;
         testsRun?: number;
@@ -87,31 +99,75 @@ export interface TaskCompletePayload {
 export interface AgentStatusPayload {
     agentId: string;
     status: 'idle' | 'working' | 'paused' | 'error' | 'offline';
-    currentTask?: string;         // Current task ID if working
-    completedTasks: number;       // Total completed
-    failedTasks: number;          // Total failed
-    uptime: number;               // Uptime in ms
-    capabilities?: string[];      // Agent capabilities
+    currentTask?: string; // Current task ID if working
+    completedTasks: number; // Total completed
+    failedTasks: number; // Total failed
+    uptime: number; // Uptime in ms
+    capabilities?: string[]; // Agent capabilities
 }
 
 export interface AgentQueryPayload {
-    question: string;             // Question from agent
-    context?: any;                // Relevant context
-    needsResponse: boolean;       // Whether response is needed
-    options?: string[];           // Multiple choice options
+    question: string; // Question from agent
+    context?: any; // Relevant context
+    needsResponse: boolean; // Whether response is needed
+    options?: string[]; // Multiple choice options
+}
+
+// Sub-agent payload interfaces (NEW)
+
+export interface SpawnSubAgentPayload {
+    parentAgentId: string; // Agent requesting sub-agent
+    subAgentType: 'general-purpose' | 'code-lead-reviewer' | 'statusline-setup' | 'output-style-setup';
+    taskDescription: string; // What the sub-agent should do
+    prompt: string; // Detailed prompt for sub-agent
+    priority?: number; // Task priority (1-10)
+    timeout?: number; // Timeout in milliseconds
+    context?: Record<string, any>; // Additional context
+}
+
+export interface SubAgentStartedPayload {
+    parentAgentId: string; // Parent agent ID
+    subAgentId: string; // Sub-agent task ID
+    subAgentType: string; // Type of sub-agent
+    startedAt: string; // ISO timestamp
+}
+
+export interface SubAgentProgressPayload {
+    parentAgentId: string; // Parent agent ID
+    subAgentId: string; // Sub-agent task ID
+    progress: number; // 0-100 percentage
+    message: string; // Progress message
+    timestamp: string; // ISO timestamp
+}
+
+export interface SubAgentResultPayload {
+    parentAgentId: string; // Parent agent ID
+    subAgentId: string; // Sub-agent task ID
+    status: 'success' | 'error' | 'timeout' | 'cancelled';
+    result?: string; // Result if successful
+    error?: string; // Error message if failed
+    executionTime: number; // Time taken in ms
+    completedAt: string; // ISO timestamp
+    metadata?: Record<string, any>; // Additional metadata
+}
+
+export interface CancelSubAgentPayload {
+    parentAgentId: string; // Parent agent ID
+    subAgentId: string; // Sub-agent task ID to cancel
+    reason?: string; // Cancellation reason
 }
 
 // Connection management
 
 export interface ClientConnection {
-    id: string;                   // Connection ID (conductor or agent-{id})
+    id: string; // Connection ID (conductor or agent-{id})
     type: 'conductor' | 'agent' | 'dashboard';
-    name: string;                 // Display name
-    connectedAt: string;          // Connection timestamp
-    lastHeartbeat: string;        // Last heartbeat received
-    messageCount: number;         // Messages sent/received
-    role?: string;                // For agents: their specialization
-    status?: string;              // Current status
+    name: string; // Display name
+    connectedAt: string; // Connection timestamp
+    lastHeartbeat: string; // Last heartbeat received
+    messageCount: number; // Messages sent/received
+    role?: string; // For agents: their specialization
+    status?: string; // Current status
 }
 
 // Helper functions

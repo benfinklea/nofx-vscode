@@ -116,10 +116,7 @@ describe('ErrorHandler', () => {
 
     describe('handleAsync', () => {
         it('should handle successful async operations', async () => {
-            const result = await errorHandler.handleAsync(
-                async () => 'success',
-                'AsyncContext'
-            );
+            const result = await errorHandler.handleAsync(async () => 'success', 'AsyncContext');
 
             expect(result).toBe('success');
             expect(mockLoggingService.error).not.toHaveBeenCalled();
@@ -129,10 +126,9 @@ describe('ErrorHandler', () => {
             const error = new Error('Async error');
 
             await expect(
-                errorHandler.handleAsync(
-                    async () => { throw error; },
-                    'AsyncContext'
-                )
+                errorHandler.handleAsync(async () => {
+                    throw error;
+                }, 'AsyncContext')
             ).rejects.toThrow('Async error');
 
             expect(mockLoggingService.error).toHaveBeenCalledWith(
@@ -146,10 +142,9 @@ describe('ErrorHandler', () => {
 
         it('should convert non-Error objects to Error', async () => {
             await expect(
-                errorHandler.handleAsync(
-                    async () => { throw 'string error'; },
-                    'AsyncContext'
-                )
+                errorHandler.handleAsync(async () => {
+                    throw 'string error';
+                }, 'AsyncContext')
             ).rejects.toThrow('string error');
 
             expect(mockLoggingService.error).toHaveBeenCalledWith(
@@ -163,10 +158,7 @@ describe('ErrorHandler', () => {
 
     describe('wrapSync', () => {
         it('should handle successful sync operations', () => {
-            const result = errorHandler.wrapSync(
-                () => 'success',
-                'SyncContext'
-            );
+            const result = errorHandler.wrapSync(() => 'success', 'SyncContext');
 
             expect(result).toBe('success');
             expect(mockLoggingService.error).not.toHaveBeenCalled();
@@ -176,10 +168,9 @@ describe('ErrorHandler', () => {
             const error = new Error('Sync error');
 
             expect(() =>
-                errorHandler.wrapSync(
-                    () => { throw error; },
-                    'SyncContext'
-                )
+                errorHandler.wrapSync(() => {
+                    throw error;
+                }, 'SyncContext')
             ).toThrow('Sync error');
 
             expect(mockLoggingService.error).toHaveBeenCalledWith(
@@ -193,10 +184,9 @@ describe('ErrorHandler', () => {
 
         it('should convert non-Error objects to Error', () => {
             expect(() =>
-                errorHandler.wrapSync(
-                    () => { throw 'string error'; },
-                    'SyncContext'
-                )
+                errorHandler.wrapSync(() => {
+                    throw 'string error';
+                }, 'SyncContext')
             ).toThrow('string error');
 
             expect(mockLoggingService.error).toHaveBeenCalledWith(
@@ -230,7 +220,8 @@ describe('ErrorHandler', () => {
         });
 
         it('should retry on failure and succeed on subsequent attempt', async () => {
-            const operation = jest.fn()
+            const operation = jest
+                .fn()
                 .mockRejectedValueOnce(new Error('First fail'))
                 .mockRejectedValueOnce(new Error('Second fail'))
                 .mockResolvedValueOnce('success');
@@ -274,13 +265,12 @@ describe('ErrorHandler', () => {
                     attempts: 3
                 })
             );
-            expect(mockNotificationService.showError).toHaveBeenCalledWith(
-                expect.stringContaining('Persistent error')
-            );
+            expect(mockNotificationService.showError).toHaveBeenCalledWith(expect.stringContaining('Persistent error'));
         });
 
         it('should use exponential backoff for retries', async () => {
-            const operation = jest.fn()
+            const operation = jest
+                .fn()
                 .mockRejectedValueOnce(new Error('Fail 1'))
                 .mockRejectedValueOnce(new Error('Fail 2'))
                 .mockResolvedValueOnce('success');

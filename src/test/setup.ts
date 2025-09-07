@@ -20,7 +20,7 @@ class MockWebSocket {
     }
 
     send(data: string) {
-    // Mock implementation
+        // Mock implementation
     }
 
     close() {
@@ -157,7 +157,7 @@ export const createMockTask = (overrides: any = {}) => ({
 
 export const createMockConfiguration = (overrides: any = {}) => ({
     maxAgents: 3,
-    claudePath: 'claude',
+    aiPath: 'claude',
     autoAssignTasks: true,
     useWorktrees: true,
     logLevel: 'info',

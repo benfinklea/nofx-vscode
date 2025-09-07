@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
-import { IWorktreeService, IConfigurationService, INotificationService, ILoggingService, IErrorHandler } from './interfaces';
+import {
+    IWorktreeService,
+    IConfigurationService,
+    INotificationService,
+    ILoggingService,
+    IErrorHandler
+} from './interfaces';
 import { WorktreeManager } from '../worktrees/WorktreeManager';
 
 export class WorktreeService implements IWorktreeService {
@@ -23,7 +29,7 @@ export class WorktreeService implements IWorktreeService {
 
         // Subscribe to configuration changes
         this.disposables.push(
-            this.configService.onDidChange((e) => {
+            this.configService.onDidChange(e => {
                 if (e.affectsConfiguration('nofx.useWorktrees')) {
                     this.initializeWorktrees();
                 }
@@ -64,11 +70,13 @@ export class WorktreeService implements IWorktreeService {
             return undefined;
         }
 
-        return await this.errorHandler?.handleAsync(async () => {
-            const worktreePath = await this.worktreeManager!.createWorktreeForAgent(agent);
-            this.loggingService?.debug(`Worktree created for agent ${agent.name}: ${worktreePath}`);
-            return worktreePath;
-        }, `Failed to create worktree for ${agent.name}`) || undefined;
+        return (
+            (await this.errorHandler?.handleAsync(async () => {
+                const worktreePath = await this.worktreeManager!.createWorktreeForAgent(agent);
+                this.loggingService?.debug(`Worktree created for agent ${agent.name}: ${worktreePath}`);
+                return worktreePath;
+            }, `Failed to create worktree for ${agent.name}`)) || undefined
+        );
     }
 
     async removeForAgent(agentId: string): Promise<boolean> {
@@ -76,31 +84,35 @@ export class WorktreeService implements IWorktreeService {
             return true; // No worktree to remove
         }
 
-        return await this.errorHandler?.handleAsync(async () => {
-            const worktreePath = this.worktreeManager!.getWorktreePath(agentId);
-            if (!worktreePath) {
-                return true; // No worktree exists
-            }
+        return (
+            (await this.errorHandler?.handleAsync(async () => {
+                const worktreePath = this.worktreeManager!.getWorktreePath(agentId);
+                if (!worktreePath) {
+                    return true; // No worktree exists
+                }
 
-            // Ask user what to do with the worktree
-            const action = await this.notificationService.showInformation(
-                'Agent has a worktree. Merge changes before removing?',
-                'Merge & Remove', 'Remove Without Merging', 'Cancel'
-            );
+                // Ask user what to do with the worktree
+                const action = await this.notificationService.showInformation(
+                    'Agent has a worktree. Merge changes before removing?',
+                    'Merge & Remove',
+                    'Remove Without Merging',
+                    'Cancel'
+                );
 
-            if (action === 'Cancel') {
-                return false; // User cancelled
-            }
+                if (action === 'Cancel') {
+                    return false; // User cancelled
+                }
 
-            if (action === 'Merge & Remove') {
-                await this.worktreeManager!.mergeAgentWork(agentId);
-                this.loggingService?.debug(`Worktree merged for agent ${agentId}`);
-            }
+                if (action === 'Merge & Remove') {
+                    await this.worktreeManager!.mergeAgentWork(agentId);
+                    this.loggingService?.debug(`Worktree merged for agent ${agentId}`);
+                }
 
-            await this.worktreeManager!.removeWorktreeForAgent(agentId);
-            this.loggingService?.debug(`Worktree removed for agent ${agentId}`);
-            return true;
-        }, `Error removing worktree for agent ${agentId}`) || false;
+                await this.worktreeManager!.removeWorktreeForAgent(agentId);
+                this.loggingService?.debug(`Worktree removed for agent ${agentId}`);
+                return true;
+            }, `Error removing worktree for agent ${agentId}`)) || false
+        );
     }
 
     async mergeForAgent(agentId: string): Promise<boolean> {
@@ -108,11 +120,13 @@ export class WorktreeService implements IWorktreeService {
             return true; // No worktree to merge
         }
 
-        return await this.errorHandler?.handleAsync(async () => {
-            await this.worktreeManager!.mergeAgentWork(agentId);
-            this.loggingService?.debug(`Worktree merged for agent ${agentId}`);
-            return true;
-        }, 'Error merging agent work') || false;
+        return (
+            (await this.errorHandler?.handleAsync(async () => {
+                await this.worktreeManager!.mergeAgentWork(agentId);
+                this.loggingService?.debug(`Worktree merged for agent ${agentId}`);
+                return true;
+            }, 'Error merging agent work')) || false
+        );
     }
 
     getWorktreePath(agentId: string): string | undefined {
