@@ -15,14 +15,14 @@ describe('AgentTemplateManager', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        
+
         // Mock fs operations
         (fs.existsSync as jest.Mock).mockReturnValue(false);
         (fs.mkdirSync as jest.Mock).mockImplementation();
         (fs.readdirSync as jest.Mock).mockReturnValue([]);
         (fs.readFileSync as jest.Mock).mockReturnValue('{}');
         (fs.writeFileSync as jest.Mock).mockImplementation();
-        
+
         // Mock vscode workspace
         (vscode.workspace.createFileSystemWatcher as jest.Mock).mockReturnValue({
             onDidCreate: jest.fn().mockReturnValue({ dispose: jest.fn() }),
@@ -41,18 +41,18 @@ describe('AgentTemplateManager', () => {
     describe('constructor and initialization', () => {
         it('should create necessary directories if they do not exist', () => {
             (fs.existsSync as jest.Mock).mockReturnValue(false);
-            
+
             new AgentTemplateManager(workspaceRoot);
-            
+
             expect(fs.mkdirSync).toHaveBeenCalledWith(mockTemplatesDir, { recursive: true });
             expect(fs.mkdirSync).toHaveBeenCalledWith(mockCustomTemplatesDir, { recursive: true });
         });
 
         it('should not create directories if they already exist', () => {
             (fs.existsSync as jest.Mock).mockReturnValue(true);
-            
+
             new AgentTemplateManager(workspaceRoot);
-            
+
             expect(fs.mkdirSync).not.toHaveBeenCalled();
         });
 
@@ -84,14 +84,14 @@ describe('AgentTemplateManager', () => {
                 }
             };
 
-            (fs.existsSync as jest.Mock).mockImplementation((dir) => 
+            (fs.existsSync as jest.Mock).mockImplementation((dir) =>
                 dir.includes('templates')
             );
             (fs.readdirSync as jest.Mock).mockReturnValue(['test.json']);
             (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(mockTemplate));
 
             manager = new AgentTemplateManager(workspaceRoot);
-            
+
             const templates = manager.getTemplates();
             expect(templates.length).toBeGreaterThan(0);
         });
@@ -152,7 +152,7 @@ describe('AgentTemplateManager', () => {
             });
 
             manager = new AgentTemplateManager(workspaceRoot);
-            
+
             const template = manager.getTemplate('backend-specialist');
             expect(template?.name).toBe('Custom Backend');
             expect(template?.systemPrompt).toBe('Custom prompt');
@@ -180,7 +180,7 @@ describe('AgentTemplateManager', () => {
                 }
             };
 
-            (fs.existsSync as jest.Mock).mockImplementation((dir) => 
+            (fs.existsSync as jest.Mock).mockImplementation((dir) =>
                 dir === mockCustomTemplatesDir
             );
             (fs.readdirSync as jest.Mock).mockImplementation((dir) => {
@@ -190,7 +190,7 @@ describe('AgentTemplateManager', () => {
             (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(customTemplate));
 
             manager = new AgentTemplateManager(workspaceRoot);
-            
+
             const template = manager.getTemplate('custom-my-agent');
             expect(template).toBeDefined();
             expect(template?.id).toBe('custom-my-agent');
@@ -204,10 +204,10 @@ describe('AgentTemplateManager', () => {
             const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
             manager = new AgentTemplateManager(workspaceRoot);
-            
+
             expect(consoleSpy).toHaveBeenCalled();
             expect(manager.getTemplates()).toEqual([]);
-            
+
             consoleSpy.mockRestore();
         });
     });
@@ -238,7 +238,7 @@ describe('AgentTemplateManager', () => {
             (fs.existsSync as jest.Mock).mockReturnValue(false);
 
             const result = await manager.createTemplate(newTemplate);
-            
+
             expect(result).toBe(true);
             expect(fs.writeFileSync).toHaveBeenCalledWith(
                 path.join(mockCustomTemplatesDir, 'new-agent.json'),
@@ -268,13 +268,13 @@ describe('AgentTemplateManager', () => {
                 }
             };
 
-            (fs.existsSync as jest.Mock).mockImplementation((filepath) => 
+            (fs.existsSync as jest.Mock).mockImplementation((filepath) =>
                 filepath.includes('existing.json')
             );
             (vscode.window.showWarningMessage as jest.Mock).mockResolvedValue('Yes');
 
             const result = await manager.createTemplate(template);
-            
+
             expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
                 expect.stringContaining('already exists'),
                 'Yes', 'No'
@@ -308,7 +308,7 @@ describe('AgentTemplateManager', () => {
             (vscode.window.showWarningMessage as jest.Mock).mockResolvedValue('No');
 
             const result = await manager.createTemplate(template);
-            
+
             expect(result).toBe(false);
             expect(fs.writeFileSync).not.toHaveBeenCalled();
         });
@@ -450,7 +450,7 @@ describe('AgentTemplateManager', () => {
             manager = new AgentTemplateManager(workspaceRoot);
 
             const result = await manager.duplicateTemplate('original', 'New Copy');
-            
+
             expect(result).toBe(true);
             expect(fs.writeFileSync).toHaveBeenCalledWith(
                 expect.stringContaining('new-copy.json'),
@@ -492,7 +492,7 @@ describe('AgentTemplateManager', () => {
             manager = new AgentTemplateManager(workspaceRoot);
 
             await manager.duplicateTemplate('test', 'My New Template');
-            
+
             expect(fs.writeFileSync).toHaveBeenCalledWith(
                 expect.stringContaining('my-new-template.json'),
                 expect.stringContaining('"id": "my-new-template"')
@@ -529,7 +529,7 @@ describe('AgentTemplateManager', () => {
             );
 
             const result = await manager.importTemplate(uri);
-            
+
             expect(result).toBe(true);
             expect(fs.writeFileSync).toHaveBeenCalledWith(
                 expect.stringContaining('imported.json'),
@@ -549,7 +549,7 @@ describe('AgentTemplateManager', () => {
             );
 
             const result = await manager.importTemplate(uri);
-            
+
             expect(result).toBe(false);
             expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
                 expect.stringContaining('Invalid template format')
@@ -563,7 +563,7 @@ describe('AgentTemplateManager', () => {
             );
 
             const result = await manager.importTemplate(uri);
-            
+
             expect(result).toBe(false);
             expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
                 expect.stringContaining('Failed to import')
@@ -604,7 +604,7 @@ describe('AgentTemplateManager', () => {
             (vscode.window.showSaveDialog as jest.Mock).mockResolvedValue(saveUri);
 
             await manager.exportTemplate('export-test');
-            
+
             expect(vscode.workspace.fs.writeFile).toHaveBeenCalledWith(
                 saveUri,
                 expect.any(Buffer)
@@ -645,14 +645,14 @@ describe('AgentTemplateManager', () => {
             (vscode.window.showSaveDialog as jest.Mock).mockResolvedValue(undefined);
 
             await manager.exportTemplate('test');
-            
+
             expect(vscode.workspace.fs.writeFile).not.toHaveBeenCalled();
             expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
         });
 
         it('should not export non-existent template', async () => {
             await manager.exportTemplate('non-existent');
-            
+
             expect(vscode.window.showSaveDialog).not.toHaveBeenCalled();
         });
     });
@@ -694,7 +694,7 @@ describe('AgentTemplateManager', () => {
             (vscode.workspace.openTextDocument as jest.Mock).mockResolvedValue(mockDocument);
 
             await manager.editTemplate('editable');
-            
+
             expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(
                 expect.stringContaining('editable.json')
             );
@@ -740,7 +740,7 @@ describe('AgentTemplateManager', () => {
             (vscode.workspace.openTextDocument as jest.Mock).mockResolvedValue(mockDocument);
 
             await manager.editTemplate('custom-my-custom');
-            
+
             expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(
                 expect.stringContaining(path.join('custom', 'my-custom.json'))
             );
@@ -748,7 +748,7 @@ describe('AgentTemplateManager', () => {
 
         it('should not open file if template does not exist', async () => {
             await manager.editTemplate('non-existent');
-            
+
             expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
         });
     });
@@ -857,7 +857,7 @@ describe('AgentTemplateManager', () => {
 
         it('should handle malformed file paths', () => {
             const weirdPath = '../../../../../../etc/passwd';
-            
+
             (fs.existsSync as jest.Mock).mockReturnValue(true);
             (fs.readdirSync as jest.Mock).mockReturnValue([weirdPath]);
             (fs.readFileSync as jest.Mock).mockImplementation(() => {
@@ -867,23 +867,23 @@ describe('AgentTemplateManager', () => {
             const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
             manager = new AgentTemplateManager(workspaceRoot);
-            
+
             expect(consoleSpy).toHaveBeenCalled();
             expect(manager.getTemplates()).toEqual([]);
-            
+
             consoleSpy.mockRestore();
         });
 
         it('should validate template structure before saving', async () => {
             const invalidTemplate = {
-                id: 'invalid',
+                id: 'invalid'
                 // Missing required fields
             } as any;
 
             // This should ideally validate and reject, but current implementation doesn't
             // This test documents current behavior and can be updated when validation is added
             const result = await manager.createTemplate(invalidTemplate);
-            
+
             // Currently it will save invalid templates
             expect(result).toBe(true);
             expect(fs.writeFileSync).toHaveBeenCalled();

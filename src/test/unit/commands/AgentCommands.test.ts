@@ -407,7 +407,7 @@ describe('AgentCommands', () => {
         it('should create agent successfully', async () => {
             const mockTemplate = { value: 'frontend-specialist' };
             const agentName = 'My Frontend Agent';
-            
+
             mockNotificationService.showQuickPick.mockResolvedValueOnce(mockTemplate);
             mockNotificationService.showInputBox.mockResolvedValueOnce(agentName);
 
@@ -762,7 +762,7 @@ describe('AgentCommands', () => {
             const secondAgent: Agent = { ...mockAgent, id: 'agent-456', name: 'Second Agent' };
             mockAgentManager.getActiveAgents.mockReturnValueOnce([mockAgent, secondAgent]);
             mockNotificationService.showQuickPick.mockResolvedValueOnce({ value: 'agent-456' });
-            mockAgentManager.getAgent.mockImplementation((id: string) => 
+            mockAgentManager.getAgent.mockImplementation((id: string) =>
                 id === 'agent-456' ? secondAgent : mockAgent
             );
 

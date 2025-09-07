@@ -163,7 +163,7 @@ class AgentItem extends TreeItem {
     constructor(public readonly agent: any) {
         // Call super first
         super(`  ${agent.name}`, vscode.TreeItemCollapsibleState.None);
-        
+
         // Then update label with activity status indicator
         const statusIndicator = this.getActivityStatusIndicator(agent.activityStatus);
         this.label = `  ${statusIndicator} ${agent.name}`;
@@ -176,7 +176,7 @@ class AgentItem extends TreeItem {
         console.log(`[NofX Debug] Agent ${agent.name} raw status: ${agent.status}, activity: ${agent.activityStatus}`);
         const normalizedStatus = normalizeAgentStatus(agent.status);
         console.log(`[NofX Debug] Agent ${agent.name} normalized status: ${normalizedStatus}`);
-        
+
         // Enhanced description based on both operational and activity status
         this.description = this.getAgentDescription(normalizedStatus, agent.activityStatus, agent.currentTask);
 
@@ -193,7 +193,7 @@ class AgentItem extends TreeItem {
             arguments: [agent.id]
         };
     }
-    
+
     private getActivityStatusIndicator(activityStatus?: string): string {
         const indicators: { [key: string]: string } = {
             'active': '🟢',      // Currently working (output detected)
@@ -207,7 +207,7 @@ class AgentItem extends TreeItem {
         };
         return indicators[activityStatus || ''] || '';
     }
-    
+
     private getActivityStatusText(activityStatus?: string): string {
         const statusTexts: { [key: string]: string } = {
             'active': 'Active - Currently working',
@@ -221,25 +221,25 @@ class AgentItem extends TreeItem {
         };
         return statusTexts[activityStatus || ''] || 'Unknown';
     }
-    
+
     private getAgentDescription(normalizedStatus: string, activityStatus?: string, currentTask?: any): string {
         // Priority: Show activity status if critical, otherwise operational status
         if (activityStatus === 'stuck' || activityStatus === 'error' || activityStatus === 'permission') {
             return this.getActivityStatusText(activityStatus);
         }
-        
+
         if (normalizedStatus === 'working' && currentTask) {
             return `Working on: ${currentTask.title}`;
         }
-        
+
         if (activityStatus === 'inactive' || activityStatus === 'waiting') {
             return this.getActivityStatusText(activityStatus);
         }
-        
-        return normalizedStatus === 'offline' ? 'Offline' : 
-               normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+
+        return normalizedStatus === 'offline' ? 'Offline' :
+            normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
     }
-    
+
     private getAgentIcon(status: string): vscode.ThemeIcon {
         // Map activity statuses to appropriate theme icons
         const iconMap: { [key: string]: string } = {
@@ -255,7 +255,7 @@ class AgentItem extends TreeItem {
             'idle': 'check',
             'offline': 'circle-outline'
         };
-        
+
         return new vscode.ThemeIcon(iconMap[status] || 'circle-outline');
     }
 }

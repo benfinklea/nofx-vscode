@@ -170,7 +170,7 @@ export function isValidMessage(message: any): message is OrchestratorMessage {
 
 export function formatMessageForClaude(message: OrchestratorMessage): string {
     let content: string;
-    
+
     switch (message.type) {
         case MessageType.ASSIGN_TASK:
             const task = message.payload as AssignTaskPayload;
@@ -219,7 +219,7 @@ export function extractJsonFromClaudeOutput(output: string): any | null {
     const jsonMatches = [];
     let depth = 0;
     let start = -1;
-    
+
     for (let i = 0; i < output.length; i++) {
         if (output[i] === '{') {
             if (depth === 0) {

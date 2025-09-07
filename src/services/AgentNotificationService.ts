@@ -61,12 +61,12 @@ export class AgentNotificationService {
      * Notify user that an agent needs attention
      */
     public async notifyUserAttention(
-        agent: Agent, 
-        reason: NotificationReason, 
+        agent: Agent,
+        reason: NotificationReason,
         event?: MonitoringEvent
     ): Promise<void> {
         const notificationKey = `${agent.id}-${reason}`;
-        
+
         // Check if we've recently shown this notification (debounce)
         if (this.shouldDebounce(notificationKey)) {
             return;
@@ -74,7 +74,7 @@ export class AgentNotificationService {
 
         // Determine notification priority based on reason
         const priority = this.getNotificationPriority(reason);
-        
+
         // Progressive notification based on priority and configuration
         switch (priority) {
             case 'low':
@@ -82,14 +82,14 @@ export class AgentNotificationService {
                     this.showStatusBarNotification(agent, reason, event);
                 }
                 break;
-                
+
             case 'medium':
                 this.showStatusBarNotification(agent, reason, event);
                 if (this.config.level !== 'minimal' && this.config.toastEnabled) {
                     await this.showToastNotification(agent, reason, event);
                 }
                 break;
-                
+
             case 'high':
                 this.showStatusBarNotification(agent, reason, event);
                 if (this.config.toastEnabled) {
@@ -99,7 +99,7 @@ export class AgentNotificationService {
                     this.playNotificationSound();
                 }
                 break;
-                
+
             case 'critical':
                 this.showStatusBarNotification(agent, reason, event);
                 if (this.config.modalEnabled) {
@@ -125,7 +125,7 @@ export class AgentNotificationService {
 
         const icon = this.getStatusIcon(reason);
         const message = this.getNotificationMessage(agent, reason, 'short');
-        
+
         this.statusBarItem.text = `${icon} ${message}`;
         this.statusBarItem.tooltip = this.getNotificationMessage(agent, reason, 'long');
         this.statusBarItem.command = {
@@ -133,7 +133,7 @@ export class AgentNotificationService {
             title: 'Focus Agent Terminal',
             arguments: [agent.id]
         };
-        
+
         this.statusBarItem.show();
 
         // Auto-hide after a period
@@ -150,12 +150,12 @@ export class AgentNotificationService {
     private async showToastNotification(agent: Agent, reason: NotificationReason, event?: MonitoringEvent): Promise<void> {
         const icon = this.getStatusIcon(reason);
         const message = `${icon} ${this.getNotificationMessage(agent, reason, 'medium')}`;
-        
+
         const actions = this.getNotificationActions(agent, reason);
         const actionTitles = actions.map(a => a.title);
-        
+
         let selectedAction: string | undefined;
-        
+
         switch (reason) {
             case 'permission':
                 selectedAction = await vscode.window.showWarningMessage(
@@ -163,14 +163,14 @@ export class AgentNotificationService {
                     ...actionTitles
                 );
                 break;
-                
+
             case 'error':
                 selectedAction = await vscode.window.showErrorMessage(
                     message,
                     ...actionTitles
                 );
                 break;
-                
+
             case 'completion':
                 if (this.config.level === 'verbose') {
                     selectedAction = await vscode.window.showInformationMessage(
@@ -179,7 +179,7 @@ export class AgentNotificationService {
                     );
                 }
                 break;
-                
+
             default:
                 selectedAction = await vscode.window.showWarningMessage(
                     message,
@@ -202,9 +202,9 @@ export class AgentNotificationService {
     private async showModalNotification(agent: Agent, reason: NotificationReason, event?: MonitoringEvent): Promise<void> {
         const icon = this.getStatusIcon(reason);
         const message = this.getNotificationMessage(agent, reason, 'long');
-        
+
         const detail = event?.data?.message || 'The agent requires immediate attention.';
-        
+
         const result = await vscode.window.showInformationMessage(
             `${icon} Critical: ${message}`,
             { modal: true, detail },
@@ -228,7 +228,7 @@ export class AgentNotificationService {
      */
     private getNotificationMessage(agent: Agent, reason: NotificationReason, length: 'short' | 'medium' | 'long'): string {
         const name = agent.name || agent.id;
-        
+
         const messages: { [key in NotificationReason]: { [key in 'short' | 'medium' | 'long']: string } } = {
             permission: {
                 short: `${name} needs permission`,
@@ -299,7 +299,7 @@ export class AgentNotificationService {
                     },
                     baseActions[1]
                 ];
-                
+
             case 'error':
                 return [
                     baseActions[0],
@@ -309,7 +309,7 @@ export class AgentNotificationService {
                     },
                     baseActions[1]
                 ];
-                
+
             case 'stuck':
                 return [
                     baseActions[0],
@@ -319,7 +319,7 @@ export class AgentNotificationService {
                     },
                     baseActions[1]
                 ];
-                
+
             default:
                 return baseActions;
         }
@@ -345,11 +345,11 @@ export class AgentNotificationService {
     private shouldDebounce(notificationKey: string): boolean {
         const lastNotification = this.notificationHistory.get(notificationKey);
         if (!lastNotification) return false;
-        
+
         const now = new Date();
         const timeSinceLastMs = now.getTime() - lastNotification.getTime();
         const debounceMs = 10000; // 10 seconds
-        
+
         return timeSinceLastMs < debounceMs;
     }
 
@@ -411,7 +411,7 @@ export class AgentNotificationService {
             }
         });
         keysToRemove.forEach(key => this.notificationHistory.delete(key));
-        
+
         // Hide status bar if it's for this agent
         if (this.statusBarItem.text?.includes(agentId)) {
             this.statusBarItem.hide();
@@ -423,7 +423,7 @@ export class AgentNotificationService {
      */
     public updateStatusBar(statuses: Map<string, AgentActivityStatus>): void {
         if (!this.config.statusBarEnabled) return;
-        
+
         const statusCounts = {
             active: 0,
             waiting: 0,
@@ -431,20 +431,20 @@ export class AgentNotificationService {
             stuck: 0,
             error: 0
         };
-        
+
         statuses.forEach(status => {
             if (status in statusCounts) {
                 statusCounts[status as keyof typeof statusCounts]++;
             }
         });
-        
+
         const parts: string[] = [];
         if (statusCounts.stuck > 0) parts.push(`🔴 ${statusCounts.stuck}`);
         if (statusCounts.error > 0) parts.push(`❌ ${statusCounts.error}`);
         if (statusCounts.waiting > 0) parts.push(`🟡 ${statusCounts.waiting}`);
         if (statusCounts.inactive > 0) parts.push(`🟠 ${statusCounts.inactive}`);
         if (statusCounts.active > 0) parts.push(`🟢 ${statusCounts.active}`);
-        
+
         if (parts.length > 0) {
             this.statusBarItem.text = `Agents: ${parts.join(' ')}`;
             this.statusBarItem.tooltip = 'Click to view agent status';

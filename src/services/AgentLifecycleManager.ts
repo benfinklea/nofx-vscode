@@ -28,15 +28,15 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         this.loggingService = loggingService;
         this.eventBus = eventBus;
         this.errorHandler = errorHandler;
-        
+
         // Initialize monitoring services
         this.activityMonitor = new ActivityMonitor();
         this.agentNotificationService = new AgentNotificationService();
-        
+
         // Set up monitoring event listeners
         this.setupMonitoringListeners();
     }
-    
+
     private setupMonitoringListeners(): void {
         // Listen for monitoring events
         this.activityMonitor.on('monitoring-event', (event) => {
@@ -82,17 +82,17 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
     private handleAgentStatusChange(data: any): void {
         const { agentId, newStatus } = data;
         const agent = this.agents.get(agentId);
-        
+
         if (agent) {
             // Update agent's activity status (separate from operational status)
             (agent as any).activityStatus = newStatus;
-            
+
             // Update tree view
             this.onAgentUpdate();
-            
+
             // Update status bar
             this.agentNotificationService.updateStatusBar(this.activityMonitor.getAllAgentStatuses());
-            
+
             // Publish event
             if (this.eventBus) {
                 this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, {
@@ -187,10 +187,10 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
             // Terminal is now ready, update status to idle
             agent.status = 'idle' as AgentStatus;
             console.log(`[NofX Debug] Agent ${agent.name} terminal initialized, status updated to: ${agent.status}`);
-            
+
             // Store agent for monitoring
             this.agents.set(agentId, agent);
-            
+
             // Start activity monitoring for this agent
             this.activityMonitor.startMonitoring(agent, terminal);
             console.log(`[NofX Debug] Started monitoring for agent ${agent.name}`);
@@ -228,11 +228,11 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         if (this.eventBus) {
             this.eventBus.publish(DOMAIN_EVENTS.AGENT_LIFECYCLE_REMOVING, { agentId });
         }
-        
+
         // Stop monitoring for this agent
         this.activityMonitor.stopMonitoring(agentId);
         this.agentNotificationService.clearNotification(agentId);
-        
+
         // Remove from internal map
         this.agents.delete(agentId);
 
@@ -271,7 +271,7 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
         // Dispose monitoring services
         this.activityMonitor.dispose();
         this.agentNotificationService.dispose();
-        
+
         // Dispose all output channels (only if not managed by LoggingService)
         for (const outputChannel of this.outputChannels.values()) {
             if (!this.loggingService) {
@@ -279,7 +279,7 @@ export class AgentLifecycleManager implements IAgentLifecycleManager {
             }
         }
         this.outputChannels.clear();
-        
+
         // Clear agent map
         this.agents.clear();
     }

@@ -39,13 +39,13 @@ export class TerminalOutputMonitor extends EventEmitter {
     public monitorTerminal(terminal: vscode.Terminal, agentId: string): void {
         // VS Code doesn't directly expose terminal output, so we use a pseudo-terminal approach
         // This creates a write emitter that intercepts terminal output
-        
+
         const writeEmitter = new vscode.EventEmitter<string>();
         this.terminalWriteEmitters.set(terminal, writeEmitter);
 
         // Create a pseudo-terminal that wraps the real terminal
         const pty = this.createPseudoTerminal(terminal, agentId, writeEmitter);
-        
+
         // Monitor the terminal output through the write emitter
         const disposable = writeEmitter.event((data: string) => {
             this.processTerminalOutput(data, terminal, agentId);
@@ -58,7 +58,7 @@ export class TerminalOutputMonitor extends EventEmitter {
      * Create a pseudo-terminal to intercept output
      */
     private createPseudoTerminal(
-        terminal: vscode.Terminal, 
+        terminal: vscode.Terminal,
         agentId: string,
         writeEmitter: vscode.EventEmitter<string>
     ): vscode.Pseudoterminal {
@@ -85,7 +85,7 @@ export class TerminalOutputMonitor extends EventEmitter {
      */
     private processTerminalOutput(output: string, terminal: vscode.Terminal, agentId: string): void {
         const lines = output.split('\n');
-        
+
         for (const line of lines) {
             if (!line.trim()) continue;
 

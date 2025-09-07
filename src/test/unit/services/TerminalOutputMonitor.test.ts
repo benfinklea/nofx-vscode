@@ -12,7 +12,7 @@ describe('TerminalOutputMonitor', () => {
 
     beforeEach(() => {
         monitor = new TerminalOutputMonitor();
-        
+
         mockTerminal = {
             name: 'Test Terminal',
             processId: Promise.resolve(1234),
@@ -35,7 +35,7 @@ describe('TerminalOutputMonitor', () => {
         } as unknown as vscode.EventEmitter<string>;
 
         (vscode.EventEmitter as any).mockImplementation(() => mockEventEmitter);
-        
+
         consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
     });
 
@@ -78,7 +78,7 @@ describe('TerminalOutputMonitor', () => {
             monitor.on('activity', activitySpy);
 
             monitor.monitorTerminal(mockTerminal, 'agent-1');
-            
+
             // Simulate terminal output
             const handler = (mockEventEmitter as any).handler;
             handler('Task completed successfully');
@@ -376,11 +376,11 @@ describe('TerminalOutputMonitor', () => {
             monitor.on('activity', activitySpy);
 
             monitor.monitorTerminal(mockTerminal, 'agent-1');
-            
+
             // Clear the handler reference when stopping
             const originalHandler = (mockEventEmitter as any).handler;
             monitor.stopMonitoring(mockTerminal);
-            
+
             // Handler still exists but emitter is disposed, so events should not be processed
             // In real usage, the disposal would prevent the handler from being called
             // For testing, we verify the emitter was disposed
@@ -399,7 +399,7 @@ describe('TerminalOutputMonitor', () => {
 
         it('should detect custom patterns', () => {
             monitor.addPattern('custom', /deploy-started/i);
-            
+
             const activitySpy = jest.fn();
             const customSpy = jest.fn();
             monitor.on('activity', activitySpy);
@@ -445,7 +445,7 @@ describe('TerminalOutputMonitor', () => {
 
         it('should include all default patterns', () => {
             const patterns = monitor.getPatterns();
-            
+
             expect(patterns.completion).toBeDefined();
             expect(patterns.permission).toBeDefined();
             expect(patterns.waiting).toBeDefined();
@@ -458,11 +458,11 @@ describe('TerminalOutputMonitor', () => {
         it('should dispose all event emitters', () => {
             const disposeSpy1 = jest.fn();
             const disposeSpy2 = jest.fn();
-            
+
             // Monitor two terminals
             mockEventEmitter.event = jest.fn(() => ({ dispose: disposeSpy1 }));
             monitor.monitorTerminal(mockTerminal, 'agent-1');
-            
+
             const mockTerminal2 = {} as vscode.Terminal;
             const mockEventEmitter2 = {
                 event: jest.fn(() => ({ dispose: disposeSpy2 })),
@@ -480,17 +480,17 @@ describe('TerminalOutputMonitor', () => {
 
         it('should remove all event listeners', () => {
             const removeAllListenersSpy = jest.spyOn(monitor, 'removeAllListeners');
-            
+
             monitor.dispose();
-            
+
             expect(removeAllListenersSpy).toHaveBeenCalled();
         });
 
         it('should clear terminal write emitters map', () => {
             monitor.monitorTerminal(mockTerminal, 'agent-1');
-            
+
             monitor.dispose();
-            
+
             // Trying to stop monitoring should have no effect (map is cleared)
             expect(() => monitor.stopMonitoring(mockTerminal)).not.toThrow();
         });
@@ -515,7 +515,7 @@ describe('TerminalOutputMonitor', () => {
     describe('createPseudoTerminal', () => {
         it('should create pseudo terminal with required methods', () => {
             monitor.monitorTerminal(mockTerminal, 'agent-1');
-            
+
             // The pseudo terminal is created internally
             // We can verify it works by checking that events are processed
             const activitySpy = jest.fn();
@@ -531,7 +531,7 @@ describe('TerminalOutputMonitor', () => {
             // This tests the pseudo terminal's handleInput method
             // In the actual implementation, it would send text to the real terminal
             monitor.monitorTerminal(mockTerminal, 'agent-1');
-            
+
             // The handleInput is part of the pseudoterminal created internally
             // We verify the terminal integration works
             expect(mockTerminal.sendText).toBeDefined();
@@ -546,7 +546,7 @@ describe('TerminalOutputMonitor', () => {
         it('should emit both pattern-specific and general activity events', () => {
             const activitySpy = jest.fn();
             const completionSpy = jest.fn();
-            
+
             monitor.on('activity', activitySpy);
             monitor.on('pattern:completion', completionSpy);
 
@@ -576,7 +576,7 @@ describe('TerminalOutputMonitor', () => {
 
         it('should emit events in order for multiple patterns', () => {
             const events: string[] = [];
-            
+
             monitor.on('pattern:thinking', () => events.push('thinking'));
             monitor.on('pattern:completion', () => events.push('completion'));
             monitor.on('pattern:error', () => events.push('error'));
@@ -591,10 +591,10 @@ describe('TerminalOutputMonitor', () => {
     describe('integration scenarios', () => {
         it('should handle multiple terminals independently', () => {
             const mockTerminal2 = { name: 'Terminal 2' } as vscode.Terminal;
-            
+
             // Store original implementation
             const originalImpl = (vscode.EventEmitter as any).getMockImplementation();
-            
+
             // Create second emitter with its own handler storage
             const mockEventEmitter2 = {
                 event: jest.fn((handler: (data: string) => void) => {
@@ -604,26 +604,26 @@ describe('TerminalOutputMonitor', () => {
                 fire: jest.fn(),
                 dispose: jest.fn()
             } as any;
-            
+
             const activitySpy = jest.fn();
             monitor.on('activity', activitySpy);
 
             // Monitor first terminal (uses default mockEventEmitter)
             monitor.monitorTerminal(mockTerminal, 'agent-1');
             const handler1 = (mockEventEmitter as any).handler;
-            
+
             // Set up second emitter for second terminal
             (vscode.EventEmitter as any).mockImplementationOnce(() => mockEventEmitter2);
             monitor.monitorTerminal(mockTerminal2, 'agent-2');
             const handler2 = (mockEventEmitter2 as any).handler;
-            
+
             // Restore original implementation
             (vscode.EventEmitter as any).mockImplementation(originalImpl);
 
             // Emit from first terminal
             handler1('Task complete');
 
-            // Emit from second terminal  
+            // Emit from second terminal
             handler2('Error: Failed');
 
             expect(activitySpy).toHaveBeenCalledTimes(2);
@@ -648,7 +648,7 @@ describe('TerminalOutputMonitor', () => {
             // First monitor the terminal to set up the handler
             monitor.monitorTerminal(mockTerminal, 'agent-1');
             const handler = (mockEventEmitter as any).handler;
-            
+
             // Simulate rapid output
             for (let i = 0; i < 100; i++) {
                 handler(`Processing item ${i}`);
@@ -663,17 +663,17 @@ describe('TerminalOutputMonitor', () => {
 
             // Start monitoring
             monitor.monitorTerminal(mockTerminal, 'agent-1');
-            
+
             // Stop monitoring
             monitor.stopMonitoring(mockTerminal);
-            
+
             // Start monitoring again
             monitor.monitorTerminal(mockTerminal, 'agent-1');
-            
+
             // Should work normally
             const handler = (mockEventEmitter as any).handler;
             handler('Task complete');
-            
+
             expect(activitySpy).toHaveBeenCalledWith(
                 expect.objectContaining({
                     pattern: 'completion'

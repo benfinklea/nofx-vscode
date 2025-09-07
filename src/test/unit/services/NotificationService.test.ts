@@ -206,7 +206,7 @@ describe('NotificationService', () => {
 
     describe('showInputBox', () => {
         it('should call vscode.window.showInputBox with options', async () => {
-            const options = { 
+            const options = {
                 prompt: 'Enter your name',
                 placeholder: 'John Doe',
                 value: 'Default name'

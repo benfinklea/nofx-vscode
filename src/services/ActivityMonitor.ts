@@ -22,7 +22,7 @@ export interface MonitoringEvent {
     timestamp: Date;
 }
 
-export type AgentActivityStatus = 
+export type AgentActivityStatus =
     | 'active'      // 🟢 Currently working (output detected)
     | 'waiting'     // 🟡 Awaiting user input/permission
     | 'thinking'    // 🔵 No output but recently active
@@ -53,24 +53,24 @@ export class ActivityMonitor extends EventEmitter {
      */
     public startMonitoring(agent: Agent, terminal: vscode.Terminal): void {
         const agentId = agent.id;
-        
+
         // Store terminal reference
         this.agentTerminals.set(agentId, terminal);
-        
+
         // Initialize metrics
         this.initializeMetrics(agentId);
-        
+
         // Start terminal output monitoring
         this.terminalMonitor.monitorTerminal(terminal, agentId);
-        
+
         // Start inactivity monitoring
         this.inactivityMonitor.startMonitoring(agentId);
-        
+
         // Set initial status
         this.updateAgentStatus(agentId, 'active');
-        
+
         console.log(`[ActivityMonitor] Started monitoring agent ${agent.name} (${agentId})`);
-        
+
         // Emit monitoring started event
         this.emitMonitoringEvent({
             type: 'status-change',
@@ -135,10 +135,10 @@ export class ActivityMonitor extends EventEmitter {
      */
     private handleTaskCompletion(activity: TerminalActivity): void {
         const { agentId } = activity;
-        
+
         this.updateAgentStatus(agentId, 'completed');
         this.updateMetrics(agentId, 'completion');
-        
+
         this.emitMonitoringEvent({
             type: 'completion',
             agentId,
@@ -162,10 +162,10 @@ export class ActivityMonitor extends EventEmitter {
      */
     private handlePermissionRequest(activity: TerminalActivity): void {
         const { agentId } = activity;
-        
+
         this.updateAgentStatus(agentId, 'permission');
         this.updateMetrics(agentId, 'permission');
-        
+
         this.emitMonitoringEvent({
             type: 'permission',
             agentId,
@@ -183,10 +183,10 @@ export class ActivityMonitor extends EventEmitter {
      */
     private handleError(activity: TerminalActivity): void {
         const { agentId } = activity;
-        
+
         this.updateAgentStatus(agentId, 'error');
         this.updateMetrics(agentId, 'error');
-        
+
         this.emitMonitoringEvent({
             type: 'error',
             agentId,
@@ -204,9 +204,9 @@ export class ActivityMonitor extends EventEmitter {
      */
     private handleWaiting(activity: TerminalActivity): void {
         const { agentId } = activity;
-        
+
         this.updateAgentStatus(agentId, 'waiting');
-        
+
         this.emitMonitoringEvent({
             type: 'activity',
             agentId,
@@ -224,9 +224,9 @@ export class ActivityMonitor extends EventEmitter {
      */
     private handleThinking(activity: TerminalActivity): void {
         const { agentId } = activity;
-        
+
         this.updateAgentStatus(agentId, 'thinking');
-        
+
         this.emitMonitoringEvent({
             type: 'activity',
             agentId,
@@ -243,9 +243,9 @@ export class ActivityMonitor extends EventEmitter {
      */
     private handleInactivityWarning(data: any): void {
         const { agentId } = data;
-        
+
         this.updateAgentStatus(agentId, 'inactive');
-        
+
         this.emitMonitoringEvent({
             type: 'inactivity',
             agentId,
@@ -263,9 +263,9 @@ export class ActivityMonitor extends EventEmitter {
      */
     private handleInactivityAlert(data: any): void {
         const { agentId } = data;
-        
+
         this.updateAgentStatus(agentId, 'stuck');
-        
+
         this.emitMonitoringEvent({
             type: 'inactivity',
             agentId,
@@ -284,7 +284,7 @@ export class ActivityMonitor extends EventEmitter {
      */
     private handleStatusChange(data: any): void {
         const { agentId, newStatus } = data;
-        
+
         // Map inactivity status to activity status
         const statusMap: { [key: string]: AgentActivityStatus } = {
             'active': 'active',
@@ -293,7 +293,7 @@ export class ActivityMonitor extends EventEmitter {
             'stuck': 'stuck',
             'waiting': 'waiting'
         };
-        
+
         const mappedStatus = statusMap[newStatus] || 'active';
         this.updateAgentStatus(agentId, mappedStatus);
     }
@@ -303,10 +303,10 @@ export class ActivityMonitor extends EventEmitter {
      */
     private updateAgentStatus(agentId: string, status: AgentActivityStatus): void {
         const previousStatus = this.agentStatus.get(agentId);
-        
+
         if (previousStatus !== status) {
             this.agentStatus.set(agentId, status);
-            
+
             // Emit status change event
             this.emit('agent-status-changed', {
                 agentId,
@@ -314,7 +314,7 @@ export class ActivityMonitor extends EventEmitter {
                 newStatus: status,
                 timestamp: new Date()
             });
-            
+
             console.log(`[ActivityMonitor] Agent ${agentId} status changed: ${previousStatus} → ${status}`);
         }
     }
@@ -343,7 +343,7 @@ export class ActivityMonitor extends EventEmitter {
         if (!metrics) return;
 
         const now = new Date();
-        
+
         switch (eventType) {
             case 'activity':
                 metrics.lastActiveTimestamp = now;
@@ -398,12 +398,12 @@ export class ActivityMonitor extends EventEmitter {
     private emitMonitoringEvent(event: MonitoringEvent): void {
         // Add to log
         this.activityLog.push(event);
-        
+
         // Limit log size
         if (this.activityLog.length > 1000) {
             this.activityLog = this.activityLog.slice(-500);
         }
-        
+
         // Emit the event
         this.emit('monitoring-event', event);
     }
@@ -461,14 +461,14 @@ export class ActivityMonitor extends EventEmitter {
             this.terminalMonitor.stopMonitoring(terminal);
             this.agentTerminals.delete(agentId);
         }
-        
+
         // Stop inactivity monitoring
         this.inactivityMonitor.stopMonitoring(agentId);
-        
+
         // Clear data
         this.agentStatus.delete(agentId);
         this.agentMetrics.delete(agentId);
-        
+
         console.log(`[ActivityMonitor] Stopped monitoring agent ${agentId}`);
     }
 

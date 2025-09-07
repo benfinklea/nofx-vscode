@@ -20,7 +20,7 @@ export class InactivityMonitor extends EventEmitter {
     private alertTimers: Map<string, NodeJS.Timeout> = new Map();
     private heartbeatTimers: Map<string, NodeJS.Timeout> = new Map();
     private agentStatus: Map<string, InactivityStatus['status']> = new Map();
-    
+
     private config: InactivityConfig = {
         warningThreshold: 30,
         alertThreshold: 120,
@@ -232,7 +232,7 @@ export class InactivityMonitor extends EventEmitter {
      */
     public updateConfig(config: Partial<InactivityConfig>): void {
         this.config = { ...this.config, ...config };
-        
+
         // Restart monitoring with new config
         const agentIds = Array.from(this.lastActivity.keys());
         agentIds.forEach(agentId => {

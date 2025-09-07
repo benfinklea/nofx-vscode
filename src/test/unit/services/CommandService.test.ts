@@ -591,28 +591,28 @@ describe('CommandService', () => {
     describe('error handling and edge cases', () => {
         it('should handle null command handlers', () => {
             const commandId = 'test.null';
-            
+
             expect(() => commandService.register(commandId, null as any)).not.toThrow();
             expect(mockCommands.registerCommand).toHaveBeenCalledWith(commandId, null, undefined);
         });
 
         it('should handle undefined command handlers', () => {
             const commandId = 'test.undefined';
-            
+
             expect(() => commandService.register(commandId, undefined as any)).not.toThrow();
             expect(mockCommands.registerCommand).toHaveBeenCalledWith(commandId, undefined, undefined);
         });
 
         it('should handle very long command IDs', () => {
             const longCommandId = 'a'.repeat(1000);
-            
+
             expect(() => commandService.register(longCommandId, jest.fn())).not.toThrow();
             expect(commandService.hasCommand(longCommandId)).toBe(true);
         });
 
         it('should handle command IDs with special characters', () => {
             const specialCommandId = 'test.command-with_special.chars123!@#$%';
-            
+
             commandService.register(specialCommandId, jest.fn());
             expect(commandService.hasCommand(specialCommandId)).toBe(true);
         });

@@ -268,7 +268,7 @@ describe('AgentLifecycleManager', () => {
             for (const testCase of testCases) {
                 jest.clearAllMocks();
                 const config = { ...mockAgentConfig, type: testCase.type };
-                
+
                 await lifecycleManager.spawnAgent(config);
 
                 expect(mockTerminalManager.createTerminal).toHaveBeenCalledWith(
@@ -325,7 +325,7 @@ describe('AgentLifecycleManager', () => {
             await managerWithoutLogging.spawnAgent(mockAgentConfig);
 
             expect(vscode.window.createOutputChannel).toHaveBeenCalledWith('n of x: Test Agent');
-            
+
             managerWithoutLogging.dispose();
         });
 
@@ -362,17 +362,17 @@ describe('AgentLifecycleManager', () => {
 
         it('should delay terminal initialization to avoid connection issues', async () => {
             jest.useFakeTimers();
-            
+
             const spawnPromise = lifecycleManager.spawnAgent(mockAgentConfig);
-            
+
             // Fast-forward through the delay
             jest.advanceTimersByTime(500);
-            
+
             const agent = await spawnPromise;
-            
+
             expect(agent).toBeDefined();
             expect(mockTerminalManager.initializeAgentTerminal).toHaveBeenCalled();
-            
+
             jest.useRealTimers();
         });
     });
@@ -430,7 +430,7 @@ describe('AgentLifecycleManager', () => {
             await managerWithoutLogging.removeAgent(agent.id);
 
             expect(mockOutputChannel.dispose).toHaveBeenCalled();
-            
+
             managerWithoutLogging.dispose();
         });
 
@@ -535,7 +535,7 @@ describe('AgentLifecycleManager', () => {
             monitoringHandler(event);
 
             expect(mockAgentNotificationServiceInstance.notifyUserAttention).toHaveBeenCalledWith(
-                expect.objectContaining({ 
+                expect.objectContaining({
                     id: testAgent.id,
                     currentTask: null,
                     tasksCompleted: 1
@@ -559,7 +559,7 @@ describe('AgentLifecycleManager', () => {
             monitoringHandler(event);
 
             expect(mockAgentNotificationServiceInstance.notifyUserAttention).toHaveBeenCalledWith(
-                expect.objectContaining({ 
+                expect.objectContaining({
                     id: testAgent.id,
                     currentTask: null, // Should still be null but tasksCompleted shouldn't increase
                     tasksCompleted: 0
@@ -649,10 +649,10 @@ describe('AgentLifecycleManager', () => {
 
         it('should clear agents map', async () => {
             const agent = await lifecycleManager.spawnAgent(mockAgentConfig);
-            
+
             lifecycleManager.dispose();
 
-            // Verify internal state is cleared (we can't access private members directly, 
+            // Verify internal state is cleared (we can't access private members directly,
             // but we can verify disposal doesn't throw)
             expect(() => lifecycleManager.dispose()).not.toThrow();
         });
@@ -692,21 +692,21 @@ describe('AgentLifecycleManager', () => {
     describe('edge cases', () => {
         it('should handle empty agent name', async () => {
             const configWithEmptyName = { ...mockAgentConfig, name: '' };
-            
+
             const agent = await lifecycleManager.spawnAgent(configWithEmptyName);
-            
+
             expect(agent.name).toBe('');
             expect(mockLoggingService.getChannel).toHaveBeenCalledWith('Agent: ');
         });
 
         it('should handle agent without template', async () => {
-            const configWithoutTemplate = { 
+            const configWithoutTemplate = {
                 name: 'Test Agent',
                 type: 'general'
             };
-            
+
             const agent = await lifecycleManager.spawnAgent(configWithoutTemplate);
-            
+
             expect(agent.template).toBeUndefined();
             expect(agent.type).toBe('general');
         });

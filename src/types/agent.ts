@@ -28,7 +28,7 @@ export interface TestAgent extends Agent {
 }
 
 // Activity monitoring types
-export type AgentActivityStatus = 
+export type AgentActivityStatus =
     | 'active'      // 🟢 Currently working (output detected)
     | 'waiting'     // 🟡 Awaiting user input/permission
     | 'thinking'    // 🔵 No output but recently active

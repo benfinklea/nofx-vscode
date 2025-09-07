@@ -22,14 +22,14 @@ interface WebviewHostFactory {
 // Mock ConductorTemplate
 class MockConductorTemplate {
     constructor(private context: vscode.ExtensionContext) {}
-    
+
     generateConductorHTML = jest.fn().mockReturnValue('<html><body>Mock HTML</body></html>');
 }
 
 // Mock PanelBinder
 class MockPanelBinder {
     static create = jest.fn().mockReturnValue(new MockPanelBinder());
-    
+
     bindWebviewToViewModel = jest.fn();
     dispose = jest.fn();
 }
@@ -189,10 +189,10 @@ describe('ConductorPanel', () => {
         it('should set up disposal callback correctly', () => {
             const bindCall = MockPanelBinder.prototype.bindWebviewToViewModel.mock.calls[0];
             const options = bindCall[3];
-            
+
             // Simulate disposal
             options.onDispose();
-            
+
             expect((ConductorPanel as any).currentPanel).toBeUndefined();
             expect(mockViewModel.dispose).toHaveBeenCalled();
         });
@@ -212,21 +212,21 @@ describe('ConductorPanel', () => {
 
             const bindCall = MockPanelBinder.prototype.bindWebviewToViewModel.mock.calls[1];
             const options = bindCall[3];
-            
+
             // Should not throw when view model has no dispose method
             expect(() => options.onDispose()).not.toThrow();
-            
+
             panel.dispose();
         });
 
         it('should generate HTML using template', () => {
             const bindCall = MockPanelBinder.prototype.bindWebviewToViewModel.mock.calls[0];
             const htmlGenerator = bindCall[2];
-            
+
             const html = htmlGenerator(mockViewState, mockWebviewHost);
-            
+
             expect(MockConductorTemplate.prototype.generateConductorHTML).toHaveBeenCalledWith(
-                mockViewState, 
+                mockViewState,
                 mockWebviewHost
             );
             expect(html).toBe('<html><body>Mock HTML</body></html>');
@@ -265,9 +265,9 @@ describe('ConductorPanel', () => {
         it('should use custom webview host factory', () => {
             const customFactory = jest.fn().mockReturnValue(mockWebviewHost);
             const panel = ConductorPanel.create(
-                mockContext, 
-                mockViewModel, 
-                mockLoggingService, 
+                mockContext,
+                mockViewModel,
+                mockLoggingService,
                 customFactory
             );
 
@@ -298,10 +298,10 @@ describe('ConductorPanel', () => {
             ConductorPanel.create(mockContext, mockViewModel, mockLoggingService);
 
             expect(vscode.Uri.joinPath).toHaveBeenCalledWith(mockContext.extensionUri, 'webview');
-            
+
             const createPanelCall = (vscode.window.createWebviewPanel as jest.Mock).mock.calls[0];
             const options = createPanelCall[3];
-            
+
             expect(options.localResourceRoots).toHaveLength(1);
         });
     });
@@ -398,27 +398,27 @@ describe('ConductorPanel', () => {
 
         it('should clear static currentPanel reference', () => {
             const panel = ConductorPanel.createOrShow(mockContext, mockViewModel, mockLoggingService);
-            
+
             expect((ConductorPanel as any).currentPanel).toBe(panel);
-            
+
             panel.dispose();
-            
+
             expect((ConductorPanel as any).currentPanel).toBeUndefined();
         });
 
         it('should handle disposal when already disposed', () => {
             conductorPanel.dispose();
-            
+
             expect(() => conductorPanel.dispose()).not.toThrow();
         });
 
         it('should dispose in correct order', () => {
             const disposeCalls: string[] = [];
-            
+
             MockPanelBinder.prototype.dispose.mockImplementation(() => {
                 disposeCalls.push('panelBinder');
             });
-            
+
             mockWebviewHost.dispose = jest.fn().mockImplementation(() => {
                 disposeCalls.push('webviewHost');
             });
@@ -432,7 +432,7 @@ describe('ConductorPanel', () => {
     describe('integration with webview lifecycle', () => {
         it('should handle webview panel disposal', () => {
             const panel = ConductorPanel.createOrShow(mockContext, mockViewModel, mockLoggingService);
-            
+
             // Simulate webview panel disposal through onDispose callback
             const bindCall = MockPanelBinder.prototype.bindWebviewToViewModel.mock.calls[0];
             const options = bindCall[3];
@@ -444,7 +444,7 @@ describe('ConductorPanel', () => {
             // Subsequent calls should create new panel
             jest.clearAllMocks();
             const newPanel = ConductorPanel.createOrShow(mockContext, mockViewModel, mockLoggingService);
-            
+
             expect(vscode.window.createWebviewPanel).toHaveBeenCalled();
             expect(newPanel).not.toBe(panel);
 
@@ -517,7 +517,7 @@ describe('ConductorPanel', () => {
 
     describe('concurrent access patterns', () => {
         it('should handle multiple concurrent createOrShow calls', () => {
-            const panels = Array.from({ length: 5 }, () => 
+            const panels = Array.from({ length: 5 }, () =>
                 ConductorPanel.createOrShow(mockContext, mockViewModel, mockLoggingService)
             );
 
@@ -539,13 +539,13 @@ describe('ConductorPanel', () => {
 
         it('should maintain consistency during disposal', () => {
             const panel1 = ConductorPanel.createOrShow(mockContext, mockViewModel, mockLoggingService);
-            
+
             // Start disposal
             panel1.dispose();
-            
+
             // Try to create new panel during disposal
             const panel2 = ConductorPanel.createOrShow(mockContext, mockViewModel, mockLoggingService);
-            
+
             expect(panel1).not.toBe(panel2);
             expect((ConductorPanel as any).currentPanel).toBe(panel2);
 

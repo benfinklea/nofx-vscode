@@ -134,7 +134,7 @@ describe('WorktreeManager', () => {
         });
 
         it('should create worktree for new agent', async () => {
-            const expectedBranchName = `agent-test-agent-1672574400000`;
+            const expectedBranchName = 'agent-test-agent-1672574400000';
             const expectedWorktreePath = '/test/.nofx-worktrees/test-agent-123';
 
             const result = await worktreeManager.createWorktreeForAgent(mockAgent);
@@ -285,7 +285,7 @@ describe('WorktreeManager', () => {
             await worktreeManager.removeWorktreeForAgent(mockAgent.id);
 
             expect(mockExecSync).toHaveBeenCalledWith(
-                `git worktree remove "/test/.nofx-worktrees/test-agent-123" --force`,
+                'git worktree remove "/test/.nofx-worktrees/test-agent-123" --force',
                 {
                     cwd: workspacePath,
                     encoding: 'utf-8'
@@ -441,7 +441,7 @@ worktree /path/to/worktree1
             });
 
             expect(mockExecSync).toHaveBeenCalledWith(
-                `git worktree remove "/test/.nofx-worktrees/agent-1" --force`,
+                'git worktree remove "/test/.nofx-worktrees/agent-1" --force',
                 {
                     cwd: workspacePath,
                     encoding: 'utf-8'
@@ -449,7 +449,7 @@ worktree /path/to/worktree1
             );
 
             expect(mockExecSync).toHaveBeenCalledWith(
-                `git worktree remove "/test/.nofx-worktrees/agent-2" --force`,
+                'git worktree remove "/test/.nofx-worktrees/agent-2" --force',
                 {
                     cwd: workspacePath,
                     encoding: 'utf-8'
@@ -776,7 +776,7 @@ branch refs/heads/agent-feature-1
             await worktreeManager.mergeAgentWork(mockAgent.id);
 
             expect(mockLoggingService.debug).toHaveBeenCalledWith('No changes to commit in worktree');
-            
+
             // Should still proceed with merge
             expect(mockExecSync).toHaveBeenCalledWith(
                 expect.stringContaining('git merge'),

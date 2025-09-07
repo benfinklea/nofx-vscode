@@ -87,12 +87,12 @@ describe('InactivityMonitor', () => {
 
         it('should reset timers on activity', () => {
             const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
-            
+
             // Advance time to make agent inactive
             jest.advanceTimersByTime(35000);
-            
+
             monitor.recordActivity('agent-1');
-            
+
             // Should clear warning and alert timers
             expect(clearTimeoutSpy).toHaveBeenCalledTimes(2);
         });
@@ -103,9 +103,9 @@ describe('InactivityMonitor', () => {
 
             // Make agent inactive
             jest.advanceTimersByTime(35000);
-            
+
             monitor.recordActivity('agent-1');
-            
+
             const status = monitor.getInactivityStatus('agent-1');
             expect(status?.status).toBe('active');
         });
@@ -116,9 +116,9 @@ describe('InactivityMonitor', () => {
 
             // Make agent stuck
             jest.advanceTimersByTime(125000);
-            
+
             monitor.recordActivity('agent-1');
-            
+
             const status = monitor.getInactivityStatus('agent-1');
             expect(status?.status).toBe('active');
         });
@@ -150,7 +150,7 @@ describe('InactivityMonitor', () => {
             monitor.on('warning', warningSpy);
 
             monitor.startMonitoring('agent-1');
-            
+
             // Advance past warning threshold (30 seconds)
             jest.advanceTimersByTime(30000);
 
@@ -185,13 +185,13 @@ describe('InactivityMonitor', () => {
             monitor.on('warning', warningSpy);
 
             monitor.startMonitoring('agent-1');
-            
+
             // Advance halfway to warning
             jest.advanceTimersByTime(15000);
-            
+
             // Record activity
             monitor.recordActivity('agent-1');
-            
+
             // Advance past original warning time
             jest.advanceTimersByTime(20000);
 
@@ -205,7 +205,7 @@ describe('InactivityMonitor', () => {
             monitor.on('alert', alertSpy);
 
             monitor.startMonitoring('agent-1');
-            
+
             // Advance past alert threshold (120 seconds)
             jest.advanceTimersByTime(120000);
 
@@ -240,7 +240,7 @@ describe('InactivityMonitor', () => {
             monitor.on('heartbeat', heartbeatSpy);
 
             monitor.startMonitoring('agent-1');
-            
+
             // Advance by heartbeat interval (15 seconds)
             jest.advanceTimersByTime(15000);
 
@@ -258,7 +258,7 @@ describe('InactivityMonitor', () => {
             monitor.on('heartbeat', heartbeatSpy);
 
             monitor.startMonitoring('agent-1');
-            
+
             // Advance by 3 heartbeat intervals
             jest.advanceTimersByTime(45000);
 
@@ -270,14 +270,14 @@ describe('InactivityMonitor', () => {
             monitor.on('status-change', statusChangeSpy);
 
             monitor.startMonitoring('agent-1');
-            
+
             // Make agent inactive first
             jest.advanceTimersByTime(30000);
             statusChangeSpy.mockClear();
-            
+
             // Record activity
             monitor.recordActivity('agent-1');
-            
+
             // After recording activity, status should be active
             const status = monitor.getInactivityStatus('agent-1');
             expect(status?.status).toBe('active');
@@ -288,10 +288,10 @@ describe('InactivityMonitor', () => {
             monitor.on('status-change', statusChangeSpy);
 
             monitor.startMonitoring('agent-1');
-            
+
             // Advance to 'thinking' range
             jest.advanceTimersByTime(10000);
-            
+
             // Trigger heartbeat
             jest.advanceTimersByTime(5000);
 
@@ -325,7 +325,7 @@ describe('InactivityMonitor', () => {
 
         it('should calculate inactive seconds correctly', () => {
             monitor.startMonitoring('agent-1');
-            
+
             // Advance by 25 seconds
             jest.advanceTimersByTime(25000);
 
@@ -353,7 +353,7 @@ describe('InactivityMonitor', () => {
         it('should return correct status for each agent', () => {
             monitor.startMonitoring('agent-1');
             jest.advanceTimersByTime(10000);
-            
+
             monitor.startMonitoring('agent-2');
             jest.advanceTimersByTime(5000);
 
@@ -402,7 +402,7 @@ describe('InactivityMonitor', () => {
         it('should log monitoring stop', () => {
             monitor.startMonitoring('agent-1');
             monitor.stopMonitoring('agent-1');
-            
+
             expect(consoleLogSpy).toHaveBeenCalledWith('[InactivityMonitor] Stopped monitoring agent agent-1');
         });
 
@@ -414,14 +414,14 @@ describe('InactivityMonitor', () => {
     describe('updateConfig', () => {
         it('should update configuration', () => {
             monitor.startMonitoring('agent-1');
-            
+
             const newConfig: Partial<InactivityConfig> = {
                 warningThreshold: 60,
                 alertThreshold: 240
             };
 
             monitor.updateConfig(newConfig);
-            
+
             // Agent should be restarted with new config
             const status = monitor.getInactivityStatus('agent-1');
             expect(status).not.toBeNull();
@@ -461,7 +461,7 @@ describe('InactivityMonitor', () => {
 
             monitor.startMonitoring('agent-1');
             monitor.startMonitoring('agent-2');
-            
+
             clearTimeoutSpy.mockClear();
             clearIntervalSpy.mockClear();
 
@@ -485,9 +485,9 @@ describe('InactivityMonitor', () => {
 
         it('should remove all event listeners', () => {
             const removeAllListenersSpy = jest.spyOn(monitor, 'removeAllListeners');
-            
+
             monitor.dispose();
-            
+
             expect(removeAllListenersSpy).toHaveBeenCalled();
         });
 
@@ -509,11 +509,11 @@ describe('InactivityMonitor', () => {
             monitor.on('status-change', statusChangeSpy);
 
             monitor.startMonitoring('agent-1');
-            
+
             // Stay in active range (< 5 seconds)
             jest.advanceTimersByTime(3000);
             statusChangeSpy.mockClear();
-            
+
             // Another heartbeat in active range
             monitor.recordActivity('agent-1');
             jest.advanceTimersByTime(3000);
@@ -527,11 +527,11 @@ describe('InactivityMonitor', () => {
             monitor.on('status-change', statusChangeSpy);
 
             monitor.startMonitoring('agent-1');
-            
+
             // Change to thinking (5-30 seconds)
             jest.advanceTimersByTime(10000);
             jest.advanceTimersByTime(5000); // Trigger heartbeat
-            
+
             expect(statusChangeSpy).toHaveBeenCalledTimes(1);
             expect(statusChangeSpy).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -545,7 +545,7 @@ describe('InactivityMonitor', () => {
     describe('edge cases', () => {
         it('should handle rapid activity recording', () => {
             monitor.startMonitoring('agent-1');
-            
+
             // Record activity multiple times rapidly
             for (let i = 0; i < 10; i++) {
                 monitor.recordActivity('agent-1');
@@ -559,20 +559,20 @@ describe('InactivityMonitor', () => {
         it('should handle monitoring same agent multiple times', () => {
             monitor.startMonitoring('agent-1');
             monitor.startMonitoring('agent-1');
-            
+
             const statuses = monitor.getAllStatus();
             expect(statuses).toHaveLength(1);
         });
 
         it('should handle concurrent timer operations', () => {
             monitor.startMonitoring('agent-1');
-            
+
             // Trigger warning
             jest.advanceTimersByTime(30000);
-            
+
             // Immediately record activity
             monitor.recordActivity('agent-1');
-            
+
             // Should reset properly
             const status = monitor.getInactivityStatus('agent-1');
             expect(status?.status).toBe('active');

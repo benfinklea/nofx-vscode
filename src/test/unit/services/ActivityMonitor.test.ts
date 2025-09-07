@@ -9,7 +9,7 @@ describe('ActivityMonitor', () => {
 
     beforeEach(() => {
         monitor = new ActivityMonitor();
-        
+
         mockTerminal = {
             name: 'Test Terminal',
             processId: Promise.resolve(123),
@@ -41,14 +41,14 @@ describe('ActivityMonitor', () => {
     describe('Agent Monitoring', () => {
         it('should start monitoring an agent', () => {
             monitor.startMonitoring(mockAgent, mockTerminal);
-            
+
             const status = monitor.getAgentStatus(mockAgent.id);
             expect(status).toBe('active');
         });
 
         it('should track agent metrics', () => {
             monitor.startMonitoring(mockAgent, mockTerminal);
-            
+
             const metrics = monitor.getAgentMetrics(mockAgent.id);
             expect(metrics).toBeDefined();
             expect(metrics?.agentId).toBe(mockAgent.id);
@@ -59,7 +59,7 @@ describe('ActivityMonitor', () => {
         it('should stop monitoring an agent', () => {
             monitor.startMonitoring(mockAgent, mockTerminal);
             monitor.stopMonitoring(mockAgent.id);
-            
+
             const status = monitor.getAgentStatus(mockAgent.id);
             expect(status).toBeUndefined();
         });
@@ -86,7 +86,7 @@ describe('ActivityMonitor', () => {
     describe('Activity Log', () => {
         it('should maintain activity log', () => {
             monitor.startMonitoring(mockAgent, mockTerminal);
-            
+
             const log = monitor.getActivityLog();
             expect(log).toBeInstanceOf(Array);
             expect(log.length).toBeGreaterThan(0);
@@ -112,7 +112,7 @@ describe('ActivityMonitor', () => {
     describe('Event Emission', () => {
         it('should emit monitoring events', (done) => {
             let eventReceived = false;
-            
+
             monitor.on('monitoring-event', (event) => {
                 if (!eventReceived) {
                     eventReceived = true;
@@ -127,7 +127,7 @@ describe('ActivityMonitor', () => {
 
         it('should emit agent status change events', (done) => {
             let eventReceived = false;
-            
+
             monitor.on('agent-status-changed', (data) => {
                 if (!eventReceived && data.newStatus === 'active') {
                     eventReceived = true;

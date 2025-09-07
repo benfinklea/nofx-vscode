@@ -49,8 +49,8 @@ export class TerminalManager implements ITerminalManager {
 
     createTerminal(agentId: string, agentConfig: any): vscode.Terminal {
         // Use terminal icon from template, config, or fallback
-        const terminalIcon = agentConfig.template?.terminalIcon ?? 
-                            agentConfig.terminalIcon ?? 
+        const terminalIcon = agentConfig.template?.terminalIcon ??
+                            agentConfig.terminalIcon ??
                             (agentConfig.type === 'conductor' ? 'terminal' : 'robot');
 
         // Get the user's default shell or use bash as fallback

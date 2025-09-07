@@ -44,7 +44,7 @@ export class AgentTemplateManager {
     constructor(workspaceRoot: string) {
         // Built-in templates packaged with the extension
         this.builtInTemplatesDir = path.join(__dirname, 'templates');
-        
+
         // Runtime templates directory (for user customization)
         this.templatesDir = path.join(workspaceRoot, '.nofx', 'templates');
         this.customTemplatesDir = path.join(this.templatesDir, 'custom');

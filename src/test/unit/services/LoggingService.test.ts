@@ -82,21 +82,21 @@ describe('LoggingService', () => {
         it('should update log level from config service', () => {
             mockConfigService.getLogLevel.mockReturnValue('debug');
             const service = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             service.debug('test message');
             expect(mockMainChannel.appendLine).toHaveBeenCalled();
-            
+
             service.dispose();
         });
 
         it('should listen to config changes', () => {
             const mockDisposable = { dispose: jest.fn() };
             mockConfigService.onDidChange.mockReturnValue(mockDisposable);
-            
+
             const service = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             expect(mockConfigService.onDidChange).toHaveBeenCalled();
-            
+
             service.dispose();
             expect(mockDisposable.dispose).toHaveBeenCalled();
         });
@@ -105,9 +105,9 @@ describe('LoggingService', () => {
     describe('setConfigurationService', () => {
         it('should set config service after construction', () => {
             const service = new LoggingService(undefined, mockMainChannel);
-            
+
             service.setConfigurationService(mockConfigService);
-            
+
             expect(mockConfigService.onDidChange).toHaveBeenCalled();
             service.dispose();
         });
@@ -115,9 +115,9 @@ describe('LoggingService', () => {
         it('should not set config service if already set', () => {
             const service = new LoggingService(mockConfigService, mockMainChannel);
             const callCount = mockConfigService.onDidChange.mock.calls.length;
-            
+
             service.setConfigurationService(mockConfigService);
-            
+
             expect(mockConfigService.onDidChange).toHaveBeenCalledTimes(callCount);
             service.dispose();
         });
@@ -127,24 +127,24 @@ describe('LoggingService', () => {
         it('should log debug messages when level is debug', () => {
             mockConfigService.getLogLevel.mockReturnValue('debug');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.debug('debug message');
             loggingService.info('info message');
             loggingService.warn('warn message');
             loggingService.error('error message');
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledTimes(4);
         });
 
         it('should not log debug messages when level is info', () => {
             mockConfigService.getLogLevel.mockReturnValue('info');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.debug('debug message');
             loggingService.info('info message');
             loggingService.warn('warn message');
             loggingService.error('error message');
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledTimes(3);
             expect(mockMainChannel.appendLine).not.toHaveBeenCalledWith(
                 expect.stringContaining('debug message')
@@ -154,24 +154,24 @@ describe('LoggingService', () => {
         it('should only log warn and error when level is warn', () => {
             mockConfigService.getLogLevel.mockReturnValue('warn');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.debug('debug message');
             loggingService.info('info message');
             loggingService.warn('warn message');
             loggingService.error('error message');
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledTimes(2);
         });
 
         it('should only log error when level is error', () => {
             mockConfigService.getLogLevel.mockReturnValue('error');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.debug('debug message');
             loggingService.info('info message');
             loggingService.warn('warn message');
             loggingService.error('error message');
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledTimes(1);
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining('error message')
@@ -181,9 +181,9 @@ describe('LoggingService', () => {
         it('should handle invalid log levels gracefully', () => {
             mockConfigService.getLogLevel.mockReturnValue('invalid');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.info('test message');
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining('test message')
             );
@@ -192,9 +192,9 @@ describe('LoggingService', () => {
         it('should handle null/undefined log level', () => {
             mockConfigService.getLogLevel.mockReturnValue(null);
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.info('test message');
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining('test message')
             );
@@ -204,7 +204,7 @@ describe('LoggingService', () => {
     describe('message formatting', () => {
         it('should format messages with timestamp and level', () => {
             loggingService.info('test message');
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringMatching(/\[\d{4}-\d{2}-\d{2}T.*\] INFO\s+test message/)
             );
@@ -213,7 +213,7 @@ describe('LoggingService', () => {
         it('should format objects as JSON', () => {
             const data = { key: 'value', nested: { prop: 123 } };
             loggingService.info('test message', data);
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining(JSON.stringify(data, null, 2))
             );
@@ -221,7 +221,7 @@ describe('LoggingService', () => {
 
         it('should append primitive data inline', () => {
             loggingService.info('test message', 'additional info');
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining('test message additional info')
             );
@@ -229,7 +229,7 @@ describe('LoggingService', () => {
 
         it('should handle undefined data', () => {
             loggingService.info('test message');
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringMatching(/test message$/)
             );
@@ -238,7 +238,7 @@ describe('LoggingService', () => {
         it('should handle circular references in objects', () => {
             const obj: any = { a: 1 };
             obj.circular = obj;
-            
+
             // JSON.stringify will throw on circular reference
             expect(() => loggingService.info('circular test', obj)).toThrow();
         });
@@ -248,12 +248,12 @@ describe('LoggingService', () => {
         it('should log to console in debug mode', () => {
             mockConfigService.getLogLevel.mockReturnValue('debug');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.debug('debug msg');
             loggingService.info('info msg');
             loggingService.warn('warn msg');
             loggingService.error('error msg');
-            
+
             expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('debug msg'));
             expect(consoleInfoSpy).toHaveBeenCalledWith(expect.stringContaining('info msg'));
             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('warn msg'));
@@ -263,9 +263,9 @@ describe('LoggingService', () => {
         it('should not log to console in non-debug mode', () => {
             mockConfigService.getLogLevel.mockReturnValue('info');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.info('info msg');
-            
+
             expect(consoleInfoSpy).not.toHaveBeenCalled();
         });
     });
@@ -274,7 +274,7 @@ describe('LoggingService', () => {
         it('should correctly determine if level is enabled', () => {
             mockConfigService.getLogLevel.mockReturnValue('info');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             expect(loggingService.isLevelEnabled('debug')).toBe(false);
             expect(loggingService.isLevelEnabled('info')).toBe(true);
             expect(loggingService.isLevelEnabled('warn')).toBe(true);
@@ -297,11 +297,11 @@ describe('LoggingService', () => {
                 appendLine: jest.fn(),
                 dispose: jest.fn()
             } as any;
-            
+
             (vscode.window.createOutputChannel as jest.Mock).mockReturnValue(mockNewChannel);
-            
+
             const channel = loggingService.getChannel('custom');
-            
+
             expect(vscode.window.createOutputChannel).toHaveBeenCalledWith('NofX - custom');
             expect(channel).toBe(mockNewChannel);
         });
@@ -311,12 +311,12 @@ describe('LoggingService', () => {
                 appendLine: jest.fn(),
                 dispose: jest.fn()
             } as any;
-            
+
             (vscode.window.createOutputChannel as jest.Mock).mockReturnValue(mockNewChannel);
-            
+
             const channel1 = loggingService.getChannel('custom');
             const channel2 = loggingService.getChannel('custom');
-            
+
             expect(vscode.window.createOutputChannel).toHaveBeenCalledTimes(1);
             expect(channel1).toBe(channel2);
         });
@@ -334,13 +334,13 @@ describe('LoggingService', () => {
         it('should track time between time() and timeEnd()', () => {
             mockConfigService.getLogLevel.mockReturnValue('debug');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.time('operation');
-            
+
             jest.advanceTimersByTime(150);
-            
+
             loggingService.timeEnd('operation');
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining('Timer operation: 150ms')
             );
@@ -349,9 +349,9 @@ describe('LoggingService', () => {
         it('should handle timeEnd without time', () => {
             mockConfigService.getLogLevel.mockReturnValue('debug');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.timeEnd('non-existent');
-            
+
             expect(mockMainChannel.appendLine).not.toHaveBeenCalledWith(
                 expect.stringContaining('Timer non-existent')
             );
@@ -360,20 +360,20 @@ describe('LoggingService', () => {
         it('should handle multiple timers', () => {
             mockConfigService.getLogLevel.mockReturnValue('debug');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.time('timer1');
             jest.advanceTimersByTime(100);
-            
+
             loggingService.time('timer2');
             jest.advanceTimersByTime(50);
-            
+
             loggingService.timeEnd('timer1');
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining('Timer timer1: 150ms')
             );
-            
+
             jest.advanceTimersByTime(25);
-            
+
             loggingService.timeEnd('timer2');
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining('Timer timer2: 75ms')
@@ -383,14 +383,14 @@ describe('LoggingService', () => {
         it('should clear timer after timeEnd', () => {
             mockConfigService.getLogLevel.mockReturnValue('debug');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.time('operation');
             jest.advanceTimersByTime(100);
             loggingService.timeEnd('operation');
-            
+
             // Clear mock calls
             jest.clearAllMocks();
-            
+
             // Second timeEnd should not log anything
             loggingService.timeEnd('operation');
             expect(mockMainChannel.appendLine).not.toHaveBeenCalled();
@@ -402,9 +402,9 @@ describe('LoggingService', () => {
             const callback = jest.fn();
             const mockDisposable = { dispose: jest.fn() };
             mockConfigService.onDidChange.mockReturnValue(mockDisposable);
-            
+
             const disposable = loggingService.onDidChangeConfiguration(callback);
-            
+
             expect(mockConfigService.onDidChange).toHaveBeenCalledWith(callback);
             expect(disposable).toBe(mockDisposable);
         });
@@ -412,12 +412,12 @@ describe('LoggingService', () => {
         it('should return no-op disposable without config service', () => {
             const service = new LoggingService(undefined, mockMainChannel);
             const callback = jest.fn();
-            
+
             const disposable = loggingService.onDidChangeConfiguration(callback);
-            
+
             expect(disposable.dispose).toBeDefined();
             expect(() => disposable.dispose()).not.toThrow();
-            
+
             service.dispose();
         });
     });
@@ -426,11 +426,11 @@ describe('LoggingService', () => {
         it('should dispose all disposables', () => {
             const mockDisposable = { dispose: jest.fn() };
             mockConfigService.onDidChange.mockReturnValue(mockDisposable);
-            
+
             const service = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             service.dispose();
-            
+
             expect(mockDisposable.dispose).toHaveBeenCalled();
         });
 
@@ -439,13 +439,13 @@ describe('LoggingService', () => {
                 appendLine: jest.fn(),
                 dispose: jest.fn()
             } as any;
-            
+
             (vscode.window.createOutputChannel as jest.Mock).mockReturnValue(mockCustomChannel);
-            
+
             loggingService.getChannel('custom');
-            
+
             loggingService.dispose();
-            
+
             expect(mockCustomChannel.dispose).toHaveBeenCalled();
             expect(mockMainChannel.dispose).not.toHaveBeenCalled();
         });
@@ -453,16 +453,16 @@ describe('LoggingService', () => {
         it('should clear timers', () => {
             loggingService.time('timer1');
             loggingService.time('timer2');
-            
+
             loggingService.dispose();
-            
+
             // Timers should be cleared, no output expected
             mockConfigService.getLogLevel.mockReturnValue('debug');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             loggingService.timeEnd('timer1');
             loggingService.timeEnd('timer2');
-            
+
             expect(mockMainChannel.appendLine).not.toHaveBeenCalledWith(
                 expect.stringContaining('Timer')
             );
@@ -478,7 +478,7 @@ describe('LoggingService', () => {
         it('should handle very long messages', () => {
             const longMessage = 'a'.repeat(10000);
             loggingService.info(longMessage);
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining(longMessage)
             );
@@ -487,7 +487,7 @@ describe('LoggingService', () => {
         it('should handle special characters in messages', () => {
             const specialMessage = 'Test \n\r\t\b\f\v\0 message';
             loggingService.info(specialMessage);
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining(specialMessage)
             );
@@ -496,9 +496,9 @@ describe('LoggingService', () => {
         it('should handle error objects', () => {
             const error = new Error('Test error');
             error.stack = 'Error stack trace';
-            
+
             loggingService.error('An error occurred', error);
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining('Test error')
             );
@@ -507,14 +507,14 @@ describe('LoggingService', () => {
         it('should handle null and undefined values', () => {
             loggingService.info('null value', null);
             loggingService.info('undefined value', undefined);
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledTimes(2);
         });
 
         it('should handle arrays', () => {
             const array = [1, 2, 3, { nested: true }];
             loggingService.info('array data', array);
-            
+
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining(JSON.stringify(array, null, 2))
             );
@@ -523,16 +523,16 @@ describe('LoggingService', () => {
         it('should handle configuration changes dynamically', () => {
             mockConfigService.getLogLevel.mockReturnValue('error');
             loggingService = new LoggingService(mockConfigService, mockMainChannel);
-            
+
             // Initially only error should log
             loggingService.info('info message 1');
             expect(mockMainChannel.appendLine).not.toHaveBeenCalled();
-            
+
             // Change config
             mockConfigService.getLogLevel.mockReturnValue('info');
             const changeCallback = mockConfigService.onDidChange.mock.calls[0][0];
             changeCallback();
-            
+
             // Now info should log
             loggingService.info('info message 2');
             expect(mockMainChannel.appendLine).toHaveBeenCalledWith(

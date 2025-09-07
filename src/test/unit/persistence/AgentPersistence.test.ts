@@ -20,7 +20,7 @@ describe('AgentPersistence', () => {
     let agentPersistence: AgentPersistence;
     let mockLoggingService: jest.Mocked<ILoggingService>;
     let workspaceRoot: string;
-    
+
     const mockFs = fs as jest.Mocked<typeof fs>;
     const mockFsPromises = fsPromises as jest.Mocked<typeof fsPromises>;
 
@@ -40,7 +40,7 @@ describe('AgentPersistence', () => {
         } as any;
 
         workspaceRoot = '/test/workspace';
-        
+
         // Reset all mocks
         jest.clearAllMocks();
 
@@ -175,7 +175,7 @@ describe('AgentPersistence', () => {
             await agentPersistence.saveAgentState(agents);
 
             const savedData = JSON.parse((mockFs.writeFileSync as jest.Mock).mock.calls[0][1]);
-            
+
             expect(savedData).toMatchObject({
                 version: '1.0',
                 timestamp: expect.any(String),
@@ -444,7 +444,7 @@ describe('AgentPersistence', () => {
                     agent: 'Old response'
                 }
             ];
-            
+
             mockFs.existsSync = jest.fn().mockReturnValue(true);
             mockFs.readFileSync = jest.fn().mockReturnValue(JSON.stringify(existingCheckpoints));
 
@@ -484,7 +484,7 @@ describe('AgentPersistence', () => {
             await agentPersistence.saveConversationCheckpoint(agentId, 'Message', 'Response');
 
             expect(mockLoggingService.error).toHaveBeenCalledWith('Error loading checkpoints:', expect.any(Error));
-            
+
             // Should still save the new checkpoint
             const savedData = JSON.parse((mockFs.writeFileSync as jest.Mock).mock.calls[0][1]);
             expect(savedData).toHaveLength(1);
@@ -735,7 +735,7 @@ describe('AgentPersistence', () => {
         it('should archive sessions to timestamped directory', async () => {
             const archiveName = 'backup-test';
             const sessionFiles = ['agent1_session.md', 'agent2_session.md'];
-            
+
             mockFs.existsSync = jest.fn().mockImplementation((path) => {
                 return path.includes('agents.json');
             });
@@ -743,7 +743,7 @@ describe('AgentPersistence', () => {
 
             const archivePath = await agentPersistence.archiveSessions(archiveName);
 
-            expect(archivePath).toMatch(new RegExp(`backup-test_\\d{4}-\\d{2}-\\d{2}T`));
+            expect(archivePath).toMatch(new RegExp('backup-test_\\d{4}-\\d{2}-\\d{2}T'));
             expect(mockFsPromises.mkdir).toHaveBeenCalledWith(
                 expect.stringContaining('archives'),
                 { recursive: true }
