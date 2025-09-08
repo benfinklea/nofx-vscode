@@ -63,6 +63,8 @@ Object.defineProperty(vscode.workspace, 'createFileSystemWatcher', {
     configurable: true
 });
 
+jest.mock('vscode');
+
 describe('CodebaseAnalyzer', () => {
     let codebaseAnalyzer: CodebaseAnalyzer;
     let fsReadFileMock: jest.SpyInstance;
@@ -562,6 +564,8 @@ import config from './config.json';
             const codeWithAliases = `
 import { Component } from '@app/components';
 import { Helper } from '@shared/utils';
+import { createMockConfigurationService, createMockLoggingService, createMockEventBus, createMockNotificationService, createMockContainer, createMockExtensionContext, createMockOutputChannel, createMockTerminal, setupVSCodeMocks } from './../../helpers/mockFactories';
+
 `;
             fsReadFileMock.mockResolvedValue(codeWithAliases);
 

@@ -10,12 +10,31 @@ import {
     AgentPerformance,
     ProjectArchitecture,
     QualityMetrics,
-    CircularDependency
+    CircularDependency,
+    PerformanceSnapshot,
+    PerformanceHistory,
+    PerformanceTrend,
+    ScoringWeights,
+    PerformanceThresholds,
+    StuckAgentDetection,
+    LoadBalancingStrategy,
+    AgentCapacityScore,
+    LoadBalancingConfig,
+    LoadBalancingMetrics,
+    TaskReassignmentReason,
+    LoadBalancingEvent,
+    AgentWorkload,
+    TaskDistributionPlan,
+    TaskReassignment,
+    LoadBalancingResult,
+    ReassignmentResult,
+    CapacityScoringWeights
 } from '../intelligence';
 import { extractJsonFromClaudeOutput } from '../orchestration/MessageProtocol';
-import { AgentTemplateManager } from '../agents/AgentTemplateManager';
+import { AgentTemplateManager, AgentTemplate } from '../agents/AgentTemplateManager';
 import { Container } from '../services/Container';
-import { SERVICE_TOKENS } from '../services/interfaces';
+import { SERVICE_TOKENS, IConfigurationService, IMetricsService } from '../services/interfaces';
+import { AIProviderResolver } from '../services/AIProviderResolver';
 import { CapabilityMatcher } from '../tasks/CapabilityMatcher';
 import { TaskDependencyManager } from '../tasks/TaskDependencyManager';
 import { DOMAIN_EVENTS } from '../services/EventConstants';
@@ -198,7 +217,7 @@ export class SuperSmartConductor {
     private taskQueue: TaskQueue;
     private terminal: vscode.Terminal | undefined;
     private outputChannel: vscode.OutputChannel;
-    private aiPath: string;
+    private aiResolver: AIProviderResolver;
     private codebaseAnalyzer: any;
     private context: vscode.ExtensionContext | undefined;
     private agentTemplateManager: AgentTemplateManager | undefined;
@@ -208,6 +227,9 @@ export class SuperSmartConductor {
     private agentPerformanceHistory: Map<string, AgentPerformance> = new Map();
     private projectArchitecture: ProjectArchitecture | undefined;
     private qualityMetrics: QualityMetrics | undefined;
+
+    // Completion timestamp tracking for throughput calculation
+    private completionTimesByAgent: Map<string, number[]> = new Map();
 
     // Monitoring and cleanup
     private monitoringIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -219,12 +241,42 @@ export class SuperSmartConductor {
     private taskAssignmentMap: Map<string, string> = new Map(); // taskId -> agentId
     private agentTasksMap: Map<string, Set<string>> = new Map(); // agentId -> Set<taskId>
     private failedAgents: Set<string> = new Set();
+    private eventBus?: IEventBus;
+
+    // Load balancing infrastructure
+    private loadBalancingConfig: LoadBalancingConfig = {
+        strategy: LoadBalancingStrategy.BALANCED,
+        overloadThreshold: 80,
+        stuckDetectionTimeout: 300000, // 5 minutes
+        monitoringInterval: 30000, // 30 seconds
+        enabled: true,
+        minTasksForLoadBalancing: 3,
+        maxReassignmentsPerCycle: 5
+    };
+    private loadBalancingMetrics: LoadBalancingMetrics = {
+        totalOperations: 0,
+        taskReassignments: 0,
+        stuckAgentsDetected: 0,
+        overloadedAgentsDetected: 0,
+        averageEffectiveness: 0,
+        successRate: 100,
+        lastOperationTime: new Date(),
+        timestamp: new Date()
+    };
+    private loadBalancingMonitor?: NodeJS.Timeout;
+    private agentCapacityScores: Map<string, AgentCapacityScore> = new Map();
+    private loadBalancingHistory: LoadBalancingEvent[] = [];
 
     constructor(agentManager: AgentManager, taskQueue: TaskQueue, context?: vscode.ExtensionContext) {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
         this.context = context;
-        this.aiPath = vscode.workspace.getConfiguration('nofx').get<string>('aiPath') || 'claude';
+
+        // Get configuration service from container
+        const container = Container.getInstance();
+        const configService = container.resolve<any>(SERVICE_TOKENS.ConfigurationService);
+        this.aiResolver = new AIProviderResolver(configService);
+
         this.outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNELS.VP_BRAIN);
         this.codebaseAnalyzer = new CodebaseAnalyzer(this.outputChannel);
 
@@ -240,6 +292,9 @@ export class SuperSmartConductor {
         } else {
             this.agentTemplateManager = undefined;
         }
+
+        // Initialize performance monitoring system
+        this.initializePerformanceSystem();
     }
 
     /**
@@ -283,19 +338,40 @@ export class SuperSmartConductor {
 
         this.terminal.show();
         await this.initializeVPConductor();
+
+        // Start load balancing monitor
+        this.startLoadBalancingMonitor();
     }
 
     private async initializeVPConductor() {
         if (!this.terminal) return;
 
         this.terminal.sendText('clear');
-        this.terminal.sendText('echo "🧠 NofX Super Smart VP Conductor v3.0"');
-        this.terminal.sendText('echo "==========================================="');
-        this.terminal.sendText('echo "Senior Engineering VP with Deep Intelligence"');
-        this.terminal.sendText('echo "==========================================="');
+        await new Promise(resolve => setTimeout(resolve, 500)); // Pause after clear
 
-        // Get system prompt
-        const systemPrompt = this.getVPSystemPrompt();
+        this.terminal.sendText('echo "🧠 NofX Super Smart VP Conductor v3.0"');
+        await new Promise(resolve => setTimeout(resolve, 500)); // Pause after title
+
+        this.terminal.sendText('echo "==========================================="');
+        await new Promise(resolve => setTimeout(resolve, 300)); // Short pause
+
+        this.terminal.sendText('echo "Senior Engineering VP with Deep Intelligence"');
+        await new Promise(resolve => setTimeout(resolve, 300)); // Short pause
+
+        this.terminal.sendText('echo "==========================================="');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Longer pause before starting
+
+        // Get abbreviated system prompt for launch (to avoid shell length limits)
+        const abbreviatedPrompt = `You are the VP of Engineering for NofX - a senior technical leader orchestrating AI agents.
+Your role: Architect systems, ensure quality, make technical decisions, mentor agents.
+You can spawn agents, assign tasks, monitor progress, and resolve conflicts.
+When given a project request, analyze it and provide a structured JSON response with tasks.`;
+
+        // Get full detailed system prompt for later injection
+        const detailedSystemPrompt = this.getVPSystemPrompt();
+
+        // Use abbreviated prompt for initial launch
+        const systemPrompt = abbreviatedPrompt;
 
         // Try file-based prompt injection first (avoids shell argument limits)
         try {
@@ -318,34 +394,91 @@ export class SuperSmartConductor {
                 // Write prompt to file
                 fs.writeFileSync(promptFilePath, systemPrompt, 'utf8');
 
-                // Use file-based prompt injection (check if claude supports --prompt-file or similar)
-                // First try with file input, fall back to stdin
-                this.terminal.sendText(
-                    `${this.aiPath} --append-system-prompt-file '${promptFilePath}' 2>/dev/null || cat '${promptFilePath}' | ${this.aiPath} --append-system-prompt "$(cat '${promptFilePath}')"`
-                );
+                // Use AI provider-specific command for file-based prompt injection
+                if (this.aiResolver.supportsSystemPrompt()) {
+                    this.terminal.sendText('echo "📝 Loading VP system prompt..."');
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Pause to see message
+
+                    const command = this.aiResolver.getSystemPromptCommand(systemPrompt);
+                    this.terminal.sendText('echo "🚀 Launching Claude with system prompt..."');
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Pause before launching
+
+                    // Show the command being executed (truncated for readability)
+                    const truncatedCommand = command.length > 100 ? command.substring(0, 100) + '...' : command;
+                    // Clean up for display - escape quotes and remove newlines
+                    const displayCommand = truncatedCommand
+                        .replace(/"/g, '\\"')
+                        .replace(/'/g, "\\'")
+                        .replace(/\n+/g, ' ');
+                    this.terminal.sendText(`echo "📋 Command: ${displayCommand}"`);
+                    await new Promise(resolve => setTimeout(resolve, 1500)); // Pause to read command
+
+                    this.terminal.sendText(command);
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // Longer pause after launching Claude
+                } else {
+                    // Provider doesn't support system prompts, show the prompt for manual input
+                    const command = this.aiResolver.getFullCommand();
+                    this.terminal.sendText(
+                        `echo "Please paste this system prompt into ${this.aiResolver.getCurrentProviderDescription()}:"`
+                    );
+                    this.terminal.sendText(`cat '${promptFilePath}'`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    this.terminal.sendText(command);
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
 
                 this.outputChannel.appendLine(`✅ Using file-based prompt injection from: ${promptFilePath}`);
             } else {
                 throw new Error('No suitable storage path available');
             }
         } catch (error) {
-            // Fallback to direct shell argument (original behavior)
-            this.outputChannel.appendLine('⚠️ File-based prompt injection failed, using shell argument fallback');
-            const escapedPrompt = systemPrompt.replace(/'/g, "'\\''"); // Escape single quotes for shell
-            this.terminal.sendText(`${this.aiPath} --append-system-prompt '${escapedPrompt}'`);
+            // Fallback to direct system prompt command
+            this.outputChannel.appendLine('⚠️ File-based prompt injection failed, using direct prompt fallback');
+            this.terminal.sendText('echo "⚠️ Using fallback prompt method..."');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            if (this.aiResolver.supportsSystemPrompt()) {
+                const command = this.aiResolver.getSystemPromptCommand(systemPrompt);
+                this.terminal.sendText('echo "🚀 Launching Claude with system prompt (fallback)..."');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                this.terminal.sendText(command);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            } else {
+                // Provider doesn't support system prompts, show the prompt for manual input
+                const command = this.aiResolver.getFullCommand();
+                this.terminal.sendText(
+                    `echo "Please paste this system prompt into ${this.aiResolver.getCurrentProviderDescription()}:"`
+                );
+                this.terminal.sendText(`echo "${systemPrompt}"`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                this.terminal.sendText(command);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
         }
 
-        setTimeout(() => {
-            if (this.terminal) {
-                this.terminal.sendText('Greetings! I am your VP of Engineering. I will:');
-                this.terminal.sendText('- Architect your entire system before we write code');
-                this.terminal.sendText('- Ensure quality and prevent technical debt');
-                this.terminal.sendText('- Coordinate complex multi-agent workflows');
-                this.terminal.sendText('- Learn and improve from every interaction');
-                this.terminal.sendText('');
-                this.terminal.sendText('What would you like to build? I will create a comprehensive plan.');
-            }
-        }, 3000);
+        // Wait for Claude to initialize and show "Welcome to Claude Code!" announcement
+        const container = Container.getInstance();
+        const configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
+        const initDelay = configService.getClaudeInitializationDelay() * 1000; // Convert to milliseconds
+        this.outputChannel.appendLine(`⏳ Waiting ${initDelay / 1000} seconds for AI to initialize...`);
+        await new Promise(resolve => setTimeout(resolve, initDelay)); // Configurable delay for AI welcome message
+
+        // Now AI should be showing welcome message - send the detailed VP prompt
+        this.outputChannel.appendLine('✅ AI initialized, sending VP conductor prompt...');
+        const fullMessage = `${detailedSystemPrompt}\n\nPlease introduce yourself as the VP of Engineering, explaining your role and capabilities.`;
+        // Send the prompt text first
+        this.terminal.sendText(fullMessage, false); // false = no newline yet
+
+        // Small delay to ensure the text is in the terminal
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Now send Enter to submit it
+        this.terminal.sendText('', true); // Send empty string with Enter to submit
+
+        // The detailed prompt injection above will handle the introduction
     }
 
     private getVPSystemPrompt(): string {
@@ -1918,6 +2051,9 @@ After providing the JSON analysis, continue with your strategic recommendations 
             }
         };
 
+        // Queue for deferred tasks that exceed maxParallelTasks
+        const deferredTasks: Task[] = [];
+
         try {
             // Get services from container with proper error handling
             let capabilityMatcher: CapabilityMatcher | undefined;
@@ -1969,9 +2105,11 @@ After providing the JSON analysis, continue with your strategic recommendations 
                 ? await this.createExecutionLayers(tasks, dependencyManager, outputChannel)
                 : [tasks]; // Fallback: treat all tasks as single layer
             result.executionLayers = executionLayers;
-            result.metrics.parallelGroups = executionLayers.length;
 
             outputChannel.appendLine(`[Task Assignment] Created ${executionLayers.length} execution layers`);
+
+            // Initialize parallel groups counter
+            let totalParallelGroups = 0;
 
             // Process each layer
             for (let layerIndex = 0; layerIndex < executionLayers.length; layerIndex++) {
@@ -1980,8 +2118,30 @@ After providing the JSON analysis, continue with your strategic recommendations 
                     `\n[Task Assignment] Processing Layer ${layerIndex + 1} with ${layer.length} tasks`
                 );
 
-                // Identify parallel tasks within the layer
-                const parallelGroups = this.identifyParallelTasks(layer);
+                // Filter tasks by readiness if dependency manager is available
+                let readyTasks = layer;
+                if (dependencyManager) {
+                    readyTasks = dependencyManager.getReadyTasks(layer);
+                    const blockedTasks = layer.filter(task => !readyTasks.includes(task));
+                    if (blockedTasks.length > 0) {
+                        outputChannel.appendLine(
+                            `[Task Assignment] ${blockedTasks.length} tasks blocked by dependencies in layer ${layerIndex + 1}`
+                        );
+                        // Move blocked tasks to unassigned for now
+                        result.unassigned.push(...blockedTasks);
+                    }
+                    outputChannel.appendLine(
+                        `[Task Assignment] ${readyTasks.length} tasks ready for assignment in layer ${layerIndex + 1}`
+                    );
+                }
+
+                // Identify parallel tasks within the ready tasks with optimization
+                const parallelGroups = dependencyManager
+                    ? this.optimizeParallelGroups(readyTasks, availableAgents, dependencyManager)
+                    : this.identifyParallelTasks(readyTasks);
+
+                // Count parallel groups for metrics
+                totalParallelGroups += parallelGroups.size;
 
                 // Track current parallel task count
                 let currentParallelCount = 0;
@@ -1999,10 +2159,23 @@ After providing the JSON analysis, continue with your strategic recommendations 
                         // Check concurrent task limit
                         if (currentParallelCount >= maxParallelTasks) {
                             outputChannel.appendLine(
-                                `[Task Assignment] Max parallel tasks (${maxParallelTasks}) reached, queuing remaining tasks`
+                                `[Task Assignment] Max parallel tasks (${maxParallelTasks}) reached, queuing task for later assignment`
                             );
-                            result.unassigned.push(task);
+                            deferredTasks.push(task);
                             continue;
+                        }
+
+                        // Check for conflicts with active tasks if dependency manager is available
+                        if (dependencyManager) {
+                            const activeTasks = result.assignments.map(a => a.task);
+                            const conflicts = dependencyManager.checkConflicts(task, activeTasks);
+                            if (conflicts.length > 0) {
+                                outputChannel.appendLine(
+                                    `[Task Assignment] Task "${task.title}" conflicts with active tasks: ${conflicts.join(', ')}. Deferring assignment.`
+                                );
+                                deferredTasks.push(task);
+                                continue;
+                            }
                         }
 
                         const assignment = await this.findBestAssignmentWithStrategy(
@@ -2063,7 +2236,101 @@ After providing the JSON analysis, continue with your strategic recommendations 
                 }
             }
 
+            // Attempt to reassign deferred tasks
+            if (deferredTasks.length > 0) {
+                outputChannel.appendLine(
+                    `\n[Task Assignment] Attempting to reassign ${deferredTasks.length} deferred tasks`
+                );
+
+                // Simple reassignment loop - try to assign deferred tasks when slots become available
+                let reassignmentAttempts = 0;
+                const maxReassignmentAttempts = 3;
+
+                while (deferredTasks.length > 0 && reassignmentAttempts < maxReassignmentAttempts) {
+                    reassignmentAttempts++;
+                    const currentParallelCount = result.assignments.length;
+                    const remainingSlots = maxParallelTasks - currentParallelCount;
+
+                    if (remainingSlots <= 0) {
+                        outputChannel.appendLine(
+                            `[Task Assignment] No remaining slots for deferred tasks after ${reassignmentAttempts} attempts`
+                        );
+                        break;
+                    }
+
+                    const tasksToReassign = deferredTasks.splice(0, remainingSlots);
+                    outputChannel.appendLine(
+                        `[Task Assignment] Reassigning ${tasksToReassign.length} deferred tasks (attempt ${reassignmentAttempts})`
+                    );
+
+                    for (const task of tasksToReassign) {
+                        const assignment = await this.findBestAssignmentWithStrategy(
+                            task,
+                            availableAgents,
+                            capabilityMatcher,
+                            result.assignments,
+                            strategy,
+                            outputChannel
+                        );
+
+                        if (assignment) {
+                            result.assignments.push(assignment);
+                            result.metrics.assignedTasks++;
+
+                            // Mark task as assigned
+                            task.assignedTo = assignment.agent.id;
+                            task.status = 'assigned';
+
+                            // Track assignment for dynamic reassignment
+                            this.taskAssignmentMap.set(task.id, assignment.agent.id);
+                            if (!this.agentTasksMap.has(assignment.agent.id)) {
+                                this.agentTasksMap.set(assignment.agent.id, new Set());
+                            }
+                            this.agentTasksMap.get(assignment.agent.id)!.add(task.id);
+
+                            // Publish task assigned event
+                            try {
+                                const container = Container.getInstance();
+                                if (container.has(SERVICE_TOKENS.EventBus)) {
+                                    const eventBus = container.resolve<IEventBus>(SERVICE_TOKENS.EventBus);
+                                    eventBus.publish(DOMAIN_EVENTS.TASK_ASSIGNED, {
+                                        taskId: task.id,
+                                        agentId: assignment.agent.id,
+                                        score: assignment.score,
+                                        layer: -1 // Deferred tasks don't belong to a specific layer
+                                    });
+                                }
+                            } catch (error) {
+                                // Event bus not available, continue without events
+                            }
+
+                            outputChannel.appendLine(
+                                `[Task Assignment] ✓ Reassigned "${task.title}" to ${assignment.agent.name} (score: ${assignment.score.toFixed(2)})`
+                            );
+                        } else {
+                            // Still can't assign, move to unassigned
+                            result.unassigned.push(task);
+                            result.failed.push({
+                                taskId: task.id,
+                                reason: 'No suitable agent found after reassignment attempts',
+                                attemptedAgents: availableAgents.map(a => a.id)
+                            });
+                        }
+                    }
+                }
+
+                // Move any remaining deferred tasks to unassigned
+                if (deferredTasks.length > 0) {
+                    outputChannel.appendLine(
+                        `[Task Assignment] Moving ${deferredTasks.length} remaining deferred tasks to unassigned`
+                    );
+                    result.unassigned.push(...deferredTasks);
+                }
+            }
+
             // Calculate metrics
+            result.metrics.parallelGroups = totalParallelGroups;
+
             if (result.assignments.length > 0) {
                 const totalScore = result.assignments.reduce((sum, a) => sum + a.score, 0);
                 result.metrics.averageScore = totalScore / result.assignments.length;
@@ -2302,6 +2569,9 @@ After providing the JSON analysis, continue with your strategic recommendations 
         // Get current workload for each agent
         const agentWorkloads = this.calculateAgentWorkloads(existingAssignments);
 
+        // Score all available agents using unified scoring approach
+        const candidateScores: Array<{ agent: Agent; score: number; breakdown: any; confidence: number }> = [];
+
         for (const agent of availableAgents) {
             // Skip if agent is at max capacity
             const currentWorkload = agentWorkloads.get(agent.id) || 0;
@@ -2311,31 +2581,42 @@ After providing the JSON analysis, continue with your strategic recommendations 
                 continue;
             }
 
-            // Calculate capability score using CapabilityMatcher (if available)
             let capabilityScore = 0.5; // Default score if no matcher
+            let breakdown: any = {};
+
+            // Use CapabilityMatcher with breakdown if available
             if (capabilityMatcher) {
-                const rankings = capabilityMatcher.rankAgents([agent], task);
-                capabilityScore = rankings[0]?.score || 0;
+                const scoreResult = capabilityMatcher.scoreAgentWithBreakdown(agent, task);
+                capabilityScore = scoreResult.score;
+                breakdown = scoreResult.breakdown;
+            } else {
+                // Fallback breakdown calculation
+                breakdown = {
+                    capabilityMatch: capabilityScore,
+                    specializationMatch: this.calculateSpecializationMatch(agent, task),
+                    typeMatch: 0.5,
+                    workloadFactor: 1 - currentWorkload / maxConcurrent,
+                    performanceFactor: 0.7
+                };
             }
 
             // Calculate workload balance score (prefer less loaded agents)
             const workloadBalance = 1 - currentWorkload / maxConcurrent;
 
-            // Calculate specialization match
-            const specializationMatch = this.calculateSpecializationMatch(agent, task);
+            // Calculate specialization match (use from breakdown if available)
+            const specializationMatch = breakdown.specializationMatch || this.calculateSpecializationMatch(agent, task);
 
-            // Calculate historical performance (simplified for now)
-            const historicalPerformance = 0.7; // Default to 70% performance
+            // Calculate historical performance (use from breakdown if available)
+            const historicalPerformance = breakdown.performanceFactor || 0.7;
 
-            // Calculate composite score
-            const criteria: AssignmentCriteria = {
+            // Calculate confidence based on capability match and workload balance
+            const confidence = this.calculateAssignmentConfidence(
                 capabilityScore,
                 workloadBalance,
-                specializationMatch,
-                historicalPerformance
-            };
+                specializationMatch
+            );
 
-            // Weighted score calculation
+            // Calculate composite score with unified weights
             const priorityWeight = vscode.workspace
                 .getConfiguration('nofx.assignment')
                 .get<number>('priorityWeight', 0.3);
@@ -2346,18 +2627,408 @@ After providing the JSON analysis, continue with your strategic recommendations 
                 historicalPerformance * 0.1 +
                 (task.priority === 'high' ? priorityWeight : 0);
 
-            if (score > bestScore) {
-                bestScore = score;
-                bestAssignment = {
-                    task,
-                    agent,
-                    score,
-                    criteria
-                };
+            candidateScores.push({
+                agent,
+                score,
+                breakdown,
+                confidence
+            });
+        }
+
+        // Sort candidates by score (highest first)
+        candidateScores.sort((a, b) => b.score - a.score);
+
+        // Select the best candidate
+        if (candidateScores.length > 0) {
+            const bestCandidate = candidateScores[0];
+            bestScore = bestCandidate.score;
+            bestAssignment = {
+                task,
+                agent: bestCandidate.agent,
+                score: bestCandidate.score,
+                criteria: {
+                    capabilityScore: bestCandidate.breakdown.capabilityMatch || 0,
+                    workloadBalance:
+                        1 -
+                        (agentWorkloads.get(bestCandidate.agent.id) || 0) /
+                            vscode.workspace.getConfiguration('nofx').get<number>('maxConcurrentAgents', 10),
+                    specializationMatch: bestCandidate.breakdown.specializationMatch || 0,
+                    historicalPerformance: bestCandidate.breakdown.performanceFactor || 0.7
+                }
+            };
+
+            // Log match explanation if CapabilityMatcher is available
+            if (capabilityMatcher) {
+                const explanation = capabilityMatcher.getMatchExplanation(bestCandidate.agent, task);
+                outputChannel.appendLine(
+                    `[Assignment] ${explanation} (confidence: ${(bestCandidate.confidence * 100).toFixed(1)}%)`
+                );
+            }
+        }
+
+        // Check if we should create custom agent for low-confidence matches
+        if (capabilityMatcher && bestAssignment) {
+            const bestCandidate = candidateScores[0];
+            const confidenceThreshold = capabilityMatcher.getCustomAgentThreshold();
+
+            if (bestCandidate.confidence < confidenceThreshold) {
+                outputChannel.appendLine(
+                    `[Custom Agent] Low confidence match (${(bestCandidate.confidence * 100).toFixed(1)}% < ${(confidenceThreshold * 100).toFixed(1)}%). Creating custom agent for task: ${task.title}`
+                );
+
+                try {
+                    const customAgent = await this.createCustomAgent(task, task.requiredCapabilities || []);
+                    if (customAgent) {
+                        // Create assignment for the custom agent
+                        const customAssignment: TaskAssignment = {
+                            task,
+                            agent: customAgent,
+                            score: 1.0, // Custom agents get perfect score for their specialized task
+                            criteria: {
+                                capabilityScore: 1.0,
+                                workloadBalance: 1.0,
+                                specializationMatch: 1.0,
+                                historicalPerformance: 0.8 // Slightly lower for new agent
+                            }
+                        };
+
+                        outputChannel.appendLine(
+                            `[Custom Agent] ✓ Created custom agent "${customAgent.name}" for task: ${task.title}`
+                        );
+                        return customAssignment;
+                    }
+                } catch (error) {
+                    outputChannel.appendLine(`[Custom Agent] ✗ Failed to create custom agent: ${error}`);
+                }
             }
         }
 
         return bestAssignment;
+    }
+
+    /**
+     * Calculate assignment confidence based on capability match, workload balance, and specialization
+     */
+    private calculateAssignmentConfidence(
+        capabilityScore: number,
+        workloadBalance: number,
+        specializationMatch: number
+    ): number {
+        // Weighted confidence calculation
+        const capabilityWeight = 0.5;
+        const workloadWeight = 0.2;
+        const specializationWeight = 0.3;
+
+        const confidence =
+            capabilityScore * capabilityWeight +
+            workloadBalance * workloadWeight +
+            specializationMatch * specializationWeight;
+
+        // Clamp to [0, 1] range
+        return Math.max(0, Math.min(1, confidence));
+    }
+
+    /**
+     * Optimize parallel groups based on resource requirements, complexity, and dependency impact
+     */
+    private optimizeParallelGroups(
+        tasks: Task[],
+        availableAgents: Agent[],
+        dependencyManager: TaskDependencyManager
+    ): Map<string, Task[]> {
+        const groups = new Map<string, Task[]>();
+
+        // Analyze tasks for optimal batching
+        const taskAnalysis = tasks.map(task => ({
+            task,
+            complexity: this.estimateTaskComplexity(task),
+            resourceRequirements: this.analyzeResourceRequirements(task),
+            dependencyImpact: this.calculateDependencyImpact(task, dependencyManager),
+            priority: this.getTaskPriority(task)
+        }));
+
+        // Sort tasks by priority and dependency impact
+        taskAnalysis.sort((a, b) => {
+            // First by priority (high priority first)
+            if (a.priority !== b.priority) {
+                const priorityOrder = { high: 3, medium: 2, low: 1 };
+                return priorityOrder[b.priority] - priorityOrder[a.priority];
+            }
+            // Then by dependency impact (higher impact first)
+            return b.dependencyImpact - a.dependencyImpact;
+        });
+
+        // Group tasks by resource compatibility and complexity
+        const resourceGroups = new Map<string, Task[]>();
+
+        for (const analysis of taskAnalysis) {
+            const { task, complexity, resourceRequirements } = analysis;
+
+            // Find compatible group or create new one
+            let assigned = false;
+            for (const [groupId, groupTasks] of resourceGroups) {
+                if (this.canGroupTogether(groupTasks, task, resourceRequirements)) {
+                    groupTasks.push(task);
+                    assigned = true;
+                    break;
+                }
+            }
+
+            if (!assigned) {
+                const groupId = `group-${resourceGroups.size + 1}`;
+                resourceGroups.set(groupId, [task]);
+            }
+        }
+
+        // Further optimize groups based on agent capabilities
+        for (const [groupId, groupTasks] of resourceGroups) {
+            const optimizedGroups = this.optimizeGroupForAgents(groupTasks, availableAgents);
+            for (let i = 0; i < optimizedGroups.length; i++) {
+                const finalGroupId = optimizedGroups.length === 1 ? groupId : `${groupId}-${i + 1}`;
+                groups.set(finalGroupId, optimizedGroups[i]);
+            }
+        }
+
+        return groups;
+    }
+
+    /**
+     * Estimate task complexity based on description and requirements
+     */
+    private estimateTaskComplexity(task: Task): number {
+        let complexity = 1; // Base complexity
+
+        // Factor in description length and keywords
+        const description = task.description.toLowerCase();
+        if (description.includes('complex') || description.includes('advanced')) complexity += 2;
+        if (description.includes('simple') || description.includes('basic')) complexity -= 0.5;
+
+        // Factor in required capabilities
+        const capabilityCount = (task.requiredCapabilities || []).length;
+        complexity += capabilityCount * 0.3;
+
+        // Factor in file count
+        const fileCount = (task.files || []).length;
+        complexity += fileCount * 0.1;
+
+        return Math.max(0.5, Math.min(5, complexity));
+    }
+
+    /**
+     * Analyze resource requirements for a task
+     */
+    private analyzeResourceRequirements(task: Task): string[] {
+        const requirements: string[] = [];
+
+        // Analyze based on required capabilities
+        const capabilities = task.requiredCapabilities || [];
+        if (capabilities.some(c => c.includes('frontend') || c.includes('ui'))) {
+            requirements.push('frontend');
+        }
+        if (capabilities.some(c => c.includes('backend') || c.includes('api'))) {
+            requirements.push('backend');
+        }
+        if (capabilities.some(c => c.includes('database') || c.includes('sql'))) {
+            requirements.push('database');
+        }
+        if (capabilities.some(c => c.includes('test') || c.includes('testing'))) {
+            requirements.push('testing');
+        }
+
+        return requirements;
+    }
+
+    /**
+     * Calculate dependency impact for a task
+     */
+    private calculateDependencyImpact(task: Task, dependencyManager: TaskDependencyManager): number {
+        const dependents = dependencyManager.getDependentTasks(task.id);
+        const softDependents = dependencyManager.getSoftDependents(task.id);
+
+        // Higher impact for tasks with more dependents
+        return dependents.length + softDependents.length * 0.5;
+    }
+
+    /**
+     * Get task priority as numeric value
+     */
+    private getTaskPriority(task: Task): 'high' | 'medium' | 'low' {
+        return task.priority || 'medium';
+    }
+
+    /**
+     * Check if tasks can be grouped together based on resource requirements
+     */
+    private canGroupTogether(existingTasks: Task[], newTask: Task, newRequirements: string[]): boolean {
+        // Get requirements of existing tasks
+        const existingRequirements = new Set<string>();
+        for (const task of existingTasks) {
+            const reqs = this.analyzeResourceRequirements(task);
+            reqs.forEach(req => existingRequirements.add(req));
+        }
+
+        // Check for resource conflicts
+        const newRequirementsSet = new Set(newRequirements);
+        for (const req of newRequirements) {
+            if (existingRequirements.has(req)) {
+                return false; // Resource conflict
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Optimize a group of tasks for available agents
+     */
+    private optimizeGroupForAgents(tasks: Task[], availableAgents: Agent[]): Task[][] {
+        if (tasks.length <= 1) {
+            return [tasks];
+        }
+
+        // Simple optimization: split large groups into smaller ones
+        const maxGroupSize = Math.min(3, Math.ceil(availableAgents.length / 2));
+        const groups: Task[][] = [];
+
+        for (let i = 0; i < tasks.length; i += maxGroupSize) {
+            groups.push(tasks.slice(i, i + maxGroupSize));
+        }
+
+        return groups;
+    }
+
+    /**
+     * Handle dependency resolution events for real-time reassignment
+     */
+    private async handleDependencyResolution(
+        taskId: string,
+        assignments: AssignmentResult,
+        outputChannel: vscode.OutputChannel
+    ): Promise<void> {
+        try {
+            // Check if there are any unassigned tasks that might now be ready
+            const unassignedTasks = assignments.unassigned || [];
+            const readyTasks = unassignedTasks.filter(task => {
+                // Simple check - in a real implementation, you'd use dependencyManager.getReadyTasks
+                return task.status === 'queued' || task.status === 'blocked';
+            });
+
+            if (readyTasks.length > 0) {
+                outputChannel.appendLine(
+                    `[Dependency Resolution] Found ${readyTasks.length} tasks that may now be ready for assignment`
+                );
+
+                // Attempt to reassign ready tasks
+                for (const task of readyTasks) {
+                    const availableAgents = this.getAvailableAgents(this.agentManager);
+                    if (availableAgents.length > 0) {
+                        const assignment = await this.findBestAssignment(
+                            task,
+                            availableAgents,
+                            undefined, // capabilityMatcher
+                            assignments.assignments,
+                            outputChannel
+                        );
+
+                        if (assignment) {
+                            assignments.assignments.push(assignment);
+                            assignments.unassigned = assignments.unassigned.filter(t => t.id !== task.id);
+
+                            // Mark task as assigned
+                            task.assignedTo = assignment.agent.id;
+                            task.status = 'assigned';
+
+                            outputChannel.appendLine(
+                                `[Dependency Resolution] ✓ Reassigned "${task.title}" to ${assignment.agent.name}`
+                            );
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            outputChannel.appendLine(`[Dependency Resolution] Error handling dependency resolution: ${error}`);
+        }
+    }
+
+    /**
+     * Handle conflict detection events
+     */
+    private async handleConflictDetection(
+        taskId: string,
+        conflictingTasks: string[],
+        assignments: AssignmentResult,
+        outputChannel: vscode.OutputChannel
+    ): Promise<void> {
+        try {
+            outputChannel.appendLine(
+                `[Conflict Detection] Task ${taskId} conflicts with: ${conflictingTasks.join(', ')}`
+            );
+
+            // Find the conflicting assignment
+            const conflictingAssignment = assignments.assignments.find(a => a.task.id === taskId);
+            if (conflictingAssignment) {
+                // Mark task as blocked
+                conflictingAssignment.task.status = 'blocked';
+                conflictingAssignment.task.blockedBy = conflictingTasks;
+
+                // Move to unassigned for potential reassignment later
+                assignments.unassigned.push(conflictingAssignment.task);
+                assignments.assignments = assignments.assignments.filter(a => a.task.id !== taskId);
+
+                outputChannel.appendLine(
+                    `[Conflict Detection] Moved conflicting task "${conflictingAssignment.task.title}" to unassigned`
+                );
+            }
+        } catch (error) {
+            outputChannel.appendLine(`[Conflict Detection] Error handling conflict detection: ${error}`);
+        }
+    }
+
+    /**
+     * Handle conflict resolution events
+     */
+    private async handleConflictResolution(
+        taskId: string,
+        assignments: AssignmentResult,
+        outputChannel: vscode.OutputChannel
+    ): Promise<void> {
+        try {
+            // Find the task that had its conflict resolved
+            const resolvedTask = assignments.unassigned.find(t => t.id === taskId);
+            if (resolvedTask) {
+                // Clear conflict-related fields
+                resolvedTask.status = 'queued';
+                resolvedTask.blockedBy = [];
+                resolvedTask.conflictsWith = [];
+
+                // Attempt to reassign the task
+                const availableAgents = this.getAvailableAgents(this.agentManager);
+                if (availableAgents.length > 0) {
+                    const assignment = await this.findBestAssignment(
+                        resolvedTask,
+                        availableAgents,
+                        undefined, // capabilityMatcher
+                        assignments.assignments,
+                        outputChannel
+                    );
+
+                    if (assignment) {
+                        assignments.assignments.push(assignment);
+                        assignments.unassigned = assignments.unassigned.filter(t => t.id !== taskId);
+
+                        // Mark task as assigned
+                        resolvedTask.assignedTo = assignment.agent.id;
+                        resolvedTask.status = 'assigned';
+
+                        outputChannel.appendLine(
+                            `[Conflict Resolution] ✓ Reassigned "${resolvedTask.title}" to ${assignment.agent.name}`
+                        );
+                    }
+                }
+            }
+        } catch (error) {
+            outputChannel.appendLine(`[Conflict Resolution] Error handling conflict resolution: ${error}`);
+        }
     }
 
     /**
@@ -2457,6 +3128,54 @@ After providing the JSON analysis, continue with your strategic recommendations 
             taskStates.set(assignment.task.id, 'pending');
         }
 
+        // Set up event-based monitoring for dependency resolution and conflicts
+        let dependencyManager: TaskDependencyManager | undefined;
+        let eventBus: IEventBus | undefined;
+        const eventDisposables: vscode.Disposable[] = [];
+
+        try {
+            const container = Container.getInstance();
+            if (container.has(SERVICE_TOKENS.TaskDependencyManager)) {
+                dependencyManager = container.resolve<TaskDependencyManager>(SERVICE_TOKENS.TaskDependencyManager);
+            }
+            if (container.has(SERVICE_TOKENS.EventBus)) {
+                eventBus = container.resolve<IEventBus>(SERVICE_TOKENS.EventBus);
+            }
+        } catch (error) {
+            outputChannel.appendLine(`[Execution Monitor] WARNING: Some services not available: ${error}`);
+        }
+
+        // Subscribe to dependency resolution events
+        if (eventBus && dependencyManager) {
+            const dependencyResolvedHandler = (event: any) => {
+                outputChannel.appendLine(
+                    `[Execution Monitor] Dependency resolved for task ${event.taskId}, checking for reassignment opportunities`
+                );
+                this.handleDependencyResolution(event.taskId, assignments, outputChannel);
+            };
+
+            const conflictDetectedHandler = (event: any) => {
+                outputChannel.appendLine(
+                    `[Execution Monitor] Conflict detected for task ${event.taskId}, attempting resolution`
+                );
+                this.handleConflictDetection(event.taskId, event.conflictingTasks, assignments, outputChannel);
+            };
+
+            const conflictResolvedHandler = (event: any) => {
+                outputChannel.appendLine(
+                    `[Execution Monitor] Conflict resolved for task ${event.taskId}, checking for reassignment opportunities`
+                );
+                this.handleConflictResolution(event.taskId, assignments, outputChannel);
+            };
+
+            // Subscribe to events
+            eventDisposables.push(
+                eventBus.subscribe(DOMAIN_EVENTS.TASK_DEPENDENCY_RESOLVED, dependencyResolvedHandler),
+                eventBus.subscribe(DOMAIN_EVENTS.TASK_CONFLICT_DETECTED, conflictDetectedHandler),
+                eventBus.subscribe(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, conflictResolvedHandler)
+            );
+        }
+
         // Event-based monitoring instead of polling
         return new Promise<ExecutionSummary>(resolve => {
             let completedCount = 0;
@@ -2468,6 +3187,8 @@ After providing the JSON analysis, continue with your strategic recommendations 
                 if (this.isDisposed) {
                     clearInterval(intervalId);
                     this.monitoringIntervals.delete(executionId);
+                    // Clean up event subscriptions
+                    eventDisposables.forEach(disposable => disposable.dispose());
                     resolve(summary);
                     return;
                 }
@@ -2546,6 +3267,8 @@ After providing the JSON analysis, continue with your strategic recommendations 
                 if (completedCount >= totalTasks) {
                     clearInterval(intervalId);
                     this.monitoringIntervals.delete(executionId);
+                    // Clean up event subscriptions
+                    eventDisposables.forEach(disposable => disposable.dispose());
 
                     summary.duration = Date.now() - startTime;
 
@@ -2755,19 +3478,6 @@ After providing the JSON analysis, continue with your strategic recommendations 
     }
 
     /**
-     * Monitor agent health and detect failures
-     */
-    private monitorAgentHealth(agentId: string): void {
-        const agent = this.agentManager.getAgent(agentId);
-        if (!agent) return;
-
-        // Check agent status (offline indicates failure)
-        if (agent.status === 'offline') {
-            this.handleAgentFailure(agentId, `Agent status: ${agent.status}`, this.outputChannel);
-        }
-    }
-
-    /**
      * Analyze codebase to build knowledge graph
      */
     async analyzeCodebase() {
@@ -2795,7 +3505,7 @@ After providing the JSON analysis, continue with your strategic recommendations 
 
         this.projectArchitecture = {
             entryPoints: this.findEntryPoints(),
-            layers: this.identifyArchitecturalLayers(),
+            layers: Object.fromEntries(this.identifyArchitecturalLayers()),
             patterns: this.detectDesignPatterns(),
             technologies: this.detectTechnologies(),
             dependencies: dependencies,
@@ -2846,6 +3556,9 @@ After providing the JSON analysis, continue with your strategic recommendations 
      */
     trackAgentPerformance(agentId: string, task: any, success: boolean, timeSpent: number) {
         if (!this.agentPerformanceHistory.has(agentId)) {
+            // Initialize completion timestamp tracking for new agent
+            this.completionTimesByAgent.set(agentId, []);
+
             this.agentPerformanceHistory.set(agentId, {
                 agentId: agentId,
                 totalTasks: 0,
@@ -2854,7 +3567,80 @@ After providing the JSON analysis, continue with your strategic recommendations 
                 averageExecutionTime: 0,
                 specialization: 'general',
                 qualityScore: 100,
-                lastActive: new Date()
+                lastActive: new Date(),
+                availability: {
+                    currentLoad: 0,
+                    maxCapacity: 1,
+                    isAvailable: true,
+                    lastResponseTime: 0,
+                    averageResponseTime: 0,
+                    uptime: 100,
+                    lastOnlineTime: new Date(),
+                    isOnline: true
+                },
+                speed: {
+                    averageTaskStartTime: 0,
+                    averageTaskCompletionTime: 0,
+                    tasksPerHour: 0,
+                    averageAssignmentToStartTime: 0,
+                    fastestTaskTime: 0,
+                    slowestTaskTime: 0,
+                    medianTaskTime: 0,
+                    taskTimeStandardDeviation: 0
+                },
+                reliability: {
+                    consecutiveFailures: 0,
+                    uptime: 100,
+                    errorRate: 0,
+                    stuckCount: 0,
+                    lastError: undefined,
+                    errorTypes: {},
+                    averageRecoveryTime: 0,
+                    successRate: 100
+                },
+                workload: {
+                    currentTasks: 0,
+                    queuedTasks: 0,
+                    maxConcurrentTasks: 1,
+                    utilizationPercentage: 0,
+                    peakWorkload: 0,
+                    averageWorkload: 0,
+                    workloadTrend: 'stable'
+                },
+                stuckDetection: {
+                    lastActivityTime: new Date(),
+                    stuckThreshold: 300000,
+                    isStuck: false,
+                    stuckReason: undefined,
+                    stuckDetectionCount: 0,
+                    lastUnstuckTime: undefined,
+                    stuckDuration: 0,
+                    detectionEnabled: true
+                },
+                trends: {
+                    performanceTrend: 'stable',
+                    speedTrend: 'stable',
+                    reliabilityTrend: 'stable',
+                    confidence: 100,
+                    dataPoints: 0,
+                    analysisTimestamp: new Date()
+                },
+                heuristicScore: {
+                    overallScore: 100,
+                    successRateScore: 100,
+                    speedScore: 100,
+                    availabilityScore: 100,
+                    reliabilityScore: 100,
+                    workloadScore: 100,
+                    weights: {
+                        successRate: 0.25,
+                        speed: 0.2,
+                        availability: 0.2,
+                        reliability: 0.25,
+                        workload: 0.1
+                    },
+                    calculatedAt: new Date()
+                }
             });
         }
 
@@ -2862,6 +3648,16 @@ After providing the JSON analysis, continue with your strategic recommendations 
         performance.totalTasks++;
         if (success) {
             performance.completedTasks++;
+
+            // Record completion timestamp for throughput calculation
+            const completionTime = Date.now();
+            if (!this.completionTimesByAgent.has(agentId)) {
+                this.completionTimesByAgent.set(agentId, []);
+            }
+            this.completionTimesByAgent.get(agentId)!.push(completionTime);
+            this.outputChannel.appendLine(
+                `✅ Task completed by Agent ${agentId} at ${new Date(completionTime).toISOString()}`
+            );
         } else {
             performance.failedTasks++;
         }
@@ -2906,6 +3702,1882 @@ After providing the JSON analysis, continue with your strategic recommendations 
         };
 
         return estimates[task.type] || 60;
+    }
+
+    /**
+     * Initialize agent metrics with default values for new agents
+     */
+    private initializeAgentMetrics(agentId: string): void {
+        if (this.agentPerformanceHistory.has(agentId)) {
+            return; // Already initialized
+        }
+
+        const defaultMetrics: AgentPerformance = {
+            agentId: agentId,
+            totalTasks: 0,
+            completedTasks: 0,
+            failedTasks: 0,
+            averageExecutionTime: 0,
+            specialization: 'general',
+            qualityScore: 100,
+            lastActive: new Date(),
+            availability: {
+                currentLoad: 0,
+                maxCapacity: 5,
+                isAvailable: true,
+                lastResponseTime: 0,
+                averageResponseTime: 0,
+                uptime: 100,
+                lastOnlineTime: new Date(),
+                isOnline: true
+            },
+            speed: {
+                averageTaskStartTime: 0,
+                averageTaskCompletionTime: 0,
+                tasksPerHour: 0,
+                averageAssignmentToStartTime: 0,
+                fastestTaskTime: 0,
+                slowestTaskTime: 0,
+                medianTaskTime: 0,
+                taskTimeStandardDeviation: 0
+            },
+            reliability: {
+                consecutiveFailures: 0,
+                uptime: 100,
+                errorRate: 0,
+                stuckCount: 0,
+                errorTypes: {},
+                averageRecoveryTime: 0,
+                successRate: 100
+            },
+            workload: {
+                currentTasks: 0,
+                queuedTasks: 0,
+                maxConcurrentTasks: 5,
+                utilizationPercentage: 0,
+                peakWorkload: 0,
+                averageWorkload: 0,
+                workloadTrend: 'stable'
+            },
+            stuckDetection: {
+                lastActivityTime: new Date(),
+                stuckThreshold: 300000, // 5 minutes
+                isStuck: false,
+                stuckDetectionCount: 0,
+                stuckDuration: 0,
+                detectionEnabled: true
+            },
+            trends: {
+                performanceTrend: 'stable',
+                speedTrend: 'stable',
+                reliabilityTrend: 'stable',
+                confidence: 0,
+                dataPoints: 0,
+                analysisTimestamp: new Date()
+            },
+            heuristicScore: {
+                overallScore: 100,
+                successRateScore: 100,
+                speedScore: 100,
+                availabilityScore: 100,
+                reliabilityScore: 100,
+                workloadScore: 100,
+                weights: {
+                    successRate: 0.3,
+                    speed: 0.2,
+                    availability: 0.2,
+                    reliability: 0.2,
+                    workload: 0.1
+                },
+                calculatedAt: new Date()
+            }
+        };
+
+        this.agentPerformanceHistory.set(agentId, defaultMetrics);
+    }
+
+    /**
+     * Update comprehensive agent metrics
+     */
+    private updateAgentMetrics(agentId: string, metrics: Partial<AgentPerformance>): void {
+        if (!this.agentPerformanceHistory.has(agentId)) {
+            this.initializeAgentMetrics(agentId);
+        }
+
+        const performance = this.agentPerformanceHistory.get(agentId)!;
+
+        // Update basic metrics
+        if (metrics.totalTasks !== undefined) performance.totalTasks = metrics.totalTasks;
+        if (metrics.completedTasks !== undefined) performance.completedTasks = metrics.completedTasks;
+        if (metrics.failedTasks !== undefined) performance.failedTasks = metrics.failedTasks;
+        if (metrics.averageExecutionTime !== undefined) performance.averageExecutionTime = metrics.averageExecutionTime;
+        if (metrics.specialization !== undefined) performance.specialization = metrics.specialization;
+        if (metrics.qualityScore !== undefined) performance.qualityScore = metrics.qualityScore;
+        if (metrics.lastActive !== undefined) performance.lastActive = metrics.lastActive;
+
+        // Update availability metrics
+        if (metrics.availability) {
+            Object.assign(performance.availability, metrics.availability);
+        }
+
+        // Update speed metrics
+        if (metrics.speed) {
+            Object.assign(performance.speed, metrics.speed);
+        }
+
+        // Update reliability metrics
+        if (metrics.reliability) {
+            Object.assign(performance.reliability, metrics.reliability);
+        }
+
+        // Update workload metrics
+        if (metrics.workload) {
+            Object.assign(performance.workload, metrics.workload);
+        }
+
+        // Update stuck detection
+        if (metrics.stuckDetection) {
+            Object.assign(performance.stuckDetection, metrics.stuckDetection);
+        }
+
+        // Update trends
+        if (metrics.trends) {
+            Object.assign(performance.trends, metrics.trends);
+        }
+
+        // Recalculate heuristic score
+        this.calculateHeuristicScore(agentId);
+    }
+
+    /**
+     * Calculate multi-criteria heuristic score for an agent
+     */
+    private calculateHeuristicScore(agentId: string): void {
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (!performance) return;
+
+        const weights = performance.heuristicScore.weights;
+
+        // Calculate individual component scores (0-100)
+        const successRateScore = performance.reliability.successRate;
+        const speedScore = this.calculateSpeedScore(performance);
+        const availabilityScore = this.calculateAvailabilityScore(performance);
+        const reliabilityScore = this.calculateReliabilityScore(performance);
+        const workloadScore = this.calculateWorkloadScore(performance);
+
+        // Calculate weighted overall score
+        const overallScore =
+            successRateScore * weights.successRate +
+            speedScore * weights.speed +
+            availabilityScore * weights.availability +
+            reliabilityScore * weights.reliability +
+            workloadScore * weights.workload;
+
+        // Update heuristic score with bounds checking
+        performance.heuristicScore = {
+            overallScore: Math.max(0, Math.min(100, Math.round(overallScore))),
+            successRateScore: Math.max(0, Math.min(100, Math.round(successRateScore))),
+            speedScore: Math.max(0, Math.min(100, Math.round(speedScore))),
+            availabilityScore: Math.max(0, Math.min(100, Math.round(availabilityScore))),
+            reliabilityScore: Math.max(0, Math.min(100, Math.round(reliabilityScore))),
+            workloadScore: Math.max(0, Math.min(100, Math.round(workloadScore))),
+            weights: weights,
+            calculatedAt: new Date()
+        };
+    }
+
+    /**
+     * Calculate speed score based on task completion times
+     */
+    private calculateSpeedScore(performance: AgentPerformance): number {
+        if (performance.totalTasks === 0) return 100;
+
+        const avgTime = performance.averageExecutionTime;
+        if (avgTime <= 0) return 100; // Avoid division by zero
+
+        // Get configurable baseline time from settings
+        const config = vscode.workspace.getConfiguration('nofx.performance');
+        const baselineTimeMinutes = config.get<number>('speedBaselineMinutes', 30);
+        const baselineTime = baselineTimeMinutes * 60 * 1000; // Convert to milliseconds
+
+        // Clamp avgTime to avoid extreme values
+        const clampedAvgTime = Math.max(1000, Math.min(avgTime, 24 * 60 * 60 * 1000)); // 1 second to 24 hours
+
+        // Use sigmoid function to avoid extreme values
+        const ratio = baselineTime / clampedAvgTime;
+        const score = Math.max(0, Math.min(100, (ratio / (1 + ratio)) * 100));
+
+        return score;
+    }
+
+    /**
+     * Calculate availability score based on uptime and response times
+     */
+    private calculateAvailabilityScore(performance: AgentPerformance): number {
+        const uptimeScore = Math.max(0, Math.min(100, performance.availability.uptime));
+
+        // Handle sentinel values and bounds checking for response time
+        let responseScore = 100; // Default for unresponsive agents
+        if (performance.availability.averageResponseTime > 0) {
+            // Clamp response time to reasonable range (0-60 seconds)
+            const clampedResponseTime = Math.max(0, Math.min(60000, performance.availability.averageResponseTime));
+            responseScore = Math.max(0, Math.min(100, 100 - clampedResponseTime / 1000)); // Penalize slow responses
+        } else if (performance.availability.averageResponseTime === -1) {
+            // Sentinel value for unresponsive agents
+            responseScore = 0;
+        }
+
+        const overallScore = (uptimeScore + responseScore) / 2;
+        return Math.max(0, Math.min(100, overallScore));
+    }
+
+    /**
+     * Calculate reliability score based on error rates and consecutive failures
+     */
+    private calculateReliabilityScore(performance: AgentPerformance): number {
+        const errorRateScore = Math.max(0, 100 - performance.reliability.errorRate);
+        const consecutiveFailurePenalty = Math.min(50, performance.reliability.consecutiveFailures * 10);
+
+        return Math.max(0, errorRateScore - consecutiveFailurePenalty);
+    }
+
+    /**
+     * Calculate workload efficiency score
+     */
+    private calculateWorkloadScore(performance: AgentPerformance): number {
+        const utilization = performance.workload.utilizationPercentage;
+        const currentLoad = performance.workload.currentTasks;
+        const maxCapacity = performance.workload.maxConcurrentTasks;
+
+        // Optimal utilization is around 70-80%
+        const optimalUtilization = 75;
+        const utilizationScore = 100 - Math.abs(utilization - optimalUtilization);
+
+        // Penalize overloading
+        const overloadPenalty = currentLoad > maxCapacity ? 30 : 0;
+
+        return Math.max(0, utilizationScore - overloadPenalty);
+    }
+
+    /**
+     * Update availability metrics for an agent
+     */
+    private updateAvailabilityMetrics(agentId: string, responseTime: number, isOnline: boolean): void {
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (!performance) return;
+
+        performance.availability.lastResponseTime = responseTime;
+        performance.availability.isOnline = isOnline;
+
+        if (isOnline) {
+            performance.availability.lastOnlineTime = new Date();
+            performance.availability.uptime = Math.min(100, performance.availability.uptime + 1);
+        } else {
+            performance.availability.uptime = Math.max(0, performance.availability.uptime - 1);
+        }
+
+        // Update average response time using separate response counter
+        // Skip averaging when responseTime is negative (unresponsive sentinel)
+        if (responseTime >= 0) {
+            const currentAvg = performance.availability.averageResponseTime;
+            const responseSamples = (performance.availability as any).responseSamples || 0;
+
+            if (responseSamples === 0) {
+                performance.availability.averageResponseTime = responseTime;
+            } else {
+                performance.availability.averageResponseTime =
+                    (currentAvg * responseSamples + responseTime) / (responseSamples + 1);
+            }
+
+            // Increment response sample counter
+            (performance.availability as any).responseSamples = responseSamples + 1;
+        }
+
+        // Update availability status
+        performance.availability.isAvailable =
+            isOnline && performance.availability.currentLoad < performance.availability.maxCapacity;
+    }
+
+    /**
+     * Update speed metrics for an agent
+     */
+    private updateSpeedMetrics(agentId: string, taskStartTime: number, taskCompletionTime: number): void {
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (!performance) return;
+
+        // Update average task start time
+        const currentStartAvg = performance.speed.averageTaskStartTime;
+        const totalTasks = performance.totalTasks;
+        performance.speed.averageTaskStartTime = (currentStartAvg * (totalTasks - 1) + taskStartTime) / totalTasks;
+
+        // Update average task completion time
+        const currentCompletionAvg = performance.speed.averageTaskCompletionTime;
+        performance.speed.averageTaskCompletionTime =
+            (currentCompletionAvg * (totalTasks - 1) + taskCompletionTime) / totalTasks;
+
+        // Update fastest/slowest times
+        if (performance.speed.fastestTaskTime === 0 || taskCompletionTime < performance.speed.fastestTaskTime) {
+            performance.speed.fastestTaskTime = taskCompletionTime;
+        }
+        if (taskCompletionTime > performance.speed.slowestTaskTime) {
+            performance.speed.slowestTaskTime = taskCompletionTime;
+        }
+
+        // Calculate tasks per hour using rolling window approach
+        this.updateTasksPerHour(agentId, performance);
+    }
+
+    /**
+     * Update tasks per hour using rolling window calculation
+     */
+    private updateTasksPerHour(agentId: string, performance: AgentPerformance): void {
+        const now = Date.now();
+        const oneHourMs = 60 * 60 * 1000; // 1 hour in milliseconds
+
+        // Get completion timestamps for this agent
+        const completionTimes = this.completionTimesByAgent.get(agentId) || [];
+
+        // Prune timestamps to only keep those within the last hour
+        const cutoffTime = now - oneHourMs;
+        const recentCompletions = completionTimes.filter(timestamp => timestamp > cutoffTime);
+
+        // Update the stored array with pruned timestamps
+        this.completionTimesByAgent.set(agentId, recentCompletions);
+
+        // Calculate tasks per hour based on rolling window
+        if (recentCompletions.length > 0) {
+            // For a 1-hour window, the count directly represents tasks per hour
+            performance.speed.tasksPerHour = recentCompletions.length;
+            this.outputChannel.appendLine(
+                `📊 Agent ${agentId}: ${recentCompletions.length} tasks completed in last hour (rolling window)`
+            );
+        } else {
+            // Fallback to stable baseline calculation if no recent completions
+            // Use agent start time or first completion time as baseline
+            const agentStartTime = performance.lastActive.getTime();
+            const elapsedMs = now - agentStartTime;
+            const elapsedHours = elapsedMs / oneHourMs;
+
+            if (elapsedHours > 0 && performance.completedTasks > 0) {
+                performance.speed.tasksPerHour = performance.completedTasks / elapsedHours;
+                this.outputChannel.appendLine(
+                    `📊 Agent ${agentId}: ${performance.speed.tasksPerHour.toFixed(2)} tasks/hour (baseline calculation)`
+                );
+            } else {
+                performance.speed.tasksPerHour = 0;
+            }
+        }
+    }
+
+    /**
+     * Clean up old completion timestamps to prevent memory bloat
+     */
+    private cleanupCompletionTimestamps(): void {
+        const now = Date.now();
+        const maxAgeMs = 24 * 60 * 60 * 1000; // Keep timestamps for 24 hours max
+
+        for (const [agentId, timestamps] of this.completionTimesByAgent) {
+            const cutoffTime = now - maxAgeMs;
+            const recentTimestamps = timestamps.filter(timestamp => timestamp > cutoffTime);
+
+            if (recentTimestamps.length !== timestamps.length) {
+                this.completionTimesByAgent.set(agentId, recentTimestamps);
+            }
+        }
+    }
+
+    /**
+     * Update reliability metrics for an agent
+     */
+    private updateReliabilityMetrics(agentId: string, errorType?: string, errorMessage?: string): void {
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (!performance) return;
+
+        if (errorType) {
+            const currentCount = performance.reliability.errorTypes[errorType] || 0;
+            performance.reliability.errorTypes[errorType] = currentCount + 1;
+        }
+
+        if (errorMessage) {
+            performance.reliability.lastError = errorMessage;
+        }
+
+        // Update error rate
+        performance.reliability.errorRate =
+            performance.totalTasks > 0 ? (performance.failedTasks / performance.totalTasks) * 100 : 0;
+
+        // Update success rate
+        performance.reliability.successRate =
+            performance.totalTasks > 0 ? (performance.completedTasks / performance.totalTasks) * 100 : 100;
+    }
+
+    /**
+     * Get comprehensive performance summary for an agent
+     */
+    private getAgentPerformanceSummary(agentId: string): AgentPerformance | null {
+        return this.agentPerformanceHistory.get(agentId) || null;
+    }
+
+    /**
+     * Detect stuck agents using multiple criteria
+     */
+    private detectStuckAgents(): string[] {
+        const stuckAgents: string[] = [];
+        const now = Date.now();
+
+        for (const [agentId, performance] of this.agentPerformanceHistory) {
+            if (!performance.stuckDetection.detectionEnabled) {
+                continue;
+            }
+
+            const lastActivity = performance.stuckDetection.lastActivityTime.getTime();
+            const timeSinceActivity = now - lastActivity;
+            const agent = this.agentManager.getAgent(agentId);
+
+            // Time-based detection
+            if (timeSinceActivity > performance.stuckDetection.stuckThreshold) {
+                this.markAgentAsStuck(agentId, 'timeout', timeSinceActivity);
+                stuckAgents.push(agentId);
+                continue;
+            }
+
+            // Responsiveness-based detection
+            if (agent && agent.status === 'offline') {
+                this.markAgentAsStuck(agentId, 'unresponsive', timeSinceActivity);
+                stuckAgents.push(agentId);
+                continue;
+            }
+
+            // Error pattern detection
+            if (performance.reliability.consecutiveFailures >= 3) {
+                this.markAgentAsStuck(agentId, 'error_pattern', timeSinceActivity);
+                stuckAgents.push(agentId);
+                continue;
+            }
+
+            // Workload-based detection
+            const currentTasks = this.agentTasksMap.get(agentId)?.size || 0;
+            if (currentTasks > 0 && timeSinceActivity > performance.stuckDetection.stuckThreshold / 2) {
+                // Check if tasks are stuck in progress
+                const stuckTasks = this.checkForStuckTasks(agentId);
+                if (stuckTasks.length > 0) {
+                    this.markAgentAsStuck(agentId, 'workload', timeSinceActivity);
+                    stuckAgents.push(agentId);
+                    continue;
+                }
+            }
+
+            // If agent was previously stuck but now shows activity, mark as unstuck
+            if (
+                performance.stuckDetection.isStuck &&
+                timeSinceActivity < performance.stuckDetection.stuckThreshold / 4
+            ) {
+                this.markAgentAsUnstuck(agentId);
+            }
+        }
+
+        return stuckAgents;
+    }
+
+    /**
+     * Mark an agent as stuck with reason and duration
+     */
+    private markAgentAsStuck(
+        agentId: string,
+        reason: 'timeout' | 'unresponsive' | 'error_pattern' | 'workload' | 'unknown',
+        duration: number
+    ): void {
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (!performance || performance.stuckDetection.isStuck) {
+            return; // Already marked as stuck
+        }
+
+        performance.stuckDetection.isStuck = true;
+        performance.stuckDetection.stuckReason = reason;
+        performance.stuckDetection.stuckDetectionCount++;
+        performance.stuckDetection.stuckDuration = duration;
+        performance.reliability.stuckCount++;
+
+        this.outputChannel.appendLine(
+            `🚨 Agent ${agentId} marked as stuck: ${reason} (${Math.round(duration / 1000)}s)`
+        );
+
+        // Trigger intervention
+        this.triggerStuckAgentIntervention(agentId);
+    }
+
+    /**
+     * Mark an agent as unstuck
+     */
+    private markAgentAsUnstuck(agentId: string): void {
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (!performance || !performance.stuckDetection.isStuck) {
+            return; // Not currently stuck
+        }
+
+        performance.stuckDetection.isStuck = false;
+        performance.stuckDetection.stuckReason = undefined;
+        performance.stuckDetection.lastUnstuckTime = new Date();
+        performance.stuckDetection.stuckDuration = 0;
+
+        this.outputChannel.appendLine(`✅ Agent ${agentId} recovered and is no longer stuck`);
+    }
+
+    /**
+     * Check for stuck tasks assigned to an agent
+     */
+    private checkForStuckTasks(agentId: string): string[] {
+        const agentTasks = this.agentTasksMap.get(agentId);
+        if (!agentTasks) return [];
+
+        const stuckTasks: string[] = [];
+        const now = Date.now();
+        const stuckThreshold = 300000; // 5 minutes
+
+        for (const taskId of agentTasks) {
+            const task = this.taskQueue.getTask(taskId);
+            if (task && task.status === 'in-progress') {
+                // Check both assignedAt and lastProgressAt timestamps
+                const taskStartTime = task.assignedAt?.getTime() || 0;
+                const lastProgressTime = task.lastProgressAt?.getTime() || taskStartTime;
+
+                // Use the more recent of the two timestamps for stuck detection
+                const referenceTime = Math.max(taskStartTime, lastProgressTime);
+
+                if (now - referenceTime > stuckThreshold) {
+                    stuckTasks.push(taskId);
+                }
+            }
+        }
+
+        return stuckTasks;
+    }
+
+    /**
+     * Configure stuck detection thresholds for an agent
+     */
+    private configureStuckDetectionThresholds(agentId: string, thresholds: Partial<StuckAgentDetection>): void {
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (!performance) {
+            this.initializeAgentMetrics(agentId);
+            return this.configureStuckDetectionThresholds(agentId, thresholds);
+        }
+
+        if (thresholds.stuckThreshold !== undefined) {
+            performance.stuckDetection.stuckThreshold = thresholds.stuckThreshold;
+        }
+        if (thresholds.detectionEnabled !== undefined) {
+            performance.stuckDetection.detectionEnabled = thresholds.detectionEnabled;
+        }
+
+        this.outputChannel.appendLine(`⚙️ Updated stuck detection thresholds for Agent ${agentId}`);
+    }
+
+    /**
+     * Analyze agent behavior patterns for stuck detection
+     */
+    private analyzeAgentBehaviorPatterns(agentId: string): {
+        isStuck: boolean;
+        confidence: number;
+        patterns: string[];
+    } {
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (!performance) {
+            return { isStuck: false, confidence: 0, patterns: [] };
+        }
+
+        const patterns: string[] = [];
+        let confidence = 0;
+
+        // Pattern 1: Increasing consecutive failures
+        if (performance.reliability.consecutiveFailures >= 2) {
+            patterns.push('increasing_failures');
+            confidence += 30;
+        }
+
+        // Pattern 2: Declining response times
+        if (performance.availability.averageResponseTime > 5000) {
+            // 5 seconds
+            patterns.push('slow_responses');
+            confidence += 25;
+        }
+
+        // Pattern 3: High error rate
+        if (performance.reliability.errorRate > 20) {
+            patterns.push('high_error_rate');
+            confidence += 35;
+        }
+
+        // Pattern 4: Workload overload
+        if (performance.workload.utilizationPercentage > 90) {
+            patterns.push('workload_overload');
+            confidence += 20;
+        }
+
+        // Pattern 5: Recent stuck history
+        if (performance.stuckDetection.stuckDetectionCount > 0) {
+            patterns.push('recent_stuck_history');
+            confidence += 15;
+        }
+
+        const isStuck = confidence >= 50 && patterns.length >= 2;
+
+        return {
+            isStuck,
+            confidence: Math.min(100, confidence),
+            patterns
+        };
+    }
+
+    /**
+     * Trigger intervention for a stuck agent
+     */
+    private triggerStuckAgentIntervention(agentId: string): void {
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (!performance) return;
+
+        this.outputChannel.appendLine(`🔧 Triggering intervention for stuck agent ${agentId}`);
+
+        // Get tasks assigned to this agent
+        const agentTasks = this.agentTasksMap.get(agentId);
+        if (agentTasks && agentTasks.size > 0) {
+            // Find optimal reassignment targets
+            const availableAgents = this.agentManager
+                .getAllAgents()
+                .filter((a: Agent) => a.id !== agentId && !this.failedAgents.has(a.id));
+
+            if (availableAgents.length > 0) {
+                // Reassign tasks to better performing agents
+                for (const taskId of agentTasks) {
+                    const optimalAgent = this.findOptimalReassignmentTarget(taskId, availableAgents);
+                    if (optimalAgent) {
+                        this.reassignTask(
+                            taskId,
+                            agentId,
+                            [optimalAgent],
+                            `Agent ${agentId} stuck - ${performance.stuckDetection.stuckReason}`,
+                            this.outputChannel
+                        );
+                    }
+                }
+            }
+        }
+
+        // Update performance metrics
+        this.updateAgentMetrics(agentId, {
+            stuckDetection: {
+                ...performance.stuckDetection,
+                lastActivityTime: new Date()
+            }
+        });
+    }
+
+    /**
+     * Enhanced agent failure handling with performance-based reassignment
+     */
+    private async handleAgentFailureEnhanced(
+        agentId: string,
+        reason: string,
+        outputChannel: vscode.OutputChannel
+    ): Promise<void> {
+        const config = vscode.workspace.getConfiguration('nofx.assignment');
+        const enableReassignment = config.get<boolean>('enableReassignment', true);
+
+        if (!enableReassignment) {
+            outputChannel.appendLine(`[Reassignment] Reassignment disabled, skipping agent ${agentId}`);
+            return;
+        }
+
+        // Mark agent as failed
+        this.failedAgents.add(agentId);
+
+        // Get tasks assigned to this agent
+        const agentTasks = this.agentTasksMap.get(agentId);
+        if (!agentTasks || agentTasks.size === 0) {
+            outputChannel.appendLine(`[Reassignment] No tasks to reassign from agent ${agentId}`);
+            return;
+        }
+
+        // Get available agents (excluding failed ones)
+        const availableAgents = this.agentManager
+            .getAllAgents()
+            .filter((a: Agent) => a.id !== agentId && !this.failedAgents.has(a.id));
+
+        if (availableAgents.length === 0) {
+            outputChannel.appendLine(`[Reassignment] No available agents for reassignment from ${agentId}`);
+            return;
+        }
+
+        // Use intelligent reassignment for each task
+        for (const taskId of agentTasks) {
+            await this.intelligentTaskReassignment(taskId, agentId, availableAgents, reason, outputChannel);
+        }
+
+        // Clear agent's task list
+        this.agentTasksMap.delete(agentId);
+
+        // Update performance metrics
+        this.updateReliabilityMetrics(agentId, 'agent_failure', reason);
+    }
+
+    /**
+     * Intelligent task reassignment considering agent performance history
+     */
+    private async intelligentTaskReassignment(
+        taskId: string,
+        failedAgentId: string,
+        availableAgents: Agent[],
+        failureReason: string,
+        outputChannel: vscode.OutputChannel
+    ): Promise<boolean> {
+        const task = this.taskQueue.getTask(taskId);
+        if (!task) {
+            outputChannel.appendLine(`[Reassignment] Task ${taskId} not found`);
+            return false;
+        }
+
+        // Get reassignment history for this task
+        const history = this.reassignmentHistory.get(taskId) || [];
+        const attemptNumber = history.length + 1;
+
+        // Check max reassignment attempts
+        const config = vscode.workspace.getConfiguration('nofx.assignment');
+        const maxAttempts = config.get<number>('maxReassignmentAttempts', 3);
+
+        if (attemptNumber > maxAttempts) {
+            outputChannel.appendLine(
+                `[Reassignment] Max attempts (${maxAttempts}) reached for task ${taskId}, marking as failed`
+            );
+            task.status = 'failed';
+            return false;
+        }
+
+        // Find optimal reassignment target using performance-based selection
+        const optimalAgent = this.findOptimalReassignmentTarget(taskId, availableAgents);
+        if (!optimalAgent) {
+            outputChannel.appendLine(`[Reassignment] No suitable agent found for task ${taskId}`);
+            return false;
+        }
+
+        const newAgentId = optimalAgent.id;
+
+        // Record reassignment
+        const record: ReassignmentRecord = {
+            taskId,
+            originalAgentId: failedAgentId,
+            newAgentId,
+            reason: failureReason,
+            timestamp: Date.now(),
+            attemptNumber
+        };
+
+        history.push(record);
+        this.reassignmentHistory.set(taskId, history);
+
+        // Update assignment maps
+        this.taskAssignmentMap.set(taskId, newAgentId);
+
+        // Update agent's task set
+        if (!this.agentTasksMap.has(newAgentId)) {
+            this.agentTasksMap.set(newAgentId, new Set());
+        }
+        this.agentTasksMap.get(newAgentId)!.add(taskId);
+
+        // Update task assignment
+        task.assignedTo = newAgentId;
+        task.status = 'assigned';
+        task.assignedAt = new Date();
+
+        // Publish reassignment event
+        if (this.eventBus) {
+            this.eventBus.publish(DOMAIN_EVENTS.TASK_ASSIGNED, {
+                taskId,
+                originalAgentId: failedAgentId,
+                newAgentId,
+                reason: failureReason,
+                attemptNumber,
+                reassigned: true
+            });
+        }
+
+        // Update performance metrics for both agents
+        const failedPerformance = this.agentPerformanceHistory.get(failedAgentId);
+        if (failedPerformance) {
+            failedPerformance.reliability.consecutiveFailures += 1;
+        }
+
+        const newPerformance = this.agentPerformanceHistory.get(newAgentId);
+        if (newPerformance) {
+            newPerformance.workload.currentTasks = this.agentTasksMap.get(newAgentId)?.size || 0;
+        }
+
+        outputChannel.appendLine(
+            `[Reassignment] ✓ Task ${taskId} reassigned from ${failedAgentId} to ${newAgentId} (attempt ${attemptNumber})`
+        );
+
+        return true;
+    }
+
+    /**
+     * Find optimal reassignment target using heuristic scoring
+     */
+    private findOptimalReassignmentTarget(taskId: string, availableAgents: Agent[]): Agent | null {
+        if (availableAgents.length === 0) return null;
+
+        const task = this.taskQueue.getTask(taskId);
+        if (!task) return null;
+
+        let bestAgent: Agent | null = null;
+        let bestScore = -1;
+
+        for (const agent of availableAgents) {
+            const score = this.calculateReassignmentScore(agent, task);
+
+            // Add minimum score threshold (e.g., 60) and loop protection
+            if (score >= 60 && !this.preventReassignmentCascade(taskId, agent.id)) {
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestAgent = agent;
+                }
+            }
+        }
+
+        // If no candidate meets threshold, skip reassignment and log
+        if (!bestAgent) {
+            this.outputChannel.appendLine(
+                `⚠️ No suitable agent found for reassignment of task ${taskId} (best score: ${bestScore})`
+            );
+        }
+
+        return bestAgent;
+    }
+
+    /**
+     * Calculate reassignment score for an agent-task pair
+     */
+    private calculateReassignmentScore(agent: Agent, task: Task): number {
+        const performance = this.agentPerformanceHistory.get(agent.id);
+        if (!performance) {
+            // New agent gets a default score
+            return 50;
+        }
+
+        let score = 0;
+
+        // Heuristic score component (40% weight)
+        score += performance.heuristicScore.overallScore * 0.4;
+
+        // Availability component (25% weight)
+        const availabilityScore = performance.availability.isAvailable ? 100 : 0;
+        score += availabilityScore * 0.25;
+
+        // Workload component (20% weight)
+        const workloadScore = Math.max(0, 100 - performance.workload.utilizationPercentage * 2);
+        score += workloadScore * 0.2;
+
+        // Specialization match component (15% weight)
+        const specializationScore = this.calculateSpecializationMatch(agent, task);
+        score += specializationScore * 0.15;
+
+        return Math.round(score);
+    }
+
+    /**
+     * Prevent reassignment cascade by tracking reassignment patterns
+     */
+    private preventReassignmentCascade(taskId: string, agentId: string): boolean {
+        const history = this.reassignmentHistory.get(taskId) || [];
+
+        // Check if this agent has been involved in too many reassignments recently
+        const recentReassignments = history.filter(
+            record => record.timestamp > Date.now() - 300000 // Last 5 minutes
+        );
+
+        const agentInvolvement = recentReassignments.filter(
+            record => record.originalAgentId === agentId || record.newAgentId === agentId
+        ).length;
+
+        // If agent has been involved in more than 2 reassignments in 5 minutes, prevent cascade
+        return agentInvolvement < 2;
+    }
+
+    /**
+     * Adaptive reassignment strategy that learns from outcomes
+     */
+    private adaptiveReassignmentStrategy(taskId: string, availableAgents: Agent[]): Agent | null {
+        const history = this.reassignmentHistory.get(taskId) || [];
+
+        // Analyze previous reassignment outcomes
+        const successfulReassignments = history.filter(record => {
+            const agent = this.agentManager.getAgent(record.newAgentId);
+            return agent && agent.status !== 'offline';
+        });
+
+        // If we have successful reassignment history, prefer those agents
+        if (successfulReassignments.length > 0) {
+            const successfulAgentIds = successfulReassignments.map(r => r.newAgentId);
+            const preferredAgents = availableAgents.filter(a => successfulAgentIds.includes(a.id));
+
+            if (preferredAgents.length > 0) {
+                return this.findOptimalReassignmentTarget(taskId, preferredAgents);
+            }
+        }
+
+        // Fall back to standard optimal selection
+        return this.findOptimalReassignmentTarget(taskId, availableAgents);
+    }
+
+    /**
+     * Start real-time performance monitoring with configurable intervals
+     */
+    private startPerformanceMonitoring(): void {
+        const config = vscode.workspace.getConfiguration('nofx.performance');
+        const monitoringInterval = config.get<number>('monitoringInterval', 30000); // 30 seconds
+        const stuckDetectionInterval = config.get<number>('stuckDetectionInterval', 60000); // 1 minute
+
+        // Start general performance monitoring
+        const performanceInterval = setInterval(() => {
+            this.monitorAgentHealthEnhanced();
+            this.trackTaskProgressMetrics();
+            this.generatePerformanceAlerts();
+            this.updatePerformanceDashboard();
+        }, monitoringInterval);
+
+        // Start stuck agent detection
+        const stuckDetectionIntervalId = setInterval(() => {
+            const stuckAgents = this.detectStuckAgents();
+            if (stuckAgents.length > 0) {
+                this.outputChannel.appendLine(
+                    `🚨 Detected ${stuckAgents.length} stuck agents: ${stuckAgents.join(', ')}`
+                );
+            }
+        }, stuckDetectionInterval);
+
+        // Store intervals for cleanup
+        this.monitoringIntervals.set('performance', performanceInterval);
+        this.monitoringIntervals.set('stuckDetection', stuckDetectionIntervalId);
+
+        this.outputChannel.appendLine(`📊 Started performance monitoring (${monitoringInterval}ms interval)`);
+    }
+
+    /**
+     * Enhanced agent health monitoring with comprehensive health checks
+     */
+    private monitorAgentHealthEnhanced(): void {
+        const agents = this.agentManager.getAllAgents();
+
+        for (const agent of agents) {
+            const performance = this.agentPerformanceHistory.get(agent.id);
+            if (!performance) {
+                this.initializeAgentMetrics(agent.id);
+                continue;
+            }
+
+            // Check agent status
+            const isOnline = agent.status !== 'offline';
+            const responseTime = this.measureAgentResponseTime(agent.id);
+
+            // Update availability metrics
+            this.updateAvailabilityMetrics(agent.id, responseTime, isOnline);
+
+            // Update workload metrics
+            const currentTasks = this.agentTasksMap.get(agent.id)?.size || 0;
+            const maxCapacity = performance.availability.maxCapacity;
+            const utilizationPercentage = (currentTasks / Math.max(1, maxCapacity || 0)) * 100;
+
+            // Update workload metrics directly
+            performance.workload.currentTasks = currentTasks;
+            performance.workload.utilizationPercentage = utilizationPercentage;
+            performance.workload.peakWorkload = Math.max(performance.workload.peakWorkload, currentTasks);
+            performance.workload.averageWorkload = (performance.workload.averageWorkload + currentTasks) / 2;
+
+            // Update stuck detection last activity time if agent is active
+            if (isOnline && currentTasks > 0) {
+                performance.stuckDetection.lastActivityTime = new Date();
+            }
+        }
+    }
+
+    /**
+     * Measure agent response time
+     */
+    private measureAgentResponseTime(agentId: string): number {
+        const startTime = Date.now();
+
+        // Simulate response time measurement
+        // In a real implementation, this would ping the agent or check its last activity
+        const agent = this.agentManager.getAgent(agentId);
+        if (!agent || agent.status === 'offline') {
+            return -1; // Agent not responding
+        }
+
+        // For now, return a simulated response time based on agent performance
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (performance) {
+            return performance.availability.averageResponseTime || 100; // Default 100ms
+        }
+
+        return 100; // Default response time for new agents
+    }
+
+    /**
+     * Track real-time task progress metrics
+     */
+    private trackTaskProgressMetrics(): void {
+        const tasks = this.taskQueue.getAllTasks();
+        const now = Date.now();
+
+        for (const task of tasks) {
+            if (task.status === 'in-progress' && task.assignedTo) {
+                const agentId = task.assignedTo;
+                const performance = this.agentPerformanceHistory.get(agentId);
+
+                if (performance) {
+                    const taskStartTime = task.assignedAt?.getTime() || now;
+                    const taskDuration = now - taskStartTime;
+
+                    // Update speed metrics for in-progress tasks
+                    if (task.status === 'in-progress') {
+                        this.updateSpeedMetrics(agentId, 0, taskDuration);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Generate performance alerts based on thresholds
+     */
+    private generatePerformanceAlerts(): void {
+        const config = vscode.workspace.getConfiguration('nofx.performance');
+        const lowPerformanceThreshold = config.get<number>('lowPerformanceThreshold', 60);
+        const highErrorRateThreshold = config.get<number>('highErrorRateThreshold', 20);
+        const highWorkloadThreshold = config.get<number>('highWorkloadThreshold', 90);
+
+        for (const [agentId, performance] of this.agentPerformanceHistory) {
+            const alerts: string[] = [];
+
+            // Low performance alert
+            if (performance.heuristicScore.overallScore < lowPerformanceThreshold) {
+                alerts.push(`Low performance: ${performance.heuristicScore.overallScore}%`);
+            }
+
+            // High error rate alert
+            if (performance.reliability.errorRate > highErrorRateThreshold) {
+                alerts.push(`High error rate: ${performance.reliability.errorRate.toFixed(1)}%`);
+            }
+
+            // High workload alert
+            if (performance.workload.utilizationPercentage > highWorkloadThreshold) {
+                alerts.push(`High workload: ${performance.workload.utilizationPercentage.toFixed(1)}%`);
+            }
+
+            // Stuck agent alert
+            if (performance.stuckDetection.isStuck) {
+                alerts.push(`Agent stuck: ${performance.stuckDetection.stuckReason}`);
+            }
+
+            // Log alerts
+            if (alerts.length > 0) {
+                this.outputChannel.appendLine(`⚠️ Performance alerts for Agent ${agentId}: ${alerts.join(', ')}`);
+            }
+        }
+    }
+
+    /**
+     * Update real-time performance dashboard
+     */
+    private updatePerformanceDashboard(): void {
+        const dashboardData = {
+            timestamp: new Date().toISOString(),
+            agents: Array.from(this.agentPerformanceHistory.entries()).map(([agentId, performance]) => ({
+                agentId,
+                overallScore: performance.heuristicScore.overallScore,
+                isStuck: performance.stuckDetection.isStuck,
+                currentLoad: performance.workload.currentTasks,
+                utilizationPercentage: performance.workload.utilizationPercentage,
+                successRate: performance.reliability.successRate,
+                errorRate: performance.reliability.errorRate,
+                isOnline: performance.availability.isOnline
+            })),
+            summary: {
+                totalAgents: this.agentPerformanceHistory.size,
+                stuckAgents: Array.from(this.agentPerformanceHistory.values()).filter(p => p.stuckDetection.isStuck)
+                    .length,
+                averagePerformance: this.calculateAveragePerformance(),
+                totalTasks: Array.from(this.agentPerformanceHistory.values()).reduce((sum, p) => sum + p.totalTasks, 0)
+            }
+        };
+
+        // Store dashboard data for potential UI display
+        this.context?.workspaceState.update('performanceDashboard', dashboardData);
+    }
+
+    /**
+     * Calculate average performance across all agents
+     */
+    private calculateAveragePerformance(): number {
+        const performances = Array.from(this.agentPerformanceHistory.values());
+        if (performances.length === 0) return 0;
+
+        const totalScore = performances.reduce((sum, p) => sum + p.heuristicScore.overallScore, 0);
+        return Math.round(totalScore / performances.length);
+    }
+
+    /**
+     * Set monitoring intervals for different monitoring types
+     */
+    private setMonitoringIntervals(intervals: {
+        performance?: number;
+        stuckDetection?: number;
+        persistence?: number;
+    }): void {
+        const config = vscode.workspace.getConfiguration('nofx.performance');
+
+        if (intervals.performance !== undefined) {
+            config.update('monitoringInterval', intervals.performance, vscode.ConfigurationTarget.Workspace);
+        }
+
+        if (intervals.stuckDetection !== undefined) {
+            config.update('stuckDetectionInterval', intervals.stuckDetection, vscode.ConfigurationTarget.Workspace);
+        }
+
+        if (intervals.persistence !== undefined) {
+            config.update('persistenceInterval', intervals.persistence, vscode.ConfigurationTarget.Workspace);
+        }
+
+        this.outputChannel.appendLine('⚙️ Updated monitoring intervals');
+    }
+
+    /**
+     * Persist performance metrics to workspace storage
+     */
+    private async persistPerformanceMetrics(): Promise<void> {
+        if (!this.context) {
+            this.outputChannel.appendLine('⚠️ No extension context available for persistence');
+            return;
+        }
+
+        try {
+            const config = vscode.workspace.getConfiguration('nofx.performance');
+            const maxSnapshots = config.get<number>('maxSnapshots', 1000);
+            const retentionDays = config.get<number>('retentionDays', 30);
+
+            // Create performance snapshots for all agents
+            const snapshots: PerformanceSnapshot[] = [];
+            const now = new Date();
+
+            for (const [agentId, performance] of this.agentPerformanceHistory) {
+                const snapshot: PerformanceSnapshot = {
+                    agentId,
+                    timestamp: now,
+                    performance: { ...performance },
+                    heuristicScore: { ...performance.heuristicScore },
+                    wasStuck: performance.stuckDetection.isStuck,
+                    currentWorkload: performance.workload.currentTasks
+                };
+                snapshots.push(snapshot);
+            }
+
+            // Get existing performance history (convert from serialized format)
+            const serializedHistory = this.context.workspaceState.get<Record<string, PerformanceHistory>>(
+                'performanceHistory',
+                {}
+            );
+            const existingHistory = new Map<string, PerformanceHistory>();
+            for (const [agentId, history] of Object.entries(serializedHistory)) {
+                // Reconstruct Maps and Dates from serialized data
+                const reconstructedHistory = this.reconstructPerformanceHistory(history);
+                existingHistory.set(agentId, reconstructedHistory);
+            }
+
+            // Update history for each agent
+            for (const snapshot of snapshots) {
+                const agentHistory = existingHistory.get(snapshot.agentId) || {
+                    agentId: snapshot.agentId,
+                    snapshots: [],
+                    timeRange: { start: now, end: now },
+                    snapshotCount: 0,
+                    averagePerformance: snapshot.performance,
+                    trendAnalysis: snapshot.performance.trends
+                };
+
+                // Add new snapshot
+                agentHistory.snapshots.push(snapshot);
+                agentHistory.snapshotCount = agentHistory.snapshots.length;
+                agentHistory.timeRange.end = now;
+
+                // Clean up old snapshots
+                const cutoffDate = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+                agentHistory.snapshots = agentHistory.snapshots.filter(
+                    (s: PerformanceSnapshot) => s.timestamp > cutoffDate
+                );
+
+                // Limit snapshots per agent
+                if (agentHistory.snapshots.length > maxSnapshots) {
+                    agentHistory.snapshots = agentHistory.snapshots.slice(-maxSnapshots);
+                }
+
+                // Update average performance
+                agentHistory.averagePerformance = this.calculateAveragePerformanceForAgent(agentHistory.snapshots);
+
+                // Update trend analysis
+                agentHistory.trendAnalysis = this.analyzePerformanceTrends(agentHistory.snapshots);
+
+                existingHistory.set(snapshot.agentId, agentHistory);
+            }
+
+            // Save to workspace state (convert Map to serializable format)
+            const serializedData: Record<string, PerformanceHistory> = {};
+            for (const [agentId, history] of existingHistory) {
+                serializedData[agentId] = this.serializePerformanceHistory(history);
+            }
+            await this.context.workspaceState.update('performanceHistory', serializedData);
+            await this.context.workspaceState.update('lastPersistenceTime', now.toISOString());
+
+            this.outputChannel.appendLine(`💾 Persisted performance metrics for ${snapshots.length} agents`);
+        } catch (error) {
+            this.outputChannel.appendLine(`❌ Failed to persist performance metrics: ${error}`);
+        }
+    }
+
+    /**
+     * Load performance history from workspace storage
+     */
+    private async loadPerformanceHistory(): Promise<void> {
+        if (!this.context) {
+            this.outputChannel.appendLine('⚠️ No extension context available for loading history');
+            return;
+        }
+
+        try {
+            const serializedHistory = this.context.workspaceState.get<Record<string, PerformanceHistory>>(
+                'performanceHistory',
+                {}
+            );
+            const lastPersistenceTime = this.context.workspaceState.get<string>('lastPersistenceTime');
+
+            if (Object.keys(serializedHistory).length > 0) {
+                // Restore performance data for agents with history
+                for (const [agentId, serializedHistoryData] of Object.entries(serializedHistory)) {
+                    const history = this.reconstructPerformanceHistory(serializedHistoryData);
+                    if (history.snapshots.length > 0) {
+                        const latestSnapshot = history.snapshots[history.snapshots.length - 1];
+                        this.agentPerformanceHistory.set(agentId, latestSnapshot.performance);
+                    }
+                }
+
+                this.outputChannel.appendLine(
+                    `📂 Loaded performance history for ${Object.keys(serializedHistory).length} agents` +
+                        (lastPersistenceTime
+                            ? ` (last updated: ${new Date(lastPersistenceTime).toLocaleString()})`
+                            : '')
+                );
+            }
+        } catch (error) {
+            this.outputChannel.appendLine(`❌ Failed to load performance history: ${error}`);
+        }
+    }
+
+    /**
+     * Serialize performance history for storage (convert Maps and Dates to serializable format)
+     */
+    private serializePerformanceHistory(history: PerformanceHistory): any {
+        return {
+            ...history,
+            snapshots: history.snapshots.map((snapshot: PerformanceSnapshot) => ({
+                ...snapshot,
+                timestamp: snapshot.timestamp.toISOString(),
+                performance: {
+                    ...snapshot.performance,
+                    lastActive: snapshot.performance.lastActive.toISOString(),
+                    availability: {
+                        ...snapshot.performance.availability,
+                        lastOnlineTime: snapshot.performance.availability.lastOnlineTime.toISOString()
+                    },
+                    stuckDetection: {
+                        ...snapshot.performance.stuckDetection,
+                        lastActivityTime: snapshot.performance.stuckDetection.lastActivityTime.toISOString(),
+                        lastUnstuckTime: snapshot.performance.stuckDetection.lastUnstuckTime?.toISOString()
+                    },
+                    trends: {
+                        ...snapshot.performance.trends,
+                        analysisTimestamp: snapshot.performance.trends.analysisTimestamp.toISOString()
+                    },
+                    heuristicScore: {
+                        ...snapshot.performance.heuristicScore,
+                        calculatedAt: snapshot.performance.heuristicScore.calculatedAt.toISOString()
+                    }
+                }
+            })),
+            timeRange: {
+                start: history.timeRange.start.toISOString(),
+                end: history.timeRange.end.toISOString()
+            }
+        };
+    }
+
+    /**
+     * Reconstruct performance history from storage (convert serialized data back to Maps and Dates)
+     */
+    private reconstructPerformanceHistory(serializedHistory: any): PerformanceHistory {
+        return {
+            ...serializedHistory,
+            snapshots: serializedHistory.snapshots.map((snapshot: any) => ({
+                ...snapshot,
+                timestamp: new Date(snapshot.timestamp),
+                performance: {
+                    ...snapshot.performance,
+                    lastActive: new Date(snapshot.performance.lastActive),
+                    availability: {
+                        ...snapshot.performance.availability,
+                        lastOnlineTime: new Date(snapshot.performance.availability.lastOnlineTime)
+                    },
+                    stuckDetection: {
+                        ...snapshot.performance.stuckDetection,
+                        lastActivityTime: new Date(snapshot.performance.stuckDetection.lastActivityTime),
+                        lastUnstuckTime: snapshot.performance.stuckDetection.lastUnstuckTime
+                            ? new Date(snapshot.performance.stuckDetection.lastUnstuckTime)
+                            : undefined
+                    },
+                    trends: {
+                        ...snapshot.performance.trends,
+                        analysisTimestamp: new Date(snapshot.performance.trends.analysisTimestamp)
+                    },
+                    heuristicScore: {
+                        ...snapshot.performance.heuristicScore,
+                        calculatedAt: new Date(snapshot.performance.heuristicScore.calculatedAt)
+                    }
+                }
+            })),
+            timeRange: {
+                start: new Date(serializedHistory.timeRange.start),
+                end: new Date(serializedHistory.timeRange.end)
+            }
+        };
+    }
+
+    /**
+     * Get stored performance history as a Map (reconstructs from serialized format)
+     */
+    private async getStoredPerformanceHistory(): Promise<Map<string, PerformanceHistory>> {
+        if (!this.context) {
+            return new Map();
+        }
+
+        const serializedHistory = this.context.workspaceState.get<Record<string, PerformanceHistory>>(
+            'performanceHistory',
+            {}
+        );
+        const histories = new Map<string, PerformanceHistory>();
+
+        for (const [agentId, serializedHistoryData] of Object.entries(serializedHistory)) {
+            const reconstructedHistory = this.reconstructPerformanceHistory(serializedHistoryData);
+            histories.set(agentId, reconstructedHistory);
+        }
+
+        return histories;
+    }
+
+    /**
+     * Set stored performance history (serializes Map to storage format)
+     */
+    private async setStoredPerformanceHistory(histories: Map<string, PerformanceHistory>): Promise<void> {
+        if (!this.context) {
+            return;
+        }
+
+        const serializedData: Record<string, PerformanceHistory> = {};
+        for (const [agentId, history] of histories) {
+            serializedData[agentId] = this.serializePerformanceHistory(history);
+        }
+
+        await this.context.workspaceState.update('performanceHistory', serializedData);
+    }
+
+    /**
+     * Archive old metrics to manage storage
+     */
+    private async archiveOldMetrics(): Promise<void> {
+        if (!this.context) return;
+
+        try {
+            const config = vscode.workspace.getConfiguration('nofx.performance');
+            const retentionDays = config.get<number>('retentionDays', 30);
+            const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+            // Get stored performance history using helper
+            const histories = await this.getStoredPerformanceHistory();
+            let archivedCount = 0;
+
+            for (const [agentId, history] of histories) {
+                const originalCount = history.snapshots.length;
+                history.snapshots = history.snapshots.filter((s: PerformanceSnapshot) => s.timestamp > cutoffDate);
+
+                if (history.snapshots.length < originalCount) {
+                    history.snapshotCount = history.snapshots.length;
+                    archivedCount += originalCount - history.snapshots.length;
+                }
+            }
+
+            if (archivedCount > 0) {
+                // Save back using helper
+                await this.setStoredPerformanceHistory(histories);
+                this.outputChannel.appendLine(
+                    `🗄️ Archived ${archivedCount} old performance snapshots across ${histories.size} agents`
+                );
+            }
+        } catch (error) {
+            this.outputChannel.appendLine(`❌ Failed to archive old metrics: ${error}`);
+        }
+    }
+
+    /**
+     * Export performance report for detailed analysis
+     */
+    private async exportPerformanceReport(): Promise<string> {
+        const report = {
+            exportTimestamp: new Date().toISOString(),
+            summary: {
+                totalAgents: this.agentPerformanceHistory.size,
+                averagePerformance: this.calculateAveragePerformance(),
+                totalTasks: Array.from(this.agentPerformanceHistory.values()).reduce((sum, p) => sum + p.totalTasks, 0),
+                stuckAgents: Array.from(this.agentPerformanceHistory.values()).filter(p => p.stuckDetection.isStuck)
+                    .length
+            },
+            agents: Array.from(this.agentPerformanceHistory.entries()).map(([agentId, performance]) => ({
+                agentId,
+                performance: {
+                    ...performance,
+                    // Convert Map to Object for JSON serialization
+                    reliability: {
+                        ...performance.reliability,
+                        errorTypes: performance.reliability.errorTypes
+                    }
+                }
+            })),
+            trends: this.analyzeOverallTrends(),
+            recommendations: this.generatePerformanceRecommendations()
+        };
+
+        return JSON.stringify(report, null, 2);
+    }
+
+    /**
+     * Calculate average performance for an agent from snapshots
+     */
+    private calculateAveragePerformanceForAgent(snapshots: PerformanceSnapshot[]): AgentPerformance {
+        if (snapshots.length === 0) {
+            throw new Error('Cannot calculate average from empty snapshots');
+        }
+
+        const firstSnapshot = snapshots[0].performance;
+        const averages: AgentPerformance = {
+            ...firstSnapshot,
+            totalTasks: 0,
+            completedTasks: 0,
+            failedTasks: 0,
+            averageExecutionTime: 0,
+            qualityScore: 0,
+            availability: { ...firstSnapshot.availability, uptime: 0 },
+            speed: { ...firstSnapshot.speed },
+            reliability: { ...firstSnapshot.reliability, successRate: 0, errorRate: 0 },
+            workload: { ...firstSnapshot.workload, utilizationPercentage: 0 },
+            stuckDetection: { ...firstSnapshot.stuckDetection },
+            trends: { ...firstSnapshot.trends },
+            heuristicScore: { ...firstSnapshot.heuristicScore, overallScore: 0 }
+        };
+
+        // Calculate averages
+        for (const snapshot of snapshots) {
+            const perf = snapshot.performance;
+            averages.totalTasks += perf.totalTasks;
+            averages.completedTasks += perf.completedTasks;
+            averages.failedTasks += perf.failedTasks;
+            averages.averageExecutionTime += perf.averageExecutionTime;
+            averages.qualityScore += perf.qualityScore;
+            averages.availability.uptime += perf.availability.uptime;
+            averages.reliability.successRate += perf.reliability.successRate;
+            averages.reliability.errorRate += perf.reliability.errorRate;
+            averages.workload.utilizationPercentage += perf.workload.utilizationPercentage;
+            averages.heuristicScore.overallScore += perf.heuristicScore.overallScore;
+        }
+
+        const count = snapshots.length;
+        averages.totalTasks = Math.round(averages.totalTasks / count);
+        averages.completedTasks = Math.round(averages.completedTasks / count);
+        averages.failedTasks = Math.round(averages.failedTasks / count);
+        averages.averageExecutionTime = averages.averageExecutionTime / count;
+        averages.qualityScore = Math.round(averages.qualityScore / count);
+        averages.availability.uptime = averages.availability.uptime / count;
+        averages.reliability.successRate = averages.reliability.successRate / count;
+        averages.reliability.errorRate = averages.reliability.errorRate / count;
+        averages.workload.utilizationPercentage = averages.workload.utilizationPercentage / count;
+        averages.heuristicScore.overallScore = Math.round(averages.heuristicScore.overallScore / count);
+
+        return averages;
+    }
+
+    /**
+     * Analyze performance trends from snapshots
+     */
+    private analyzePerformanceTrends(snapshots: PerformanceSnapshot[]): PerformanceTrend {
+        if (snapshots.length < 2) {
+            return {
+                performanceTrend: 'stable',
+                speedTrend: 'stable',
+                reliabilityTrend: 'stable',
+                confidence: 0,
+                dataPoints: snapshots.length,
+                analysisTimestamp: new Date()
+            };
+        }
+
+        const recent = snapshots.slice(-5); // Last 5 snapshots
+        const older = snapshots.slice(-10, -5); // Previous 5 snapshots
+
+        const recentAvg = recent.reduce((sum, s) => sum + s.heuristicScore.overallScore, 0) / recent.length;
+        const olderAvg =
+            older.length > 0
+                ? older.reduce((sum, s) => sum + s.heuristicScore.overallScore, 0) / older.length
+                : recentAvg;
+
+        const performanceTrend =
+            recentAvg > olderAvg + 5 ? 'improving' : recentAvg < olderAvg - 5 ? 'declining' : 'stable';
+
+        return {
+            performanceTrend,
+            speedTrend: 'stable', // Simplified for now
+            reliabilityTrend: 'stable', // Simplified for now
+            confidence: Math.min(100, snapshots.length * 10),
+            dataPoints: snapshots.length,
+            analysisTimestamp: new Date()
+        };
+    }
+
+    /**
+     * Analyze overall trends across all agents
+     */
+    private analyzeOverallTrends(): any {
+        const performances = Array.from(this.agentPerformanceHistory.values());
+        const improving = performances.filter(p => p.trends.performanceTrend === 'improving').length;
+        const declining = performances.filter(p => p.trends.performanceTrend === 'declining').length;
+        const stable = performances.filter(p => p.trends.performanceTrend === 'stable').length;
+
+        return {
+            improving,
+            declining,
+            stable,
+            total: performances.length,
+            improvementRate: performances.length > 0 ? (improving / performances.length) * 100 : 0
+        };
+    }
+
+    /**
+     * Generate performance recommendations
+     */
+    private generatePerformanceRecommendations(): string[] {
+        const recommendations: string[] = [];
+        const performances = Array.from(this.agentPerformanceHistory.values());
+
+        // Check for stuck agents
+        const stuckAgents = performances.filter(p => p.stuckDetection.isStuck);
+        if (stuckAgents.length > 0) {
+            recommendations.push(`Consider investigating ${stuckAgents.length} stuck agents`);
+        }
+
+        // Check for low performance
+        const lowPerformers = performances.filter(p => p.heuristicScore.overallScore < 60);
+        if (lowPerformers.length > 0) {
+            recommendations.push(`Review performance of ${lowPerformers.length} low-performing agents`);
+        }
+
+        // Check for high error rates
+        const highErrorAgents = performances.filter(p => p.reliability.errorRate > 20);
+        if (highErrorAgents.length > 0) {
+            recommendations.push(
+                `Investigate error patterns in ${highErrorAgents.length} agents with high error rates`
+            );
+        }
+
+        // Check for workload imbalance
+        const overloadedAgents = performances.filter(p => p.workload.utilizationPercentage > 90);
+        if (overloadedAgents.length > 0) {
+            recommendations.push(`Consider redistributing workload from ${overloadedAgents.length} overloaded agents`);
+        }
+
+        return recommendations;
+    }
+
+    /**
+     * Cleanup metrics storage
+     */
+    private async cleanupMetricsStorage(): Promise<void> {
+        if (!this.context) return;
+
+        try {
+            const config = vscode.workspace.getConfiguration('nofx.performance');
+            const maxStorageSize = config.get<number>('maxStorageSizeMB', 100) * 1024 * 1024; // Convert to bytes
+
+            // Get current storage size by reading the serialized record
+            const serializedHistory = this.context.workspaceState.get<Record<string, PerformanceHistory>>(
+                'performanceHistory',
+                {}
+            );
+            const estimatedSize = JSON.stringify(serializedHistory).length;
+
+            if (estimatedSize > maxStorageSize) {
+                // Reconstruct via helper to work with Map format
+                const histories = await this.getStoredPerformanceHistory();
+
+                // Reduce snapshots per agent proportionally
+                const reductionFactor = maxStorageSize / estimatedSize;
+
+                for (const [agentId, history] of histories) {
+                    const targetCount = Math.floor(history.snapshots.length * reductionFactor);
+                    if (targetCount < history.snapshots.length) {
+                        history.snapshots = history.snapshots.slice(-targetCount);
+                        history.snapshotCount = targetCount;
+                    }
+                }
+
+                // Serialize back via helper
+                await this.setStoredPerformanceHistory(histories);
+                this.outputChannel.appendLine(
+                    `🧹 Cleaned up metrics storage (reduced by ${Math.round((1 - reductionFactor) * 100)}%) across ${histories.size} agents`
+                );
+            }
+        } catch (error) {
+            this.outputChannel.appendLine(`❌ Failed to cleanup metrics storage: ${error}`);
+        }
+    }
+
+    /**
+     * Load performance configuration from user settings
+     */
+    private loadPerformanceConfiguration(): void {
+        const config = vscode.workspace.getConfiguration('nofx.performance');
+
+        // Load monitoring intervals
+        const monitoringInterval = config.get<number>('monitoringInterval', 30000);
+        const stuckDetectionInterval = config.get<number>('stuckDetectionInterval', 60000);
+        const persistenceInterval = config.get<number>('persistenceInterval', 300000); // 5 minutes
+
+        // Load thresholds
+        const lowPerformanceThreshold = config.get<number>('lowPerformanceThreshold', 60);
+        const highErrorRateThreshold = config.get<number>('highErrorRateThreshold', 20);
+        const highWorkloadThreshold = config.get<number>('highWorkloadThreshold', 90);
+        const slowResponseThreshold = config.get<number>('slowResponseThreshold', 5000);
+
+        // Load storage settings
+        const maxSnapshots = config.get<number>('maxSnapshots', 1000);
+        const retentionDays = config.get<number>('retentionDays', 30);
+        const maxStorageSizeMB = config.get<number>('maxStorageSizeMB', 100);
+        const compressOldData = config.get<boolean>('compressOldData', true);
+
+        // Load scoring weights
+        const scoringWeights = config.get<ScoringWeights>('scoringWeights', {
+            successRate: 0.3,
+            speed: 0.2,
+            availability: 0.2,
+            reliability: 0.2,
+            workload: 0.1
+        });
+
+        // Apply configuration to all agents
+        for (const [agentId, performance] of this.agentPerformanceHistory) {
+            // Update scoring weights
+            performance.heuristicScore.weights = scoringWeights;
+
+            // Update stuck detection thresholds
+            performance.stuckDetection.stuckThreshold = config.get<number>('stuckThreshold', 300000);
+            performance.stuckDetection.detectionEnabled = config.get<boolean>('stuckDetectionEnabled', true);
+        }
+
+        this.outputChannel.appendLine('⚙️ Loaded performance configuration');
+    }
+
+    /**
+     * Update scoring weights for heuristic scoring
+     */
+    private updateScoringWeights(weights: Partial<ScoringWeights>): void {
+        const config = vscode.workspace.getConfiguration('nofx.performance');
+        const currentWeights = config.get<ScoringWeights>('scoringWeights', {
+            successRate: 0.3,
+            speed: 0.2,
+            availability: 0.2,
+            reliability: 0.2,
+            workload: 0.1
+        });
+
+        const newWeights: ScoringWeights = {
+            ...currentWeights,
+            ...weights
+        };
+
+        // Normalize weights to ensure they sum to 1
+        const totalWeight =
+            newWeights.successRate +
+            newWeights.speed +
+            newWeights.availability +
+            newWeights.reliability +
+            newWeights.workload;
+
+        if (totalWeight > 0) {
+            newWeights.successRate /= totalWeight;
+            newWeights.speed /= totalWeight;
+            newWeights.availability /= totalWeight;
+            newWeights.reliability /= totalWeight;
+            newWeights.workload /= totalWeight;
+        }
+
+        // Update configuration
+        config.update('scoringWeights', newWeights, vscode.ConfigurationTarget.Workspace);
+
+        // Apply to all agents
+        for (const [agentId, performance] of this.agentPerformanceHistory) {
+            performance.heuristicScore.weights = newWeights;
+            this.calculateHeuristicScore(agentId);
+        }
+
+        this.outputChannel.appendLine('⚙️ Updated scoring weights');
+    }
+
+    /**
+     * Configure alert thresholds for performance monitoring
+     */
+    private configureAlertThresholds(thresholds: Partial<PerformanceThresholds>): void {
+        const config = vscode.workspace.getConfiguration('nofx.performance');
+
+        if (thresholds.lowPerformanceThreshold !== undefined) {
+            config.update(
+                'lowPerformanceThreshold',
+                thresholds.lowPerformanceThreshold,
+                vscode.ConfigurationTarget.Workspace
+            );
+        }
+
+        if (thresholds.highErrorRateThreshold !== undefined) {
+            config.update(
+                'highErrorRateThreshold',
+                thresholds.highErrorRateThreshold,
+                vscode.ConfigurationTarget.Workspace
+            );
+        }
+
+        if (thresholds.highWorkloadThreshold !== undefined) {
+            config.update(
+                'highWorkloadThreshold',
+                thresholds.highWorkloadThreshold,
+                vscode.ConfigurationTarget.Workspace
+            );
+        }
+
+        if (thresholds.slowResponseThreshold !== undefined) {
+            config.update(
+                'slowResponseThreshold',
+                thresholds.slowResponseThreshold,
+                vscode.ConfigurationTarget.Workspace
+            );
+        }
+
+        if (thresholds.stuckThreshold !== undefined) {
+            config.update('stuckThreshold', thresholds.stuckThreshold, vscode.ConfigurationTarget.Workspace);
+        }
+
+        if (thresholds.minTasksForReliability !== undefined) {
+            config.update(
+                'minTasksForReliability',
+                thresholds.minTasksForReliability,
+                vscode.ConfigurationTarget.Workspace
+            );
+        }
+
+        this.outputChannel.appendLine('⚙️ Updated alert thresholds');
+    }
+
+    /**
+     * Initialize performance monitoring system
+     */
+    private initializePerformanceSystem(): void {
+        // Load configuration
+        this.loadPerformanceConfiguration();
+
+        // Load performance history
+        this.loadPerformanceHistory();
+
+        // Start monitoring
+        this.startPerformanceMonitoring();
+
+        // Start persistence interval
+        const config = vscode.workspace.getConfiguration('nofx.performance');
+        const persistenceInterval = config.get<number>('persistenceInterval', 300000); // 5 minutes
+
+        const persistenceIntervalId = setInterval(async () => {
+            await this.persistPerformanceMetrics();
+            await this.archiveOldMetrics();
+            await this.cleanupMetricsStorage();
+            this.cleanupCompletionTimestamps(); // Clean up old completion timestamps
+        }, persistenceInterval);
+
+        this.monitoringIntervals.set('persistence', persistenceIntervalId);
+
+        this.outputChannel.appendLine('🚀 Performance monitoring system initialized');
+    }
+
+    /**
+     * Stop performance monitoring system
+     */
+    private stopPerformanceSystem(): void {
+        // Clear all monitoring intervals
+        for (const [name, interval] of this.monitoringIntervals) {
+            clearInterval(interval);
+            this.outputChannel.appendLine(`⏹️ Stopped ${name} monitoring`);
+        }
+        this.monitoringIntervals.clear();
+
+        // Final persistence
+        this.persistPerformanceMetrics();
+
+        this.outputChannel.appendLine('🛑 Performance monitoring system stopped');
+    }
+
+    /**
+     * Get current performance configuration
+     */
+    private getPerformanceConfiguration(): any {
+        const config = vscode.workspace.getConfiguration('nofx.performance');
+
+        return {
+            monitoring: {
+                monitoringInterval: config.get<number>('monitoringInterval', 30000),
+                stuckDetectionInterval: config.get<number>('stuckDetectionInterval', 60000),
+                persistenceInterval: config.get<number>('persistenceInterval', 300000)
+            },
+            thresholds: {
+                lowPerformanceThreshold: config.get<number>('lowPerformanceThreshold', 60),
+                highErrorRateThreshold: config.get<number>('highErrorRateThreshold', 20),
+                highWorkloadThreshold: config.get<number>('highWorkloadThreshold', 90),
+                slowResponseThreshold: config.get<number>('slowResponseThreshold', 5000),
+                stuckThreshold: config.get<number>('stuckThreshold', 300000),
+                minTasksForReliability: config.get<number>('minTasksForReliability', 5)
+            },
+            storage: {
+                maxSnapshots: config.get<number>('maxSnapshots', 1000),
+                retentionDays: config.get<number>('retentionDays', 30),
+                maxStorageSizeMB: config.get<number>('maxStorageSizeMB', 100),
+                compressOldData: config.get<boolean>('compressOldData', true)
+            },
+            scoring: {
+                weights: config.get<ScoringWeights>('scoringWeights', {
+                    successRate: 0.3,
+                    speed: 0.2,
+                    availability: 0.2,
+                    reliability: 0.2,
+                    workload: 0.1
+                })
+            }
+        };
     }
 
     /**
@@ -3067,6 +5739,9 @@ After providing the JSON analysis, continue with your strategic recommendations 
     public dispose(): void {
         this.isDisposed = true;
 
+        // Stop performance monitoring system
+        this.stopPerformanceSystem();
+
         // Clear all monitoring intervals
         this.monitoringIntervals.forEach(intervalId => clearInterval(intervalId));
         this.monitoringIntervals.clear();
@@ -3100,5 +5775,1372 @@ After providing the JSON analysis, continue with your strategic recommendations 
         if (this.agentTemplateManager) {
             this.agentTemplateManager.dispose();
         }
+    }
+
+    /**
+     * Creates a custom agent when no existing agent meets the capability threshold
+     */
+    private async createCustomAgent(task: Task, taskRequirements: string[]): Promise<Agent | null> {
+        try {
+            // Analyze task specialization
+            const specialization = this.analyzeTaskSpecialization(task);
+
+            // Generate custom agent template
+            const template = this.generateCustomAgentTemplate(task, taskRequirements);
+
+            // Save the custom template
+            const templateSaved = await this.saveCustomAgentTemplate(template);
+            if (!templateSaved) {
+                this.outputChannel.appendLine(`[Custom Agent] Failed to save template for ${template.name}`);
+                return null;
+            }
+
+            // Spawn the custom agent
+            const agentConfig = {
+                templateId: template.id,
+                name: template.name,
+                type: specialization,
+                specialization: specialization
+            };
+
+            const customAgent = await this.agentManager.spawnAgent(agentConfig);
+            if (customAgent) {
+                this.logCustomAgentCreation(customAgent, task, `Created for ${specialization} specialization`);
+                return customAgent;
+            }
+
+            return null;
+        } catch (error) {
+            this.outputChannel.appendLine(`[Custom Agent] Error creating custom agent: ${error}`);
+            return null;
+        }
+    }
+
+    /**
+     * Analyzes task to determine agent specialization
+     */
+    private analyzeTaskSpecialization(task: Task): string {
+        const description = task.description.toLowerCase();
+        const tags = (task.tags || []).map(tag => tag.toLowerCase());
+        const requirements = (task.requiredCapabilities || []).map(req => req.toLowerCase());
+
+        const allText = `${description} ${tags.join(' ')} ${requirements.join(' ')}`;
+
+        // Blockchain and Web3
+        if (
+            allText.includes('blockchain') ||
+            allText.includes('web3') ||
+            allText.includes('smart contract') ||
+            allText.includes('ethereum') ||
+            allText.includes('solidity') ||
+            allText.includes('defi')
+        ) {
+            return 'blockchain-developer';
+        }
+
+        // Game Development
+        if (
+            allText.includes('game') ||
+            allText.includes('unity') ||
+            allText.includes('unreal') ||
+            allText.includes('gaming') ||
+            allText.includes('game engine') ||
+            allText.includes('3d')
+        ) {
+            return 'game-engine-specialist';
+        }
+
+        // Machine Learning and AI
+        if (
+            allText.includes('machine learning') ||
+            allText.includes('ml') ||
+            allText.includes('tensorflow') ||
+            allText.includes('pytorch') ||
+            allText.includes('neural network') ||
+            allText.includes('ai model')
+        ) {
+            return 'ai-ml-specialist';
+        }
+
+        // Data Science
+        if (
+            allText.includes('data science') ||
+            allText.includes('analytics') ||
+            allText.includes('pandas') ||
+            allText.includes('numpy') ||
+            allText.includes('jupyter') ||
+            allText.includes('data analysis')
+        ) {
+            return 'data-science-specialist';
+        }
+
+        // DevOps and Infrastructure
+        if (
+            allText.includes('devops') ||
+            allText.includes('kubernetes') ||
+            allText.includes('docker') ||
+            allText.includes('ci/cd') ||
+            allText.includes('infrastructure') ||
+            allText.includes('deployment')
+        ) {
+            return 'devops-specialist';
+        }
+
+        // Security
+        if (
+            allText.includes('security') ||
+            allText.includes('penetration') ||
+            allText.includes('vulnerability') ||
+            allText.includes('cryptography') ||
+            allText.includes('authentication') ||
+            allText.includes('authorization')
+        ) {
+            return 'security-specialist';
+        }
+
+        // Mobile Development
+        if (
+            allText.includes('mobile') ||
+            allText.includes('ios') ||
+            allText.includes('android') ||
+            allText.includes('react native') ||
+            allText.includes('flutter') ||
+            allText.includes('swift')
+        ) {
+            return 'mobile-specialist';
+        }
+
+        // Frontend Development
+        if (
+            allText.includes('frontend') ||
+            allText.includes('react') ||
+            allText.includes('vue') ||
+            allText.includes('angular') ||
+            allText.includes('ui') ||
+            allText.includes('css') ||
+            allText.includes('javascript')
+        ) {
+            return 'frontend-specialist';
+        }
+
+        // Backend Development
+        if (
+            allText.includes('backend') ||
+            allText.includes('api') ||
+            allText.includes('server') ||
+            allText.includes('database') ||
+            allText.includes('node.js') ||
+            allText.includes('python') ||
+            allText.includes('java')
+        ) {
+            return 'backend-specialist';
+        }
+
+        // Database
+        if (
+            allText.includes('database') ||
+            allText.includes('sql') ||
+            allText.includes('postgresql') ||
+            allText.includes('mongodb') ||
+            allText.includes('redis') ||
+            allText.includes('mysql')
+        ) {
+            return 'database-specialist';
+        }
+
+        // Testing
+        if (
+            allText.includes('testing') ||
+            allText.includes('qa') ||
+            allText.includes('test') ||
+            allText.includes('automation') ||
+            allText.includes('selenium') ||
+            allText.includes('jest')
+        ) {
+            return 'testing-specialist';
+        }
+
+        // Default to generalist
+        return 'generalist-specialist';
+    }
+
+    /**
+     * Generates a custom agent template based on task requirements
+     */
+    private generateCustomAgentTemplate(task: Task, requirements: string[]): AgentTemplate {
+        const specialization = this.analyzeTaskSpecialization(task);
+        const uniqueName = this.generateUniqueAgentName(specialization);
+        const uniqueId = this.generateUniqueAgentId(uniqueName);
+
+        return {
+            id: uniqueId,
+            name: uniqueName,
+            icon: this.selectAgentIcon(specialization),
+            color: this.selectAgentColor(specialization),
+            description: `Specialized agent for ${specialization} tasks, created dynamically for: ${task.title}`,
+            types: [specialization.split('-')[0]], // Extract main type (e.g., 'blockchain' from 'blockchain-developer')
+            tags: this.getSpecializationKeywords(task),
+            capabilities: this.generateAgentCapabilities(specialization, requirements),
+            systemPrompt: this.generateSystemPrompt(specialization, task),
+            detailedPrompt: `You are a specialized ${specialization} agent created specifically for this task: "${task.title}". ${task.description}`,
+            taskPreferences: {
+                preferred: [specialization, ...requirements],
+                avoid: [],
+                priority: 'high'
+            },
+            filePatterns: {
+                watch: this.getFilePatternsForSpecialization(specialization),
+                ignore: ['node_modules/**', '.git/**', 'coverage/**']
+            },
+            commands: this.getCommandsForSpecialization(specialization),
+            snippets: this.getSnippetsForSpecialization(specialization),
+            version: '1.0.0',
+            author: 'nofx-dynamic-creator'
+        };
+    }
+
+    /**
+     * Generates agent capabilities based on specialization and requirements
+     */
+    private generateAgentCapabilities(specialization: string, requirements: string[]): AgentTemplate['capabilities'] {
+        const baseCapabilities = {
+            languages: [] as string[],
+            frameworks: [] as string[],
+            tools: [] as string[],
+            testing: [] as string[],
+            specialties: [specialization]
+        };
+
+        // Add capabilities based on specialization
+        switch (specialization) {
+            case 'blockchain-developer':
+                baseCapabilities.languages = ['solidity', 'javascript', 'typescript', 'rust', 'go'];
+                baseCapabilities.frameworks = ['hardhat', 'truffle', 'web3.js', 'ethers.js', 'foundry'];
+                baseCapabilities.tools = ['remix', 'metamask', 'ganache', 'infura', 'alchemy'];
+                break;
+            case 'game-engine-specialist':
+                baseCapabilities.languages = ['c#', 'c++', 'javascript', 'lua', 'python'];
+                baseCapabilities.frameworks = ['unity', 'unreal engine', 'godot', 'phaser', 'three.js'];
+                baseCapabilities.tools = ['blender', 'maya', 'photoshop', 'visual studio', 'unity hub'];
+                break;
+            case 'ai-ml-specialist':
+                baseCapabilities.languages = ['python', 'r', 'julia', 'scala'];
+                baseCapabilities.frameworks = ['tensorflow', 'pytorch', 'scikit-learn', 'keras', 'hugging face'];
+                baseCapabilities.tools = ['jupyter', 'colab', 'wandb', 'mlflow', 'docker'];
+                break;
+            case 'data-science-specialist':
+                baseCapabilities.languages = ['python', 'r', 'sql', 'julia'];
+                baseCapabilities.frameworks = ['pandas', 'numpy', 'scipy', 'matplotlib', 'seaborn'];
+                baseCapabilities.tools = ['jupyter', 'tableau', 'power bi', 'apache spark', 'airflow'];
+                break;
+            case 'devops-specialist':
+                baseCapabilities.languages = ['bash', 'python', 'yaml', 'json'];
+                baseCapabilities.frameworks = ['kubernetes', 'docker', 'terraform', 'ansible', 'jenkins'];
+                baseCapabilities.tools = ['aws', 'azure', 'gcp', 'gitlab ci', 'github actions'];
+                break;
+            case 'security-specialist':
+                baseCapabilities.languages = ['python', 'bash', 'powershell', 'c', 'go'];
+                baseCapabilities.frameworks = ['owasp', 'nmap', 'burp suite', 'metasploit', 'wireshark'];
+                baseCapabilities.tools = ['kali linux', 'nmap', 'burp suite', 'sqlmap', 'john the ripper'];
+                break;
+            case 'mobile-specialist':
+                baseCapabilities.languages = ['swift', 'kotlin', 'javascript', 'dart', 'java'];
+                baseCapabilities.frameworks = ['react native', 'flutter', 'xamarin', 'ionic', 'native script'];
+                baseCapabilities.tools = ['xcode', 'android studio', 'expo', 'firebase', 'app center'];
+                break;
+            case 'frontend-specialist':
+                baseCapabilities.languages = ['javascript', 'typescript', 'html', 'css', 'sass'];
+                baseCapabilities.frameworks = ['react', 'vue', 'angular', 'svelte', 'next.js'];
+                baseCapabilities.tools = ['webpack', 'vite', 'eslint', 'prettier', 'storybook'];
+                break;
+            case 'backend-specialist':
+                baseCapabilities.languages = ['javascript', 'typescript', 'python', 'java', 'c#', 'go', 'rust'];
+                baseCapabilities.frameworks = ['express', 'fastapi', 'spring', 'django', 'flask', 'gin'];
+                baseCapabilities.tools = ['postman', 'insomnia', 'docker', 'nginx', 'redis'];
+                break;
+            case 'database-specialist':
+                baseCapabilities.languages = ['sql', 'python', 'javascript', 'java'];
+                baseCapabilities.frameworks = ['postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch'];
+                baseCapabilities.tools = ['pgadmin', 'mongodb compass', 'redis cli', 'kibana', 'grafana'];
+                break;
+            case 'testing-specialist':
+                baseCapabilities.languages = ['javascript', 'python', 'java', 'c#'];
+                baseCapabilities.frameworks = ['jest', 'cypress', 'selenium', 'pytest', 'junit'];
+                baseCapabilities.tools = ['postman', 'newman', 'k6', 'artillery', 'browserstack'];
+                break;
+            default:
+                baseCapabilities.languages = ['javascript', 'typescript', 'python', 'java'];
+                baseCapabilities.frameworks = ['react', 'node.js', 'express', 'django'];
+                baseCapabilities.tools = ['git', 'docker', 'vscode', 'postman'];
+        }
+
+        // Add requirements to capabilities
+        requirements.forEach(req => {
+            if (
+                !baseCapabilities.languages.includes(req) &&
+                !baseCapabilities.frameworks.includes(req) &&
+                !baseCapabilities.tools.includes(req)
+            ) {
+                baseCapabilities.tools.push(req);
+            }
+        });
+
+        return baseCapabilities;
+    }
+
+    /**
+     * Generates system prompt for the custom agent
+     */
+    private generateSystemPrompt(specialization: string, task: Task): string {
+        const basePrompt = `You are a specialized ${specialization} agent created dynamically to handle specific tasks.`;
+
+        const specializationPrompts: Record<string, string> = {
+            'blockchain-developer':
+                'You excel at smart contract development, DeFi protocols, and Web3 applications. You understand Solidity, Web3.js, and blockchain architecture.',
+            'game-engine-specialist':
+                'You are an expert in game development, 3D graphics, and game engines. You can work with Unity, Unreal Engine, and various game frameworks.',
+            'ai-ml-specialist':
+                'You specialize in machine learning, artificial intelligence, and data modeling. You work with TensorFlow, PyTorch, and various ML frameworks.',
+            'data-science-specialist':
+                'You are a data science expert who can analyze data, create visualizations, and build predictive models using Python, R, and statistical methods.',
+            'devops-specialist':
+                'You excel at infrastructure, deployment, and automation. You work with Docker, Kubernetes, CI/CD pipelines, and cloud platforms.',
+            'security-specialist':
+                'You are a cybersecurity expert who can identify vulnerabilities, implement security measures, and conduct security assessments.',
+            'mobile-specialist':
+                'You specialize in mobile app development for iOS and Android platforms using React Native, Flutter, or native development.',
+            'frontend-specialist':
+                'You are a frontend expert who creates beautiful, responsive user interfaces using modern web technologies and frameworks.',
+            'backend-specialist':
+                'You excel at server-side development, APIs, databases, and backend architecture using various programming languages and frameworks.',
+            'database-specialist':
+                'You are a database expert who can design, optimize, and manage various database systems and data storage solutions.',
+            'testing-specialist':
+                'You specialize in software testing, quality assurance, and test automation using various testing frameworks and tools.'
+        };
+
+        const specializationPrompt =
+            specializationPrompts[specialization] ||
+            'You are a versatile developer who can adapt to various programming tasks.';
+
+        return `${basePrompt} ${specializationPrompt}
+
+Current Task: ${task.title}
+Description: ${task.description}
+
+Focus on delivering high-quality, well-tested code that meets the specific requirements of this task.`;
+    }
+
+    /**
+     * Selects appropriate icon for the specialization
+     */
+    private selectAgentIcon(specialization: string): string {
+        const iconMap: Record<string, string> = {
+            'blockchain-developer': '🔗',
+            'game-engine-specialist': '🎮',
+            'ai-ml-specialist': '🤖',
+            'data-science-specialist': '📊',
+            'devops-specialist': '⚙️',
+            'security-specialist': '🔒',
+            'mobile-specialist': '📱',
+            'frontend-specialist': '🎨',
+            'backend-specialist': '⚡',
+            'database-specialist': '🗄️',
+            'testing-specialist': '🧪'
+        };
+        return iconMap[specialization] || '👨‍💻';
+    }
+
+    /**
+     * Selects appropriate color for the specialization
+     */
+    private selectAgentColor(specialization: string): string {
+        const colorMap: Record<string, string> = {
+            'blockchain-developer': '#f7931a',
+            'game-engine-specialist': '#ff6b6b',
+            'ai-ml-specialist': '#4ecdc4',
+            'data-science-specialist': '#45b7d1',
+            'devops-specialist': '#96ceb4',
+            'security-specialist': '#feca57',
+            'mobile-specialist': '#ff9ff3',
+            'frontend-specialist': '#54a0ff',
+            'backend-specialist': '#5f27cd',
+            'database-specialist': '#00d2d3',
+            'testing-specialist': '#ff9f43'
+        };
+        return colorMap[specialization] || '#6c5ce7';
+    }
+
+    /**
+     * Generates unique agent name based on specialization
+     */
+    private generateUniqueAgentName(specialization: string): string {
+        const baseName = specialization.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const timestamp = Date.now().toString().slice(-4);
+        return `${baseName} ${timestamp}`;
+    }
+
+    /**
+     * Generates unique agent ID
+     */
+    private generateUniqueAgentId(baseName: string): string {
+        const sanitized = baseName.toLowerCase().replace(/\s+/g, '-');
+        const timestamp = Date.now().toString().slice(-6);
+        return `custom-${sanitized}-${timestamp}`;
+    }
+
+    /**
+     * Checks if agent name is unique
+     */
+    private isAgentNameUnique(name: string): boolean {
+        const allAgents = this.agentManager.getAllAgents();
+        return !allAgents.some(agent => agent.name === name);
+    }
+
+    /**
+     * Gets specialization keywords from task
+     */
+    private getSpecializationKeywords(task: Task): string[] {
+        const keywords = new Set<string>();
+
+        // Add from description
+        const descriptionWords = task.description.toLowerCase().split(/\s+/);
+        descriptionWords.forEach(word => {
+            if (word.length > 3) keywords.add(word);
+        });
+
+        // Add from tags
+        (task.tags || []).forEach(tag => keywords.add(tag.toLowerCase()));
+
+        // Add from requirements
+        (task.requiredCapabilities || []).forEach(req => keywords.add(req.toLowerCase()));
+
+        return Array.from(keywords).slice(0, 10); // Limit to 10 keywords
+    }
+
+    /**
+     * Gets file patterns for specialization
+     */
+    private getFilePatternsForSpecialization(specialization: string): string[] {
+        const patternMap: Record<string, string[]> = {
+            'blockchain-developer': ['**/*.sol', '**/*.js', '**/*.ts', '**/hardhat.config.*', '**/truffle-config.*'],
+            'game-engine-specialist': ['**/*.cs', '**/*.cpp', '**/*.h', '**/*.js', '**/*.ts', '**/*.unity'],
+            'ai-ml-specialist': ['**/*.py', '**/*.ipynb', '**/*.pkl', '**/*.h5', '**/*.json'],
+            'data-science-specialist': ['**/*.py', '**/*.ipynb', '**/*.csv', '**/*.json', '**/*.sql'],
+            'devops-specialist': ['**/Dockerfile*', '**/*.yml', '**/*.yaml', '**/*.tf', '**/k8s/**'],
+            'security-specialist': ['**/*.py', '**/*.sh', '**/*.ps1', '**/*.js', '**/*.ts'],
+            'mobile-specialist': ['**/*.swift', '**/*.kt', '**/*.js', '**/*.ts', '**/*.dart'],
+            'frontend-specialist': ['**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx', '**/*.css', '**/*.scss'],
+            'backend-specialist': ['**/*.js', '**/*.ts', '**/*.py', '**/*.java', '**/*.go', '**/*.rs'],
+            'database-specialist': ['**/*.sql', '**/*.py', '**/*.js', '**/*.ts', '**/migrations/**'],
+            'testing-specialist': ['**/*.test.*', '**/*.spec.*', '**/*.cy.*', '**/tests/**', '**/__tests__/**']
+        };
+        return patternMap[specialization] || ['**/*.js', '**/*.ts', '**/*.py'];
+    }
+
+    /**
+     * Gets commands for specialization
+     */
+    private getCommandsForSpecialization(specialization: string): Record<string, string> {
+        const commandMap: Record<string, Record<string, string>> = {
+            'blockchain-developer': {
+                compile: 'npx hardhat compile',
+                test: 'npx hardhat test',
+                deploy: 'npx hardhat run scripts/deploy.js'
+            },
+            'game-engine-specialist': {
+                build: 'unity -batchmode -quit -projectPath . -buildTarget StandaloneWindows64',
+                test: 'unity -batchmode -quit -projectPath . -runTests'
+            },
+            'ai-ml-specialist': {
+                train: 'python train.py',
+                predict: 'python predict.py',
+                evaluate: 'python evaluate.py'
+            },
+            'data-science-specialist': {
+                analyze: 'python analyze.py',
+                visualize: 'python visualize.py',
+                report: 'jupyter nbconvert --to html report.ipynb'
+            },
+            'devops-specialist': {
+                build: 'docker build -t app .',
+                deploy: 'kubectl apply -f k8s/',
+                test: 'docker-compose -f docker-compose.test.yml up --abort-on-container-exit'
+            },
+            'security-specialist': {
+                scan: 'nmap -sV target',
+                audit: 'python security_audit.py',
+                test: 'python penetration_test.py'
+            },
+            'mobile-specialist': {
+                'build-ios': 'npx react-native run-ios',
+                'build-android': 'npx react-native run-android',
+                test: 'npx react-native test'
+            },
+            'frontend-specialist': {
+                dev: 'npm run dev',
+                build: 'npm run build',
+                test: 'npm test'
+            },
+            'backend-specialist': {
+                start: 'npm start',
+                dev: 'npm run dev',
+                test: 'npm test'
+            },
+            'database-specialist': {
+                migrate: 'npx prisma migrate dev',
+                seed: 'npx prisma db seed',
+                studio: 'npx prisma studio'
+            },
+            'testing-specialist': {
+                test: 'npm test',
+                e2e: 'npx cypress run',
+                coverage: 'npm run test:coverage'
+            }
+        };
+        return (
+            commandMap[specialization] || {
+                start: 'npm start',
+                test: 'npm test',
+                build: 'npm run build'
+            }
+        );
+    }
+
+    /**
+     * Gets snippets for specialization
+     */
+    private getSnippetsForSpecialization(specialization: string): Record<string, string> {
+        const snippetMap: Record<string, Record<string, string>> = {
+            'blockchain-developer': {
+                contract: 'contract ${1:ContractName} {\n    ${2:// contract code}\n}',
+                function:
+                    'function ${1:functionName}() public ${2:view} returns (${3:uint256}) {\n    ${4:// function body}\n}'
+            },
+            'ai-ml-specialist': {
+                model: 'model = ${1:ModelClass}()\nmodel.compile(optimizer="${2:adam}", loss="${3:sparse_categorical_crossentropy}")\nmodel.fit(${4:X_train}, ${5:y_train}, epochs=${6:10})',
+                import: 'import tensorflow as tf\nimport numpy as np\nimport pandas as pd'
+            },
+            'frontend-specialist': {
+                component:
+                    'const ${1:ComponentName} = () => {\n    return (\n        <div>\n            ${2:// component content}\n        </div>\n    );\n};',
+                hook: 'const [${1:state}, set${2:State}] = useState(${3:initialValue});'
+            }
+        };
+        return (
+            snippetMap[specialization] || {
+                function: 'function ${1:functionName}() {\n    ${2:// function body}\n}',
+                class: 'class ${1:ClassName} {\n    ${2:// class body}\n}'
+            }
+        );
+    }
+
+    /**
+     * Saves custom agent template using AgentTemplateManager
+     * Custom templates are saved to .nofx/templates/custom/ for runtime discoverability
+     * Use saveCustomAgentTemplateAsBuiltIn() if you need to save to src/agents/templates/
+     */
+    private async saveCustomAgentTemplate(template: AgentTemplate): Promise<boolean> {
+        try {
+            if (!this.agentTemplateManager) {
+                this.outputChannel.appendLine('[Custom Agent] AgentTemplateManager not available');
+                return false;
+            }
+
+            // Check configuration for custom template save location
+            const saveToBuiltIn = vscode.workspace
+                .getConfiguration('nofx')
+                .get<boolean>('saveCustomTemplatesToBuiltIn', false);
+
+            if (saveToBuiltIn) {
+                // Save to built-in templates directory (src/agents/templates/)
+                return await this.saveCustomAgentTemplateAsBuiltIn(template);
+            } else {
+                // Save as custom template to .nofx/templates/custom/ (default)
+                await this.agentTemplateManager.saveTemplate(template, true);
+                this.outputChannel.appendLine(
+                    `[Custom Agent] Template saved to .nofx/templates/custom/: ${template.name}`
+                );
+                return true;
+            }
+        } catch (error) {
+            this.outputChannel.appendLine(`[Custom Agent] Error saving template: ${error}`);
+            return false;
+        }
+    }
+
+    /**
+     * Saves custom agent template to built-in templates directory (for development)
+     * WARNING: This modifies the extension source and may be lost on updates
+     */
+    private async saveCustomAgentTemplateAsBuiltIn(template: AgentTemplate): Promise<boolean> {
+        try {
+            if (!this.agentTemplateManager) {
+                this.outputChannel.appendLine('[Custom Agent] AgentTemplateManager not available');
+                return false;
+            }
+
+            // Save to built-in templates directory (src/agents/templates/)
+            const saved = await this.agentTemplateManager.saveBuiltInLikeTemplate(template);
+            if (saved) {
+                this.outputChannel.appendLine(
+                    `[Custom Agent] Template saved to src/agents/templates/: ${template.name}`
+                );
+                this.outputChannel.appendLine('[Custom Agent] WARNING: This template may be lost on extension updates');
+            }
+            return saved;
+        } catch (error) {
+            this.outputChannel.appendLine(`[Custom Agent] Error saving built-in template: ${error}`);
+            return false;
+        }
+    }
+
+    /**
+     * Logs custom agent creation with details
+     */
+    private logCustomAgentCreation(agent: Agent, task: Task, reason: string): void {
+        this.outputChannel.appendLine(`[Custom Agent] Created agent "${agent.name}" (${agent.id})`);
+        this.outputChannel.appendLine(`[Custom Agent] Reason: ${reason}`);
+        this.outputChannel.appendLine(`[Custom Agent] Task: ${task.title}`);
+        this.outputChannel.appendLine(`[Custom Agent] Specialization: ${agent.template?.types?.[0] || 'unknown'}`);
+    }
+
+    /**
+     * Handles low capability match scenarios
+     */
+    private async handleLowCapabilityMatch(task: Task, bestScore: number): Promise<Agent | null> {
+        this.outputChannel.appendLine(
+            `[Custom Agent] Low capability match (${bestScore.toFixed(2)}), creating custom agent`
+        );
+        return await this.createCustomAgent(task, task.requiredCapabilities || []);
+    }
+
+    // ============================================================================
+    // LOAD BALANCING IMPLEMENTATION
+    // ============================================================================
+
+    /**
+     * Start the load balancing monitor with configurable intervals
+     */
+    public startLoadBalancingMonitor(): void {
+        if (!this.loadBalancingConfig.enabled) {
+            this.outputChannel.appendLine('⚖️ Load balancing is disabled');
+            return;
+        }
+
+        if (this.loadBalancingMonitor) {
+            clearInterval(this.loadBalancingMonitor);
+        }
+
+        this.loadBalancingMonitor = setInterval(() => {
+            this.performLoadBalancingCycle();
+        }, this.loadBalancingConfig.monitoringInterval);
+
+        this.outputChannel.appendLine(
+            `⚖️ Load balancing monitor started (interval: ${this.loadBalancingConfig.monitoringInterval}ms)`
+        );
+    }
+
+    /**
+     * Stop the load balancing monitor
+     */
+    public stopLoadBalancingMonitor(): void {
+        if (this.loadBalancingMonitor) {
+            clearInterval(this.loadBalancingMonitor);
+            this.loadBalancingMonitor = undefined;
+            this.outputChannel.appendLine('⚖️ Load balancing monitor stopped');
+        }
+    }
+
+    /**
+     * Perform a complete load balancing cycle
+     */
+    private async performLoadBalancingCycle(): Promise<void> {
+        try {
+            const startTime = Date.now();
+
+            // Check if we have enough tasks to warrant load balancing
+            const totalTasks = Array.from(this.agentTasksMap.values()).reduce((sum, tasks) => sum + tasks.size, 0);
+            if (totalTasks < this.loadBalancingConfig.minTasksForLoadBalancing) {
+                return;
+            }
+
+            // Detect overloaded and stuck agents
+            const overloadedAgents = this.detectOverloadedAgents();
+            const stuckAgents = this.detectStuckAgents();
+
+            // Handle overloaded agents
+            if (overloadedAgents.length > 0) {
+                await this.rebalanceTaskLoad(overloadedAgents);
+            }
+
+            // Handle stuck agents
+            if (stuckAgents.length > 0) {
+                await this.handleStuckAgents(stuckAgents);
+            }
+
+            // Optimize agent utilization
+            await this.optimizeAgentUtilization();
+
+            // Update metrics
+            this.loadBalancingMetrics.totalOperations++;
+            this.loadBalancingMetrics.lastOperationTime = new Date();
+            this.loadBalancingMetrics.timestamp = new Date();
+
+            // Emit load balancing operations metric
+            try {
+                const container = Container.getInstance();
+                if (container.has(SERVICE_TOKENS.MetricsService)) {
+                    const metricsService = container.resolve<IMetricsService>(SERVICE_TOKENS.MetricsService);
+                    metricsService.recordLoadBalancingMetric('load_balancing_operations', 1);
+                }
+            } catch (error) {
+                // Metrics service not available, continue without error
+            }
+
+            const duration = Date.now() - startTime;
+            this.outputChannel.appendLine(`⚖️ Load balancing cycle completed in ${duration}ms`);
+        } catch (error) {
+            this.outputChannel.appendLine(`⚖️ Load balancing cycle failed: ${error}`);
+        }
+    }
+
+    /**
+     * Detect agents that are overloaded based on capacity and performance
+     */
+    private detectOverloadedAgents(): string[] {
+        const overloadedAgents: string[] = [];
+
+        for (const [agentId, performance] of this.agentPerformanceHistory) {
+            const cap = Math.max(1, performance.availability.maxCapacity || 0);
+            const utilizationPercentage = (performance.availability.currentLoad / cap) * 100;
+
+            if (utilizationPercentage > this.loadBalancingConfig.overloadThreshold) {
+                overloadedAgents.push(agentId);
+                this.loadBalancingMetrics.overloadedAgentsDetected++;
+
+                // Record overloaded agents detected metric
+                try {
+                    const container = Container.getInstance();
+                    if (container.has(SERVICE_TOKENS.MetricsService)) {
+                        const metricsService = container.resolve<IMetricsService>(SERVICE_TOKENS.MetricsService);
+                        metricsService.recordLoadBalancingMetric('overloaded_agents_detected', 1, { agentId });
+                    }
+                } catch (error) {
+                    // Metrics service not available, continue without error
+                }
+
+                this.publishLoadBalancingEvent({
+                    type: 'agent_overloaded',
+                    agentId,
+                    timestamp: new Date(),
+                    data: { utilizationPercentage, threshold: this.loadBalancingConfig.overloadThreshold }
+                });
+            }
+        }
+
+        return overloadedAgents;
+    }
+
+    /**
+     * Rebalance task load for overloaded agents
+     */
+    private async rebalanceTaskLoad(overloadedAgents: string[]): Promise<void> {
+        for (const agentId of overloadedAgents) {
+            const agentTasks = this.agentTasksMap.get(agentId);
+            if (!agentTasks || agentTasks.size === 0) continue;
+
+            // Find optimal reassignment targets
+            const availableAgents = this.getAvailableAgentsForReassignment(agentId);
+            if (availableAgents.length === 0) continue;
+
+            // Create distribution plan
+            const distributionPlan = this.createTaskDistributionPlan(agentId, availableAgents);
+            if (distributionPlan.reassignments.length === 0) continue;
+
+            // Execute reassignments
+            await this.executeTaskDistributionPlan(distributionPlan);
+        }
+    }
+
+    /**
+     * Handle stuck agents by reassigning their tasks
+     */
+    private async handleStuckAgents(stuckAgents: string[]): Promise<void> {
+        for (const agentId of stuckAgents) {
+            const agentTasks = this.agentTasksMap.get(agentId);
+            if (!agentTasks || agentTasks.size === 0) continue;
+
+            const availableAgents = this.getAvailableAgentsForReassignment(agentId);
+            if (availableAgents.length === 0) continue;
+
+            // Reassign all tasks from stuck agent
+            for (const taskId of agentTasks) {
+                const optimalAgent = this.findOptimalReassignmentTarget(taskId, availableAgents);
+                if (optimalAgent) {
+                    await this.reassignTask(
+                        taskId,
+                        agentId,
+                        [optimalAgent],
+                        `Agent ${agentId} stuck - ${this.agentPerformanceHistory.get(agentId)?.stuckDetection.stuckReason}`,
+                        this.outputChannel
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * Optimize agent utilization across the system
+     */
+    private async optimizeAgentUtilization(): Promise<void> {
+        const allAgents = Array.from(this.agentPerformanceHistory.keys());
+        const agentWorkloads = this.calculateAgentWorkloadsDetailed();
+
+        // Calculate load balancing effectiveness
+        const effectiveness = this.calculateLoadBalancingEffectiveness(agentWorkloads);
+        this.loadBalancingMetrics.averageEffectiveness = effectiveness;
+
+        // If effectiveness is low, consider additional optimizations
+        if (effectiveness < 70) {
+            await this.performAdvancedOptimization(agentWorkloads);
+        }
+    }
+
+    /**
+     * Calculate detailed agent workloads with capacity information
+     */
+    private calculateAgentWorkloadsDetailed(): Map<string, AgentWorkload> {
+        const workloads = new Map<string, AgentWorkload>();
+
+        for (const [agentId, performance] of this.agentPerformanceHistory) {
+            const currentTasks = this.agentTasksMap.get(agentId)?.size || 0;
+            const tasksCompletedLastHour = this.calculateTasksCompletedLastHour(agentId);
+            const cap = Math.max(1, performance.availability.maxCapacity || 0);
+
+            workloads.set(agentId, {
+                agentId,
+                currentTasks,
+                maxConcurrentTasks: performance.availability.maxCapacity,
+                utilizationPercentage: (currentTasks / cap) * 100,
+                tasksCompletedLastHour,
+                averageTaskTime: performance.averageExecutionTime,
+                isAvailable: performance.availability.isAvailable,
+                timestamp: new Date()
+            });
+        }
+
+        return workloads;
+    }
+
+    /**
+     * Calculate tasks completed by an agent in the last hour
+     */
+    private calculateTasksCompletedLastHour(agentId: string): number {
+        const completionTimes = this.completionTimesByAgent.get(agentId) || [];
+        const oneHourAgo = Date.now() - 60 * 60 * 1000;
+
+        return completionTimes.filter(time => time > oneHourAgo).length;
+    }
+
+    /**
+     * Calculate load balancing effectiveness score
+     */
+    private calculateLoadBalancingEffectiveness(workloads: Map<string, AgentWorkload>): number {
+        if (workloads.size === 0) return 100;
+
+        const utilizationPercentages = Array.from(workloads.values()).map(w => w.utilizationPercentage);
+        const averageUtilization =
+            utilizationPercentages.reduce((sum, util) => sum + util, 0) / utilizationPercentages.length;
+
+        // Calculate standard deviation to measure load distribution
+        const variance =
+            utilizationPercentages.reduce((sum, util) => sum + Math.pow(util - averageUtilization, 2), 0) /
+            utilizationPercentages.length;
+        const standardDeviation = Math.sqrt(variance);
+
+        // Effectiveness is higher when standard deviation is lower (more balanced)
+        const effectiveness = Math.max(0, 100 - standardDeviation * 2);
+        return Math.round(effectiveness);
+    }
+
+    /**
+     * Perform advanced optimization when basic load balancing is insufficient
+     */
+    private async performAdvancedOptimization(workloads: Map<string, AgentWorkload>): Promise<void> {
+        // Find agents with significantly different utilization
+        const sortedWorkloads = Array.from(workloads.entries()).sort(
+            (a, b) => a[1].utilizationPercentage - b[1].utilizationPercentage
+        );
+
+        if (sortedWorkloads.length < 2) return;
+
+        const lowestUtilization = sortedWorkloads[0];
+        const highestUtilization = sortedWorkloads[sortedWorkloads.length - 1];
+
+        // If there's a significant imbalance, consider reassignment
+        if (highestUtilization[1].utilizationPercentage - lowestUtilization[1].utilizationPercentage > 30) {
+            const highLoadAgent = highestUtilization[0];
+            const lowLoadAgent = lowestUtilization[0];
+
+            const highLoadTasks = this.agentTasksMap.get(highLoadAgent);
+            if (highLoadTasks && highLoadTasks.size > 0) {
+                // Find a task that can be reassigned
+                for (const taskId of highLoadTasks) {
+                    const task = this.taskQueue.getTask(taskId);
+                    if (task && this.canAgentHandleTask(lowLoadAgent, task)) {
+                        await this.reassignTask(
+                            taskId,
+                            highLoadAgent,
+                            [this.agentManager.getAgent(lowLoadAgent)!],
+                            'Advanced load balancing optimization',
+                            this.outputChannel
+                        );
+                        break; // Only reassign one task per cycle
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Get available agents for reassignment (excluding the source agent)
+     */
+    private getAvailableAgentsForReassignment(excludeAgentId: string): Agent[] {
+        return this.agentManager
+            .getAvailableAgents()
+            .filter(
+                agent => agent.id !== excludeAgentId && !this.failedAgents.has(agent.id) && agent.status === 'online'
+            );
+    }
+
+    /**
+     * Create a task distribution plan for load balancing
+     */
+    private createTaskDistributionPlan(sourceAgentId: string, targetAgents: Agent[]): TaskDistributionPlan {
+        const planId = `lb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const reassignments: TaskReassignment[] = [];
+
+        const sourceTasks = this.agentTasksMap.get(sourceAgentId);
+        if (!sourceTasks || sourceTasks.size === 0) {
+            return {
+                planId,
+                reassignments: [],
+                expectedDistribution: new Map(),
+                effectivenessScore: 0,
+                createdAt: new Date(),
+                executed: false
+            };
+        }
+
+        // Calculate capacity scores for target agents
+        const targetScores = new Map<string, AgentCapacityScore>();
+        for (const agent of targetAgents) {
+            targetScores.set(agent.id, this.calculateAgentCapacityScore(agent.id));
+        }
+
+        // Create reassignments based on capacity and performance
+        let reassignmentCount = 0;
+        const maxReassignments = Math.min(this.loadBalancingConfig.maxReassignmentsPerCycle, sourceTasks.size);
+
+        for (const taskId of sourceTasks) {
+            if (reassignmentCount >= maxReassignments) break;
+
+            const task = this.taskQueue.getTask(taskId);
+            if (!task) continue;
+
+            const bestTarget = this.findOptimalReassignmentTarget(taskId, targetAgents);
+            if (bestTarget) {
+                const capacityScore = targetScores.get(bestTarget.id);
+                const expectedImprovement = capacityScore ? capacityScore.overallScore : 50;
+
+                reassignments.push({
+                    taskId,
+                    currentAgentId: sourceAgentId,
+                    targetAgentId: bestTarget.id,
+                    reason: TaskReassignmentReason.OVERLOADED,
+                    expectedImprovement,
+                    priority: Math.round(expectedImprovement / 10)
+                });
+
+                reassignmentCount++;
+            }
+        }
+
+        // Calculate expected distribution
+        const expectedDistribution = this.calculateExpectedDistribution(reassignments);
+        const effectivenessScore = this.calculatePlanEffectiveness(expectedDistribution);
+
+        return {
+            planId,
+            reassignments,
+            expectedDistribution,
+            effectivenessScore,
+            createdAt: new Date(),
+            executed: false
+        };
+    }
+
+    /**
+     * Execute a task distribution plan
+     */
+    private async executeTaskDistributionPlan(plan: TaskDistributionPlan): Promise<LoadBalancingResult> {
+        const result: LoadBalancingResult = {
+            success: true,
+            tasksReassigned: 0,
+            agentsAffected: 0,
+            effectiveness: plan.effectivenessScore,
+            duration: 0,
+            errors: [],
+            timestamp: new Date(),
+            reassignmentResults: []
+        };
+
+        const startTime = Date.now();
+        const affectedAgents = new Set<string>();
+
+        for (const reassignment of plan.reassignments) {
+            try {
+                const targetAgent = this.agentManager.getAgent(reassignment.targetAgentId);
+                if (!targetAgent) {
+                    result.errors.push(`Target agent ${reassignment.targetAgentId} not found`);
+                    continue;
+                }
+
+                const reassignmentResult = await this.reassignTask(
+                    reassignment.taskId,
+                    reassignment.currentAgentId,
+                    [targetAgent],
+                    `Load balancing: ${reassignment.reason}`,
+                    this.outputChannel
+                );
+
+                if (reassignmentResult) {
+                    result.tasksReassigned++;
+                    affectedAgents.add(reassignment.currentAgentId);
+                    affectedAgents.add(reassignment.targetAgentId);
+
+                    result.reassignmentResults.push({
+                        taskId: reassignment.taskId,
+                        sourceAgentId: reassignment.currentAgentId,
+                        targetAgentId: reassignment.targetAgentId,
+                        success: true,
+                        timestamp: new Date()
+                    });
+
+                    this.loadBalancingMetrics.taskReassignments++;
+                } else {
+                    result.reassignmentResults.push({
+                        taskId: reassignment.taskId,
+                        sourceAgentId: reassignment.currentAgentId,
+                        targetAgentId: reassignment.targetAgentId,
+                        success: false,
+                        error: 'Reassignment failed',
+                        timestamp: new Date()
+                    });
+                }
+            } catch (error) {
+                result.errors.push(`Failed to reassign task ${reassignment.taskId}: ${error}`);
+                result.reassignmentResults.push({
+                    taskId: reassignment.taskId,
+                    sourceAgentId: reassignment.currentAgentId,
+                    targetAgentId: reassignment.targetAgentId,
+                    success: false,
+                    error: String(error),
+                    timestamp: new Date()
+                });
+            }
+        }
+
+        result.agentsAffected = affectedAgents.size;
+        result.duration = Date.now() - startTime;
+        result.success = result.errors.length === 0;
+
+        // Mark plan as executed
+        plan.executed = true;
+        plan.executedAt = new Date();
+
+        this.outputChannel.appendLine(
+            `⚖️ Executed load balancing plan: ${result.tasksReassigned} tasks reassigned, ${result.agentsAffected} agents affected`
+        );
+
+        return result;
+    }
+
+    /**
+     * Calculate expected distribution after reassignments
+     */
+    private calculateExpectedDistribution(reassignments: TaskReassignment[]): Map<string, AgentWorkload> {
+        const expectedDistribution = new Map<string, AgentWorkload>();
+
+        // Initialize with current workloads
+        for (const [agentId, performance] of this.agentPerformanceHistory) {
+            const currentTasks = this.agentTasksMap.get(agentId)?.size || 0;
+            const cap = Math.max(1, performance.availability.maxCapacity || 0);
+            expectedDistribution.set(agentId, {
+                agentId,
+                currentTasks,
+                maxConcurrentTasks: performance.availability.maxCapacity,
+                utilizationPercentage: (currentTasks / cap) * 100,
+                tasksCompletedLastHour: this.calculateTasksCompletedLastHour(agentId),
+                averageTaskTime: performance.averageExecutionTime,
+                isAvailable: performance.availability.isAvailable,
+                timestamp: new Date()
+            });
+        }
+
+        // Apply reassignments
+        for (const reassignment of reassignments) {
+            const sourceWorkload = expectedDistribution.get(reassignment.currentAgentId);
+            const targetWorkload = expectedDistribution.get(reassignment.targetAgentId);
+
+            if (sourceWorkload && targetWorkload) {
+                sourceWorkload.currentTasks--;
+                sourceWorkload.utilizationPercentage =
+                    (sourceWorkload.currentTasks / Math.max(1, sourceWorkload.maxConcurrentTasks || 0)) * 100;
+
+                targetWorkload.currentTasks++;
+                targetWorkload.utilizationPercentage =
+                    (targetWorkload.currentTasks / Math.max(1, targetWorkload.maxConcurrentTasks || 0)) * 100;
+            }
+        }
+
+        return expectedDistribution;
+    }
+
+    /**
+     * Calculate plan effectiveness score
+     */
+    private calculatePlanEffectiveness(expectedDistribution: Map<string, AgentWorkload>): number {
+        return this.calculateLoadBalancingEffectiveness(expectedDistribution);
+    }
+
+    /**
+     * Calculate agent capacity score for load balancing decisions
+     */
+    private calculateAgentCapacityScore(agentId: string): AgentCapacityScore {
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (!performance) {
+            return {
+                overallScore: 0,
+                capacityScore: 0,
+                performanceScore: 0,
+                availabilityScore: 0,
+                specializationScore: 0,
+                weights: {
+                    capacity: 0.3,
+                    performance: 0.3,
+                    availability: 0.2,
+                    specialization: 0.2
+                },
+                calculatedAt: new Date()
+            };
+        }
+
+        // Calculate individual scores
+        const cap = Math.max(1, performance.availability.maxCapacity || 0);
+        const capacityScore = Math.max(
+            0,
+            100 - (performance.availability.currentLoad / cap) * 100
+        );
+        const performanceScore = performance.qualityScore;
+        const availabilityScore = performance.availability.isAvailable ? 100 : 0;
+        const specializationScore = 75; // Default specialization score
+
+        // Calculate weighted overall score
+        const weights: CapacityScoringWeights = {
+            capacity: 0.3,
+            performance: 0.3,
+            availability: 0.2,
+            specialization: 0.2
+        };
+
+        const overallScore = Math.round(
+            capacityScore * weights.capacity +
+                performanceScore * weights.performance +
+                availabilityScore * weights.availability +
+                specializationScore * weights.specialization
+        );
+
+        const score: AgentCapacityScore = {
+            overallScore,
+            capacityScore,
+            performanceScore,
+            availabilityScore,
+            specializationScore,
+            weights,
+            calculatedAt: new Date()
+        };
+
+        this.agentCapacityScores.set(agentId, score);
+        return score;
+    }
+
+    /**
+     * Check if an agent can handle a specific task
+     */
+    private canAgentHandleTask(agentId: string, task: Task): boolean {
+        const agent = this.agentManager.getAgent(agentId);
+        if (!agent) return false;
+
+        // Check if agent is available
+        const performance = this.agentPerformanceHistory.get(agentId);
+        if (!performance || !performance.availability.isAvailable) return false;
+
+        // Check capacity
+        if (performance.availability.currentLoad >= performance.availability.maxCapacity) return false;
+
+        // Check capabilities (basic check)
+        if (task.requiredCapabilities && task.requiredCapabilities.length > 0) {
+            const agentCapabilities = agent.capabilities || [];
+            const hasRequiredCapabilities = task.requiredCapabilities.every(cap => agentCapabilities.includes(cap));
+            if (!hasRequiredCapabilities) return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Publish load balancing event
+     */
+    private publishLoadBalancingEvent(event: LoadBalancingEvent): void {
+        this.loadBalancingHistory.push(event);
+
+        // Keep only last 100 events
+        if (this.loadBalancingHistory.length > 100) {
+            this.loadBalancingHistory = this.loadBalancingHistory.slice(-100);
+        }
+
+        // Publish to event bus if available
+        if (this.eventBus) {
+            this.eventBus.publish(DOMAIN_EVENTS.LOAD_BALANCING_EVENT, event);
+        }
+
+        this.outputChannel.appendLine(`⚖️ Load balancing event: ${event.type} for agent ${event.agentId}`);
+    }
+
+    /**
+     * Get load balancing configuration
+     */
+    public getLoadBalancingConfig(): LoadBalancingConfig {
+        return { ...this.loadBalancingConfig };
+    }
+
+    /**
+     * Update load balancing configuration
+     */
+    public updateLoadBalancingConfig(config: Partial<LoadBalancingConfig>): void {
+        this.loadBalancingConfig = { ...this.loadBalancingConfig, ...config };
+
+        // Restart monitor if interval changed
+        if (config.monitoringInterval && this.loadBalancingMonitor) {
+            this.stopLoadBalancingMonitor();
+            this.startLoadBalancingMonitor();
+        }
+
+        this.outputChannel.appendLine('⚖️ Load balancing configuration updated');
+    }
+
+    /**
+     * Get load balancing metrics
+     */
+    public getLoadBalancingMetrics(): LoadBalancingMetrics {
+        return { ...this.loadBalancingMetrics };
+    }
+
+    /**
+     * Get load balancing history
+     */
+    public getLoadBalancingHistory(): LoadBalancingEvent[] {
+        return [...this.loadBalancingHistory];
+    }
+
+    /**
+     * Get agent capacity scores
+     */
+    public getAgentCapacityScores(): Map<string, AgentCapacityScore> {
+        return new Map(this.agentCapacityScores);
+    }
+
+    /**
+     * Enhanced calculateAgentWorkloads method with capacity consideration
+     */
+    private calculateAgentWorkloadsEnhanced(
+        assignments: TaskAssignment[]
+    ): Map<string, { count: number; capacity: number; utilization: number }> {
+        const workloads = new Map<string, { count: number; capacity: number; utilization: number }>();
+
+        for (const assignment of assignments) {
+            const current = workloads.get(assignment.agent.id) || { count: 0, capacity: 1, utilization: 0 };
+            const performance = this.agentPerformanceHistory.get(assignment.agent.id);
+            const maxCapacity = performance?.availability.maxCapacity || 1;
+
+            current.count++;
+            current.capacity = maxCapacity;
+            current.utilization = (current.count / Math.max(1, maxCapacity || 0)) * 100;
+
+            workloads.set(assignment.agent.id, current);
+        }
+
+        return workloads;
+    }
+
+    /**
+     * Get optimal agent for task with load balancing consideration
+     */
+    private getOptimalAgentForTask(task: Task, availableAgents: Agent[]): Agent | null {
+        if (availableAgents.length === 0) return null;
+
+        let bestAgent: Agent | null = null;
+        let bestScore = 0;
+
+        for (const agent of availableAgents) {
+            const capacityScore = this.calculateAgentCapacityScore(agent.id);
+            const capabilityScore = this.calculateCapabilityScore(agent, task);
+
+            // Combined score: 60% capacity, 40% capability
+            const combinedScore = capacityScore.overallScore * 0.6 + capabilityScore * 0.4;
+
+            if (combinedScore > bestScore) {
+                bestScore = combinedScore;
+                bestAgent = agent;
+            }
+        }
+
+        return bestAgent;
+    }
+
+    /**
+     * Calculate capability score for agent-task matching
+     */
+    private calculateCapabilityScore(agent: Agent, task: Task): number {
+        if (!task.requiredCapabilities || task.requiredCapabilities.length === 0) {
+            return 100; // No specific requirements
+        }
+
+        const agentCapabilities = agent.capabilities || [];
+        const matchingCapabilities = task.requiredCapabilities.filter(cap => agentCapabilities.includes(cap));
+
+        return (matchingCapabilities.length / task.requiredCapabilities.length) * 100;
+    }
+
+    /**
+     * Distribute workload evenly across available agents
+     */
+    private distributeWorkloadEvenly(availableAgents: Agent[]): Map<string, number> {
+        const distribution = new Map<string, number>();
+        const totalCapacity = availableAgents.reduce((sum, agent) => {
+            const performance = this.agentPerformanceHistory.get(agent.id);
+            return sum + (performance?.availability.maxCapacity || 1);
+        }, 0);
+
+        for (const agent of availableAgents) {
+            const performance = this.agentPerformanceHistory.get(agent.id);
+            const capacity = performance?.availability.maxCapacity || 1;
+            const targetLoad = Math.round((capacity / totalCapacity) * 100);
+            distribution.set(agent.id, targetLoad);
+        }
+
+        return distribution;
     }
 }

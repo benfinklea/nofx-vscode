@@ -1,5 +1,17 @@
-import { expect } from 'chai';
-import * as sinon from 'sinon';
+// Chai replaced with Jest expectations
+import { jest } from '@jest/globals';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockErrorHandler,
+    createMockMetricsService,
+    createMockContainer,
+    createMockExtensionContext,
+    setupVSCodeMocks,
+    resetAllMocks
+} from './../../helpers/mockFactories';
 import { EventEmitter } from 'events';
 import * as child_process from 'child_process';
 import * as vscode from 'vscode';
@@ -13,6 +25,8 @@ import {
 } from '../../../services/TaskToolBridge';
 import { ILoggingService, IConfigurationService } from '../../../services/interfaces';
 
+jest.mock('vscode');
+
 describe('TaskToolBridge', () => {
     let sandbox: sinon.SinonSandbox;
     let taskToolBridge: TaskToolBridge;
@@ -23,38 +37,33 @@ describe('TaskToolBridge', () => {
     let clock: sinon.SinonFakeTimers;
 
     beforeEach(() => {
-        sandbox = sinon.createSandbox();
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockConfigService = createMockConfigurationService();
+        // Jest handles mock cleanup automatically
         clock = sandbox.useFakeTimers();
 
         // Create mock services
-        mockLoggingService = {
-            info: sandbox.stub(),
-            warn: sandbox.stub(),
-            error: sandbox.stub(),
-            debug: sandbox.stub()
-        } as any;
+        mockLoggingService = createMockLoggingService();
 
-        mockConfigService = {
-            get: sandbox.stub(),
-            onDidChange: sandbox.stub().returns({ dispose: sandbox.stub() })
-        } as any;
+        mockConfigService = createMockConfigurationService();
 
         // Configure default config values
-        mockConfigService.get.withArgs('nofx.subAgents.maxTotal', 10).returns(10);
-        mockConfigService.get.withArgs('nofx.subAgents.maxPerAgent', 3).returns(3);
-        mockConfigService.get.withArgs('nofx.subAgents.timeout', 300000).returns(300000);
-        mockConfigService.get.withArgs('nofx.subAgents.retryAttempts', 2).returns(2);
-        mockConfigService.get.withArgs('nofx.subAgents.retryDelay', 1000).returns(1000);
-        mockConfigService.get.withArgs('nofx.aiPath').returns(undefined);
+        mockConfigService.get.withArgs('nofx.subAgents.maxTotal', 10).mockReturnValue(10);
+        mockConfigService.get.withArgs('nofx.subAgents.maxPerAgent', 3).mockReturnValue(3);
+        mockConfigService.get.withArgs('nofx.subAgents.timeout', 300000).mockReturnValue(300000);
+        mockConfigService.get.withArgs('nofx.subAgents.retryAttempts', 2).mockReturnValue(2);
+        mockConfigService.get.withArgs('nofx.subAgents.retryDelay', 1000).mockReturnValue(1000);
+        mockConfigService.get.withArgs('nofx.aiPath').mockReturnValue(undefined);
 
         // Create mock process
         mockProcess = new EventEmitter();
         mockProcess.stdout = new EventEmitter();
         mockProcess.stderr = new EventEmitter();
-        mockProcess.kill = sandbox.stub();
+        mockProcess.kill = jest.fn();
 
         // Stub spawn
-        spawnStub = sandbox.stub(child_process, 'spawn').returns(mockProcess as any);
+        spawnStub = jest.fn(child_process, 'spawn').mockReturnValue(mockProcess as any);
 
         // Create TaskToolBridge instance
         taskToolBridge = new TaskToolBridge(mockLoggingService, mockConfigService);
@@ -62,24 +71,24 @@ describe('TaskToolBridge', () => {
 
     afterEach(() => {
         taskToolBridge.dispose();
-        clock.restore();
-        sandbox.restore();
+        clock.mockRestore();
+        jest.clearAllMocks();
     });
 
     describe('Constructor', () => {
         it('should initialize with correct configuration', () => {
             expect(taskToolBridge).to.be.instanceof(TaskToolBridge);
-            expect(mockLoggingService.info).to.have.been.calledWith('TaskToolBridge initialized');
+            expect(mockLoggingService.info).to.have.been.toHaveBeenCalledWith('TaskToolBridge initialized');
         });
 
         it('should register configuration change listener', () => {
-            expect(mockConfigService.onDidChange).to.have.been.calledOnce;
+            expect(mockConfigService.onDidChange).to.have.been.toHaveBeenCalledTimes(1);
         });
 
         it('should load configuration from config service', () => {
-            expect(mockConfigService.get).to.have.been.calledWith('nofx.subAgents.maxTotal', 10);
-            expect(mockConfigService.get).to.have.been.calledWith('nofx.subAgents.maxPerAgent', 3);
-            expect(mockConfigService.get).to.have.been.calledWith('nofx.subAgents.timeout', 300000);
+            expect(mockConfigService.get).to.have.been.toHaveBeenCalledWith('nofx.subAgents.maxTotal', 10);
+            expect(mockConfigService.get).to.have.been.toHaveBeenCalledWith('nofx.subAgents.maxPerAgent', 3);
+            expect(mockConfigService.get).to.have.been.toHaveBeenCalledWith('nofx.subAgents.timeout', 300000);
         });
     });
 
@@ -100,10 +109,10 @@ describe('TaskToolBridge', () => {
 
             const result = await taskPromise;
 
-            expect(result.status).to.equal('success');
-            expect(result.parentAgentId).to.equal('agent-1');
-            expect(result.type).to.equal(SubAgentType.GENERAL_PURPOSE);
-            expect(result.result).to.include('Task completed');
+            expect(result.status).toBe('success');
+            expect(result.parentAgentId).toBe('agent-1');
+            expect(result.type).toBe(SubAgentType.GENERAL_PURPOSE);
+            expect(result.result).toContain('Task completed');
         });
 
         it('should handle task failure', async () => {
@@ -122,8 +131,8 @@ describe('TaskToolBridge', () => {
 
             const result = await taskPromise;
 
-            expect(result.status).to.equal('error');
-            expect(result.error).to.include('Claude process exited with code 1');
+            expect(result.status).toBe('error');
+            expect(result.error).toContain('Claude process exited with code 1');
         });
 
         it('should handle task timeout', async () => {
@@ -140,9 +149,9 @@ describe('TaskToolBridge', () => {
 
             const result = await taskPromise;
 
-            expect(result.status).to.equal('timeout');
-            expect(result.error).to.include('Task timed out after 1000ms');
-            expect(mockProcess.kill).to.have.been.calledWith('SIGTERM');
+            expect(result.status).toBe('timeout');
+            expect(result.error).toContain('Task timed out after 1000ms');
+            expect(mockProcess.kill).to.have.been.toHaveBeenCalledWith('SIGTERM');
         });
 
         it('should queue task if agent has active tasks', async () => {
@@ -165,7 +174,7 @@ describe('TaskToolBridge', () => {
             // Verify second task is queued
             const queuedTasks = taskToolBridge.getQueuedTasks('agent-1');
             expect(queuedTasks).to.have.lengthOf(1);
-            expect(queuedTasks[0].description).to.equal('Task 2');
+            expect(queuedTasks[0].description).toBe('Task 2');
 
             // Complete first task
             process.nextTick(() => {
@@ -182,12 +191,12 @@ describe('TaskToolBridge', () => {
             });
 
             const result2 = await task2Promise;
-            expect(result2.status).to.equal('success');
+            expect(result2.status).toBe('success');
         });
 
         it('should respect max tasks per agent limit', async () => {
             // Configure max 2 tasks per agent
-            mockConfigService.get.withArgs('nofx.subAgents.maxPerAgent', 3).returns(2);
+            mockConfigService.get.withArgs('nofx.subAgents.maxPerAgent', 3).mockReturnValue(2);
             taskToolBridge = new TaskToolBridge(mockLoggingService, mockConfigService);
 
             // Start two tasks
@@ -216,7 +225,7 @@ describe('TaskToolBridge', () => {
             });
 
             const result = await taskPromise;
-            expect(result.status).to.equal('success');
+            expect(result.status).toBe('success');
         });
 
         it('should pass context to task', async () => {
@@ -233,8 +242,8 @@ describe('TaskToolBridge', () => {
             // Verify spawn was called with prompt containing context
             const spawnCall = spawnStub.getCall(0);
             const prompt = spawnCall.args[1][2];
-            expect(prompt).to.include('Context:');
-            expect(prompt).to.include('test-project');
+            expect(prompt).toContain('Context:');
+            expect(prompt).toContain('test-project');
 
             process.nextTick(() => {
                 mockProcess.stdout.emit('data', JSON.stringify({ result: 'Done' }));
@@ -263,7 +272,7 @@ describe('TaskToolBridge', () => {
             await taskToolBridge.cancelTask(taskId);
 
             // Verify process was killed
-            expect(mockProcess.kill).to.have.been.calledWith('SIGTERM');
+            expect(mockProcess.kill).to.have.been.toHaveBeenCalledWith('SIGTERM');
 
             // Verify task is no longer active
             const remainingTasks = taskToolBridge.getAgentTasks('agent-1');
@@ -275,12 +284,12 @@ describe('TaskToolBridge', () => {
                 await taskToolBridge.cancelTask('non-existent-task');
                 expect.fail('Should have thrown error');
             } catch (error: any) {
-                expect(error.message).to.include('Task non-existent-task not found');
+                expect(error.message).toContain('Task non-existent-task not found');
             }
         });
 
         it('should emit taskCancelled event', async () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             taskToolBridge.on('taskCancelled', eventSpy);
 
             const taskPromise = taskToolBridge.executeTaskForAgent(
@@ -293,9 +302,9 @@ describe('TaskToolBridge', () => {
             const taskId = taskToolBridge.getAgentTasks('agent-1')[0].id;
             await taskToolBridge.cancelTask(taskId);
 
-            expect(eventSpy).to.have.been.calledOnce;
-            const event = eventSpy.getCall(0).args[0];
-            expect(event.status).to.equal('cancelled');
+            expect(eventSpy).to.have.been.toHaveBeenCalledTimes(1);
+            const event = eventSpy.mock.calls[0][0];
+            expect(event.status).toBe('cancelled');
         });
     });
 
@@ -334,7 +343,7 @@ describe('TaskToolBridge', () => {
 
     describe('Event Emissions', () => {
         it('should emit taskStarted event', async () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             taskToolBridge.on('taskStarted', eventSpy);
 
             const taskPromise = taskToolBridge.executeTaskForAgent(
@@ -346,14 +355,14 @@ describe('TaskToolBridge', () => {
 
             await new Promise(resolve => process.nextTick(resolve));
 
-            expect(eventSpy).to.have.been.calledOnce;
-            const emittedTask = eventSpy.getCall(0).args[0];
-            expect(emittedTask.parentAgentId).to.equal('agent-1');
-            expect(emittedTask.description).to.equal('Task');
+            expect(eventSpy).to.have.been.toHaveBeenCalledTimes(1);
+            const emittedTask = eventSpy.mock.calls[0][0];
+            expect(emittedTask.parentAgentId).toBe('agent-1');
+            expect(emittedTask.description).toBe('Task');
         });
 
         it('should emit taskCompleted event on success', async () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             taskToolBridge.on('taskCompleted', eventSpy);
 
             const taskPromise = taskToolBridge.executeTaskForAgent(
@@ -370,13 +379,13 @@ describe('TaskToolBridge', () => {
 
             await taskPromise;
 
-            expect(eventSpy).to.have.been.calledOnce;
-            const result = eventSpy.getCall(0).args[0];
-            expect(result.status).to.equal('success');
+            expect(eventSpy).to.have.been.toHaveBeenCalledTimes(1);
+            const result = eventSpy.mock.calls[0][0];
+            expect(result.status).toBe('success');
         });
 
         it('should emit taskFailed event on error', async () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             taskToolBridge.on('taskFailed', eventSpy);
 
             const taskPromise = taskToolBridge.executeTaskForAgent(
@@ -392,13 +401,13 @@ describe('TaskToolBridge', () => {
 
             await taskPromise;
 
-            expect(eventSpy).to.have.been.calledOnce;
-            const result = eventSpy.getCall(0).args[0];
-            expect(result.status).to.equal('error');
+            expect(eventSpy).to.have.been.toHaveBeenCalledTimes(1);
+            const result = eventSpy.mock.calls[0][0];
+            expect(result.status).toBe('error');
         });
 
         it('should emit taskTimeout event', async () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             taskToolBridge.on('taskTimeout', eventSpy);
 
             const taskPromise = taskToolBridge.executeTaskForAgent(
@@ -413,13 +422,13 @@ describe('TaskToolBridge', () => {
 
             await taskPromise;
 
-            expect(eventSpy).to.have.been.calledOnce;
-            const result = eventSpy.getCall(0).args[0];
-            expect(result.status).to.equal('timeout');
+            expect(eventSpy).to.have.been.toHaveBeenCalledTimes(1);
+            const result = eventSpy.mock.calls[0][0];
+            expect(result.status).toBe('timeout');
         });
 
         it('should emit taskQueued event', async () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             taskToolBridge.on('taskQueued', eventSpy);
 
             // Start first task to occupy the agent
@@ -430,13 +439,13 @@ describe('TaskToolBridge', () => {
 
             await new Promise(resolve => process.nextTick(resolve));
 
-            expect(eventSpy).to.have.been.calledOnce;
-            const queuedTask = eventSpy.getCall(0).args[0];
-            expect(queuedTask.description).to.equal('T2');
+            expect(eventSpy).to.have.been.toHaveBeenCalledTimes(1);
+            const queuedTask = eventSpy.mock.calls[0][0];
+            expect(queuedTask.description).toBe('T2');
         });
 
         it('should emit taskProgress events', async () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             taskToolBridge.on('taskProgress', eventSpy);
 
             const taskPromise = taskToolBridge.executeTaskForAgent(
@@ -454,8 +463,8 @@ describe('TaskToolBridge', () => {
 
             await taskPromise;
 
-            expect(eventSpy).to.have.been.calledTwice;
-            expect(eventSpy.getCall(0).args[0].progress).to.equal(50);
+            expect(eventSpy).to.have.been.toHaveBeenCalledTimes(2);
+            expect(eventSpy.mock.calls[0][0].progress).to.equal(50);
             expect(eventSpy.getCall(1).args[0].progress).to.equal(100);
         });
     });
@@ -477,9 +486,9 @@ describe('TaskToolBridge', () => {
             await taskPromise;
 
             const stats = taskToolBridge.getStats();
-            expect(stats.totalTasks).to.equal(1);
-            expect(stats.successfulTasks).to.equal(1);
-            expect(stats.failedTasks).to.equal(0);
+            expect(stats.totalTasks).toBe(1);
+            expect(stats.successfulTasks).toBe(1);
+            expect(stats.failedTasks).toBe(0);
         });
 
         it('should track failed tasks', async () => {
@@ -497,7 +506,7 @@ describe('TaskToolBridge', () => {
             await taskPromise;
 
             const stats = taskToolBridge.getStats();
-            expect(stats.failedTasks).to.equal(1);
+            expect(stats.failedTasks).toBe(1);
         });
 
         it('should track timeout tasks', async () => {
@@ -514,7 +523,7 @@ describe('TaskToolBridge', () => {
             await taskPromise;
 
             const stats = taskToolBridge.getStats();
-            expect(stats.timeoutTasks).to.equal(1);
+            expect(stats.timeoutTasks).toBe(1);
         });
 
         it('should track cancelled tasks', async () => {
@@ -529,7 +538,7 @@ describe('TaskToolBridge', () => {
             await taskToolBridge.cancelTask(taskId);
 
             const stats = taskToolBridge.getStats();
-            expect(stats.cancelledTasks).to.equal(1);
+            expect(stats.cancelledTasks).toBe(1);
         });
 
         it('should calculate average execution time', async () => {
@@ -581,17 +590,17 @@ describe('TaskToolBridge', () => {
             const agent1Stats = taskToolBridge.getAgentStats('agent-1');
             const agent2Stats = taskToolBridge.getAgentStats('agent-2');
 
-            expect(agent1Stats.activeTasks + agent1Stats.queuedTasks).to.equal(2);
-            expect(agent2Stats.activeTasks).to.equal(1);
+            expect(agent1Stats.activeTasks + agent1Stats.queuedTasks).toBe(2);
+            expect(agent2Stats.activeTasks).toBe(1);
         });
     });
 
     describe('Configuration changes', () => {
         it('should update configuration on change', () => {
-            const changeCallback = mockConfigService.onDidChange.getCall(0).args[0];
+            const changeCallback = mockConfigService.onDidChange.mock.calls[0][0];
 
             // Update config values
-            mockConfigService.get.withArgs('nofx.subAgents.maxPerAgent', 3).returns(5);
+            mockConfigService.get.withArgs('nofx.subAgents.maxPerAgent', 3).mockReturnValue(5);
 
             // Trigger configuration change
             const event = {
@@ -600,7 +609,7 @@ describe('TaskToolBridge', () => {
 
             changeCallback(event);
 
-            expect(mockLoggingService.info).to.have.been.calledWith('TaskToolBridge configuration updated');
+            expect(mockLoggingService.info).to.have.been.toHaveBeenCalledWith('TaskToolBridge configuration updated');
         });
     });
 
@@ -617,8 +626,8 @@ describe('TaskToolBridge', () => {
 
             const result = await taskPromise;
 
-            expect(result.status).to.equal('error');
-            expect(result.error).to.include('Cannot spawn process');
+            expect(result.status).toBe('error');
+            expect(result.error).toContain('Cannot spawn process');
         });
 
         it('should handle invalid JSON output', async () => {
@@ -636,8 +645,8 @@ describe('TaskToolBridge', () => {
 
             const result = await taskPromise;
 
-            expect(result.status).to.equal('success');
-            expect(result.result).to.equal('Not valid JSON output');
+            expect(result.status).toBe('success');
+            expect(result.result).toBe('Not valid JSON output');
         });
 
         it('should handle process stderr output', async () => {
@@ -656,7 +665,7 @@ describe('TaskToolBridge', () => {
 
             const result = await taskPromise;
 
-            expect(result.status).to.equal('success');
+            expect(result.status).toBe('success');
         });
     });
 
@@ -672,8 +681,8 @@ describe('TaskToolBridge', () => {
             // Verify cleanup
             expect(taskToolBridge.getAgentTasks('agent-1')).to.have.lengthOf(0);
             expect(taskToolBridge.getAgentTasks('agent-2')).to.have.lengthOf(0);
-            expect(mockProcess.kill).to.have.been.called;
-            expect(mockLoggingService.info).to.have.been.calledWith('TaskToolBridge disposed');
+            expect(mockProcess.kill).toHaveBeenCalled;
+            expect(mockLoggingService.info).to.have.been.toHaveBeenCalledWith('TaskToolBridge disposed');
         });
 
         it('should remove all event listeners on dispose', () => {
@@ -732,7 +741,7 @@ describe('TaskToolBridge', () => {
             });
 
             const result = await taskPromise;
-            expect(result.status).to.equal('success');
+            expect(result.status).toBe('success');
         });
 
         it('should handle very long output', async () => {
@@ -751,7 +760,7 @@ describe('TaskToolBridge', () => {
             });
 
             const result = await taskPromise;
-            expect(result.status).to.equal('success');
+            expect(result.status).toBe('success');
             expect(result.result).to.have.length.greaterThan(9000);
         });
     });

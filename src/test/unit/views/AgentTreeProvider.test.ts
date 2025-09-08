@@ -2,6 +2,17 @@ import * as vscode from 'vscode';
 import { AgentTreeProvider } from '../../../views/AgentTreeProvider';
 import { ITreeStateManager, IUIStateManager } from '../../../services/interfaces';
 import { normalizeAgentStatus, normalizeTaskStatus } from '../../../types/ui';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock VS Code API
 jest.mock('vscode');
@@ -14,6 +25,8 @@ describe('AgentTreeProvider', () => {
     let mockDisposables: vscode.Disposable[];
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.clearAllMocks();
         mockDisposables = [];
         mockRefreshFire = jest.fn();

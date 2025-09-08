@@ -202,7 +202,15 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
      * Returns all tasks as an array (for inspection)
      */
     toArray(): Task[] {
-        return [...this.readyHeap.map(item => item.task), ...this.validatedHeap.map(item => item.task)];
+        const allItems = [...this.readyHeap, ...this.validatedHeap];
+        // Sort by priority order: high > medium > low, then by timestamp (FIFO)
+        allItems.sort((a, b) => {
+            if (a.priority !== b.priority) {
+                return b.priority - a.priority; // Higher priority first (descending)
+            }
+            return a.timestamp - b.timestamp; // FIFO for same priority (older first)
+        });
+        return allItems.map(item => item.task);
     }
 
     /**
@@ -225,6 +233,9 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
             const oldPriority = item.priority;
             item.priority = newPriority;
 
+            // Also update the task's numericPriority field
+            item.task.numericPriority = newPriority;
+
             // Restore heap property
             if (newPriority > oldPriority) {
                 this.bubbleUp(this.readyHeap, readyIndex);
@@ -242,6 +253,9 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
             const item = this.validatedHeap[validatedIndex];
             const oldPriority = item.priority;
             item.priority = newPriority;
+
+            // Also update the task's numericPriority field
+            item.task.numericPriority = newPriority;
 
             // Restore heap property
             if (newPriority > oldPriority) {

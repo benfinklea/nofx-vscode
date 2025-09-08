@@ -2,6 +2,17 @@ import { TaskDependencyManager } from '../../../tasks/TaskDependencyManager';
 import { ILoggingService, IEventBus, INotificationService } from '../../../services/interfaces';
 import { Task } from '../../../agents/types';
 import { DOMAIN_EVENTS } from '../../../services/EventConstants';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 describe('TaskDependencyManager', () => {
     let manager: TaskDependencyManager;
@@ -24,30 +35,14 @@ describe('TaskDependencyManager', () => {
     });
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.clearAllMocks();
 
         // Mock services
-        mockLoggingService = {
-            log: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            debug: jest.fn()
-        };
+        mockLoggingService = createMockLoggingService();
 
-        mockEventBus = {
-            publish: jest.fn(),
-            subscribe: jest.fn(),
-            unsubscribe: jest.fn()
-        } as any;
-
-        mockNotificationService = {
-            showInformation: jest.fn(),
-            showWarning: jest.fn(),
-            showError: jest.fn(),
-            showInputBox: jest.fn(),
-            showQuickPick: jest.fn()
-        } as any;
+        mockNotificationService = createMockNotificationService();
 
         manager = new TaskDependencyManager(mockLoggingService, mockEventBus, mockNotificationService);
     });

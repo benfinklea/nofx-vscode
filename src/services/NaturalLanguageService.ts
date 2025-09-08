@@ -44,8 +44,9 @@ export class NaturalLanguageService {
     private initializePatterns(): void {
         // Spawn agent patterns
         this.patterns.push({
-            pattern: /(?:add|spawn|create|start)\s+(?:a\s+)?(\w+)(?:\s+(?:agent|dev|developer|specialist|engineer))?(?:\s+(?:called|named)\s+["']?([^"']+)["']?)?/i,
-            converter: (matches) => ({
+            pattern:
+                /(?:add|spawn|create|start)\s+(?:a\s+)?(\w+)(?:\s+(?:agent|dev|developer|specialist|engineer))?(?:\s+(?:called|named)\s+["']?([^"']+)["']?)?/i,
+            converter: matches => ({
                 type: 'spawn',
                 role: this.normalizeAgentType(matches[1]),
                 name: matches[2] || undefined
@@ -69,7 +70,7 @@ export class NaturalLanguageService {
 
         this.patterns.push({
             pattern: /(?:what'?s?|show|get)\s+(?:agent[-\s])?(\d+|[a-zA-Z][\w-]*)\s+(?:doing|status|working on)?/i,
-            converter: (matches) => ({
+            converter: matches => ({
                 type: 'status',
                 agentId: `agent-${matches[1]}`
             }),
@@ -81,7 +82,7 @@ export class NaturalLanguageService {
         // Task assignment patterns
         this.patterns.push({
             pattern: /(?:assign|give|delegate)\s+["']?(.+?)["']?\s+to\s+(?:agent[-\s])?(\d+|[a-zA-Z][\w-]*)/i,
-            converter: (matches) => ({
+            converter: matches => ({
                 type: 'assign',
                 task: matches[1],
                 agentId: `agent-${matches[2]}`,
@@ -94,7 +95,7 @@ export class NaturalLanguageService {
 
         this.patterns.push({
             pattern: /(?:have|tell|ask)\s+(?:agent[-\s])?(\d+|[a-zA-Z][\w-]*)\s+(?:to\s+)?(.+)/i,
-            converter: (matches) => ({
+            converter: matches => ({
                 type: 'assign',
                 agentId: `agent-${matches[1]}`,
                 task: matches[2],
@@ -108,7 +109,7 @@ export class NaturalLanguageService {
         // Termination patterns
         this.patterns.push({
             pattern: /(?:terminate|stop|remove|dismiss|kill)\s+(?:agent[-\s])?(\d+|[a-zA-Z][\w-]*|all)/i,
-            converter: (matches) => ({
+            converter: matches => ({
                 type: 'terminate',
                 agentId: matches[1] === 'all' ? 'all' : `agent-${matches[1]}`
             }),
@@ -120,7 +121,7 @@ export class NaturalLanguageService {
         // Priority task patterns
         this.patterns.push({
             pattern: /(?:urgent|high priority|asap|immediately)\s*:?\s*(.+)/i,
-            converter: (matches) => ({
+            converter: matches => ({
                 type: 'assign',
                 task: matches[1],
                 priority: 'high',
@@ -134,7 +135,7 @@ export class NaturalLanguageService {
         // Team presets
         this.patterns.push({
             pattern: /(?:start|create|spawn|assemble)\s+(?:a\s+)?(\w+)\s+team/i,
-            converter: (matches) => ({
+            converter: matches => ({
                 type: 'spawn_team',
                 preset: this.normalizeTeamPreset(matches[1])
             }),
@@ -185,98 +186,98 @@ export class NaturalLanguageService {
                     isFromCache: true
                 };
             }
-        const trimmedInput = input.trim();
-        
-        // Check if it's already JSON with robust parsing
-        if (trimmedInput.startsWith('{')) {
-            try {
-                const json = JSON.parse(trimmedInput);
-                
-                // Validate JSON structure
-                if (!json.type || typeof json.type !== 'string') {
-                    throw new Error('JSON command must have a type field');
-                }
-                
-                const result = {
-                    command: this.sanitizeCommand(json),
-                    confidence: 1.0,
-                    interpretation: 'Raw JSON command'
-                };
-                
-                this.recordSuccess(input, result);
-                return result;
-            } catch (error) {
-                this.loggingService?.warn('Invalid JSON in input, attempting natural language parsing:', error);
-                // Continue with natural language parsing as fallback
-            }
-        }
+            const trimmedInput = input.trim();
 
-        // Try to match patterns
-        let bestMatch: { command: any; confidence: number; description: string } | null = null;
-        
-        for (const pattern of this.patterns) {
-            const matches = trimmedInput.match(pattern.pattern);
-            if (matches) {
-                const command = pattern.converter(matches);
-                if (!bestMatch || pattern.confidence > bestMatch.confidence) {
-                    bestMatch = {
-                        command,
-                        confidence: pattern.confidence,
-                        description: pattern.description
+            // Check if it's already JSON with robust parsing
+            if (trimmedInput.startsWith('{')) {
+                try {
+                    const json = JSON.parse(trimmedInput);
+
+                    // Validate JSON structure
+                    if (!json.type || typeof json.type !== 'string') {
+                        throw new Error('JSON command must have a type field');
+                    }
+
+                    const result = {
+                        command: this.sanitizeCommand(json),
+                        confidence: 1.0,
+                        interpretation: 'Raw JSON command'
+                    };
+
+                    this.recordSuccess(input, result);
+                    return result;
+                } catch (error) {
+                    this.loggingService?.warn('Invalid JSON in input, attempting natural language parsing:', error);
+                    // Continue with natural language parsing as fallback
+                }
+            }
+
+            // Try to match patterns
+            let bestMatch: { command: any; confidence: number; description: string } | null = null;
+
+            for (const pattern of this.patterns) {
+                const matches = trimmedInput.match(pattern.pattern);
+                if (matches) {
+                    const command = pattern.converter(matches);
+                    if (!bestMatch || pattern.confidence > bestMatch.confidence) {
+                        bestMatch = {
+                            command,
+                            confidence: pattern.confidence,
+                            description: pattern.description
+                        };
+                    }
+                }
+            }
+
+            if (bestMatch) {
+                try {
+                    const sanitizedCommand = this.sanitizeCommand(bestMatch.command);
+
+                    this.loggingService?.debug('Natural language parsed:', {
+                        input: trimmedInput,
+                        command: sanitizedCommand,
+                        confidence: bestMatch.confidence
+                    });
+
+                    const result = {
+                        command: sanitizedCommand,
+                        confidence: bestMatch.confidence,
+                        interpretation: `${bestMatch.description}: ${JSON.stringify(sanitizedCommand)}`
+                    };
+
+                    this.recordSuccess(input, result);
+                    return result;
+                } catch (error) {
+                    this.loggingService?.error('Error processing matched command:', error);
+                    this.recordFailure();
+
+                    return {
+                        command: null,
+                        confidence: 0,
+                        interpretation: 'Error processing command',
+                        error: error instanceof Error ? error.message : 'Unknown error',
+                        suggestions: this.getSuggestions(trimmedInput)
                     };
                 }
             }
-        }
 
-        if (bestMatch) {
-            try {
-                const sanitizedCommand = this.sanitizeCommand(bestMatch.command);
-                
-                this.loggingService?.debug('Natural language parsed:', {
-                    input: trimmedInput,
-                    command: sanitizedCommand,
-                    confidence: bestMatch.confidence
-                });
+            // No match found, provide suggestions
+            const suggestions = this.getSuggestions(trimmedInput);
 
-                const result = {
-                    command: sanitizedCommand,
-                    confidence: bestMatch.confidence,
-                    interpretation: `${bestMatch.description}: ${JSON.stringify(sanitizedCommand)}`
-                };
-                
-                this.recordSuccess(input, result);
-                return result;
-            } catch (error) {
-                this.loggingService?.error('Error processing matched command:', error);
-                this.recordFailure();
-                
-                return {
-                    command: null,
-                    confidence: 0,
-                    interpretation: 'Error processing command',
-                    error: error instanceof Error ? error.message : 'Unknown error',
-                    suggestions: this.getSuggestions(trimmedInput)
-                };
-            }
-        }
+            this.recordFailure();
 
-        // No match found, provide suggestions
-        const suggestions = this.getSuggestions(trimmedInput);
-        
-        this.recordFailure();
-        
-        return {
-            command: null,
-            confidence: 0,
-            interpretation: 'Could not understand command',
-            suggestions,
-            error: 'No matching pattern found'
-        };
+            return {
+                command: null,
+                confidence: 0,
+                interpretation: 'Could not understand command',
+                suggestions,
+                error: 'No matching pattern found'
+            };
         } catch (error) {
             // Catastrophic failure - log and return safe default
             this.loggingService?.error('Catastrophic failure in parseNaturalLanguage:', error);
             this.recordFailure();
-            
+
             return {
                 command: null,
                 confidence: 0,
@@ -314,31 +315,31 @@ export class NaturalLanguageService {
      */
     private normalizeAgentType(type: string): string {
         const normalized = type.toLowerCase().replace(/[-_\s]+/g, '-');
-        
+
         const typeMap: Record<string, string> = {
-            'frontend': 'frontend-specialist',
-            'front': 'frontend-specialist',
-            'ui': 'frontend-specialist',
-            'backend': 'backend-specialist',
-            'back': 'backend-specialist',
-            'api': 'backend-specialist',
-            'fullstack': 'fullstack-developer',
-            'full': 'fullstack-developer',
-            'test': 'testing-specialist',
-            'testing': 'testing-specialist',
-            'qa': 'testing-specialist',
-            'devops': 'devops-engineer',
-            'ops': 'devops-engineer',
-            'ai': 'ai-ml-specialist',
-            'ml': 'ai-ml-specialist',
-            'mobile': 'mobile-developer',
-            'ios': 'mobile-developer',
-            'android': 'mobile-developer',
-            'security': 'security-expert',
-            'sec': 'security-expert',
-            'database': 'database-architect',
-            'db': 'database-architect',
-            'data': 'database-architect'
+            frontend: 'frontend-specialist',
+            front: 'frontend-specialist',
+            ui: 'frontend-specialist',
+            backend: 'backend-specialist',
+            back: 'backend-specialist',
+            api: 'backend-specialist',
+            fullstack: 'fullstack-developer',
+            full: 'fullstack-developer',
+            test: 'testing-specialist',
+            testing: 'testing-specialist',
+            qa: 'testing-specialist',
+            devops: 'devops-engineer',
+            ops: 'devops-engineer',
+            ai: 'ai-ml-specialist',
+            ml: 'ai-ml-specialist',
+            mobile: 'mobile-developer',
+            ios: 'mobile-developer',
+            android: 'mobile-developer',
+            security: 'security-expert',
+            sec: 'security-expert',
+            database: 'database-architect',
+            db: 'database-architect',
+            data: 'database-architect'
         };
 
         return typeMap[normalized] || `${normalized}-specialist`;
@@ -350,14 +351,14 @@ export class NaturalLanguageService {
     private normalizeTeamPreset(preset: string | undefined): string {
         if (!preset) return 'standard-team';
         const normalized = preset.toLowerCase();
-        
+
         const presetMap: Record<string, string> = {
-            'small': 'small-team',
-            'standard': 'standard-team',
-            'large': 'large-team',
-            'fullstack': 'fullstack-team',
-            'full': 'fullstack-team',
-            'custom': 'custom-team'
+            small: 'small-team',
+            standard: 'standard-team',
+            large: 'large-team',
+            fullstack: 'fullstack-team',
+            full: 'fullstack-team',
+            custom: 'custom-team'
         };
 
         return presetMap[normalized] || 'standard-team';
@@ -366,26 +367,19 @@ export class NaturalLanguageService {
     /**
      * Show interpretation dialog for confirmation
      */
-    public async confirmInterpretation(
-        interpretation: string,
-        command: any
-    ): Promise<boolean> {
+    public async confirmInterpretation(interpretation: string, command: any): Promise<boolean> {
         const message = `I understood: ${interpretation}\n\nExecute this command?`;
-        const result = await vscode.window.showInformationMessage(
-            message,
-            { modal: false },
-            'Yes',
-            'No',
-            'Show JSON'
-        );
+        const result = await vscode.window.showInformationMessage(message, { modal: false }, 'Yes', 'No', 'Show JSON');
 
         if (result === 'Show JSON') {
-            await vscode.window.showInformationMessage(
-                `JSON Command:\n${JSON.stringify(command, null, 2)}`,
-                { modal: true },
-                'Execute',
-                'Cancel'
-            ).then(r => r === 'Execute');
+            await vscode.window
+                .showInformationMessage(
+                    `JSON Command:\n${JSON.stringify(command, null, 2)}`,
+                    { modal: true },
+                    'Execute',
+                    'Cancel'
+                )
+                .then(r => r === 'Execute');
         }
 
         return result === 'Yes';
@@ -398,12 +392,12 @@ export class NaturalLanguageService {
         if (!command || typeof command !== 'object') {
             throw new Error('Command must be an object');
         }
-        
+
         // Ensure required fields
         if (!command.type) {
             throw new Error('Command must have a type field');
         }
-        
+
         // Sanitize string fields
         const sanitized: any = {};
         for (const [key, value] of Object.entries(command)) {
@@ -414,10 +408,10 @@ export class NaturalLanguageService {
                 sanitized[key] = value;
             }
         }
-        
+
         return sanitized;
     }
-    
+
     /**
      * Record successful parse for caching and metrics
      */
@@ -425,7 +419,7 @@ export class NaturalLanguageService {
         this.failureCount = 0;
         this.lastSuccessfulParse = new Date();
         this.isHealthy = true;
-        
+
         // Add to cache with size limit
         if (this.commandHistory.size >= this.CACHE_SIZE) {
             const firstKey = this.commandHistory.keys().next().value;
@@ -435,19 +429,19 @@ export class NaturalLanguageService {
         }
         this.commandHistory.set(input, result);
     }
-    
+
     /**
      * Record parse failure for health monitoring
      */
     private recordFailure(): void {
         this.failureCount++;
-        
+
         if (this.failureCount > this.MAX_FAILURES) {
             this.isHealthy = false;
             this.loggingService?.error(`NaturalLanguageService unhealthy: ${this.failureCount} consecutive failures`);
         }
     }
-    
+
     /**
      * Get service health status
      */
@@ -464,7 +458,7 @@ export class NaturalLanguageService {
             cacheSize: this.commandHistory.size
         };
     }
-    
+
     /**
      * Reset service to healthy state
      */
@@ -474,7 +468,7 @@ export class NaturalLanguageService {
         this.commandHistory.clear();
         this.loggingService?.info('NaturalLanguageService reset to healthy state');
     }
-    
+
     /**
      * Get all available example commands
      */
@@ -489,7 +483,7 @@ export class NaturalLanguageService {
             return examples;
         } catch (error) {
             this.loggingService?.error('Error getting examples:', error);
-            return ['add a frontend dev', 'assign task to agent-1', 'what\'s everyone doing?'];
+            return ['add a frontend dev', 'assign task to agent-1', "what's everyone doing?"];
         }
     }
 }

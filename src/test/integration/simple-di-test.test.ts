@@ -1,8 +1,19 @@
-import { createIntegrationContainer } from '../utils/TestHelpers';
+import { createIntegrationContainer } from './../utils/TestHelpers';
 import { SERVICE_TOKENS } from '../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
 
 describe('Simple DI Container Test', () => {
-    it('should create container and resolve services', () => {
+    it('should create container and resolve services', async () => {
         const container = createIntegrationContainer();
 
         // Test resolving EventBus
@@ -27,7 +38,7 @@ describe('Simple DI Container Test', () => {
         const priorityQueue = container.resolve(SERVICE_TOKENS.PriorityTaskQueue);
         expect(priorityQueue).toBeDefined();
 
-        // Cleanup
-        container.dispose();
+        // Cleanup - await async disposal
+        await container.dispose();
     });
 });

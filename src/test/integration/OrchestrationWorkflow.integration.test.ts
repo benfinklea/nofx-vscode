@@ -22,6 +22,17 @@ import {
 } from '../../orchestration/MessageProtocol';
 import { ORCH_EVENTS } from '../../services/EventConstants';
 import { createTestContainer, createMockAgent, waitForEvent, measureTime } from '../setup';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
 
 // Mock WebSocket for integration testing
 class MockWebSocketClient {
@@ -60,6 +71,20 @@ class MockWebSocketClient {
     }
 }
 
+jest.setTimeout(10000);
+
+jest.mock('ws', () => ({
+    WebSocketServer: jest.fn().mockImplementation(() => ({
+        on: jest.fn((event: string, callback: any) => {
+            if (event === 'listening') {
+                // Immediately call listening callback to simulate successful start
+                setTimeout(() => callback(), 0);
+            }
+        }),
+        close: jest.fn()
+    })),
+    WebSocket: jest.fn()
+}));
 describe('Orchestration Workflow Integration Tests', () => {
     let orchestrationServer: OrchestrationServer;
     let mockLoggingService: jest.Mocked<ILoggingService>;
@@ -73,12 +98,16 @@ describe('Orchestration Workflow Integration Tests', () => {
     let mockWebSocketClient: MockWebSocketClient;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Reset all mocks
         jest.clearAllMocks();
 
         // Create comprehensive mock services
         mockLoggingService = {
+            trace: jest.fn(),
             debug: jest.fn(),
+            agents: jest.fn(),
             info: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
@@ -102,9 +131,12 @@ describe('Orchestration Workflow Integration Tests', () => {
 
         mockErrorHandler = {
             handleError: jest.fn(),
-            handleAsync: jest.fn(),
-            wrapSync: jest.fn(),
-            withRetry: jest.fn(),
+            handleAsync: jest.fn(async (operation: () => Promise<any>, context?: string) => {
+                // Actually execute the operation for tests to work
+                return await operation();
+            }),
+            wrapSync: jest.fn((operation: () => any) => operation()),
+            withRetry: jest.fn(async (operation: () => Promise<any>) => await operation()),
             dispose: jest.fn()
         };
 
@@ -203,6 +235,12 @@ describe('Orchestration Workflow Integration Tests', () => {
                 });
             }),
             setDashboardCallback: jest.fn(),
+            clearDashboardCallback: jest.fn(),
+            getDeliveryStats: jest.fn(() => ({
+                totalSent: 0,
+                totalDelivered: 0,
+                failureRate: 0
+            })),
             dispose: jest.fn()
         };
 

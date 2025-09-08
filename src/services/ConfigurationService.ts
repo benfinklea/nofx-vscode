@@ -174,12 +174,20 @@ export class ConfigurationService implements IConfigurationService {
         return this.get<boolean>(CONFIG_KEYS.USE_WORKTREES, true);
     }
 
+    isAutoManageWorktrees(): boolean {
+        return this.get<boolean>(CONFIG_KEYS.AUTO_MANAGE_WORKTREES, true);
+    }
+
     isShowAgentTerminalOnSpawn(): boolean {
         return this.get<boolean>(CONFIG_KEYS.SHOW_AGENT_TERMINAL_ON_SPAWN, false);
     }
 
     isClaudeSkipPermissions(): boolean {
         return this.get<boolean>(CONFIG_KEYS.CLAUDE_SKIP_PERMISSIONS, false);
+    }
+
+    getClaudeInitializationDelay(): number {
+        return this.get<number>(CONFIG_KEYS.CLAUDE_INITIALIZATION_DELAY, 15);
     }
 
     getTemplatesPath(): string {
@@ -281,10 +289,24 @@ export class ConfigurationService implements IConfigurationService {
             return this.validationCache.get(cacheKey)!;
         }
 
-        const validation = this.validator.validateConfigurationKey(key, value);
-        this.validationCache.set(cacheKey, validation);
-
-        return validation;
+        try {
+            const validation = this.validator.validateConfigurationKey(key, value);
+            this.validationCache.set(cacheKey, validation);
+            return validation;
+        } catch (error) {
+            // Handle validator errors gracefully
+            const errorMessage = error instanceof Error ? error.message : 'Unknown validation error';
+            return {
+                isValid: false,
+                errors: [
+                    {
+                        field: key,
+                        message: errorMessage,
+                        severity: 'error'
+                    }
+                ]
+            };
+        }
     }
 
     // Configuration migration and backup methods

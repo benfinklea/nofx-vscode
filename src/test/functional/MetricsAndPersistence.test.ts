@@ -17,11 +17,24 @@ import { TaskDependencyManager } from '../../tasks/TaskDependencyManager';
 import { PriorityTaskQueue } from '../../tasks/PriorityTaskQueue';
 import { setupExtension, teardownExtension, setupMockWorkspace, clearMockWorkspace } from './setup';
 import { __getContainerForTests } from '../../extension';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
 
 /**
  * Comprehensive tests for metrics collection and data persistence
  * Note: These tests require real filesystem access. Set MOCK_FS=false or use memfs.
  */
+jest.mock('vscode');
+
 describe('Metrics and Persistence', () => {
     let container: IContainer;
     let context: vscode.ExtensionContext;
@@ -44,6 +57,8 @@ describe('Metrics and Persistence', () => {
     });
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Get the same container instance as the activated extension
         const activated = __getContainerForTests();
         if (!activated) throw new Error('Activated container not available');
@@ -128,7 +143,7 @@ describe('Metrics and Persistence', () => {
 
             // Simulate agent spawn
             const resolvedEventBus = container.resolve(SERVICE_TOKENS.EventBus);
-            resolvedEventBus.publish(DOMAIN_EVENTS.AGENT_SPAWNED, {
+            resolvedEventBus.publish(DOMAIN_EVENTS.AGENT_LIFECYCLE_SPAWNED, {
                 agentId: 'agent-1',
                 timestamp: Date.now()
             });

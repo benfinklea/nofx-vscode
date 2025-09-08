@@ -1,0 +1,488 @@
+/* Modern NofX Panel - Clean, Compact Design */
+:root {
+    --panel-bg: var(--vscode-sideBar-background);
+    --panel-fg: var(--vscode-sideBar-foreground);
+    --panel-border: var(--vscode-panel-border);
+    --hover-bg: var(--vscode-list-hoverBackground);
+    --active-bg: var(--vscode-list-activeSelectionBackground);
+    --active-fg: var(--vscode-list-activeSelectionForeground);
+    --button-bg: var(--vscode-button-background);
+    --button-fg: var(--vscode-button-foreground);
+    --button-hover: var(--vscode-button-hoverBackground);
+    --secondary-fg: var(--vscode-descriptionForeground);
+    --accent-color: var(--vscode-focusBorder);
+    --warning-color: var(--vscode-editorWarning-foreground);
+    --success-color: var(--vscode-terminal-ansiGreen);
+    --input-bg: var(--vscode-input-background);
+    --input-border: var(--vscode-input-border);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--panel-fg);
+    background: var(--panel-bg);
+    overflow: hidden;
+}
+
+.panel-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Header - Workspace info and status */
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--panel-border);
+    min-height: 32px;
+}
+
+.workspace-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.workspace-icon {
+    font-size: 14px;
+}
+
+.workspace-name {
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--panel-fg);
+}
+
+.status-indicators {
+    display: flex;
+    gap: 8px;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    font-size: 11px;
+}
+
+.status-icon {
+    font-size: 10px;
+}
+
+.status-value {
+    font-weight: 600;
+    min-width: 12px;
+    text-align: center;
+}
+
+/* Tab Bar - Clean horizontal tabs */
+.tab-bar {
+    display: flex;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--panel-border);
+    padding: 0 4px;
+}
+
+.tab-button {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 4px;
+    border: none;
+    background: transparent;
+    color: var(--secondary-fg);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s ease;
+    font-size: 11px;
+    min-height: 32px;
+}
+
+.tab-button:hover {
+    background: var(--hover-bg);
+    color: var(--panel-fg);
+}
+
+.tab-button.active {
+    color: var(--panel-fg);
+    border-bottom-color: var(--accent-color);
+    background: var(--hover-bg);
+}
+
+.tab-icon {
+    font-size: 12px;
+}
+
+.tab-label {
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Tab Content */
+.tab-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.tab-pane {
+    display: none;
+    padding: 8px 0;
+}
+
+.tab-pane.active {
+    display: block;
+}
+
+/* Sections - Organized content blocks */
+.section {
+    margin-bottom: 16px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px 4px;
+    margin-bottom: 4px;
+}
+
+.section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--secondary-fg);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.section-action {
+    background: transparent;
+    border: none;
+    color: var(--secondary-fg);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 2px;
+    font-size: 10px;
+    transition: all 0.15s ease;
+}
+
+.section-action:hover {
+    background: var(--hover-bg);
+    color: var(--panel-fg);
+}
+
+/* Action Lists - Compact clickable items */
+.action-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.action-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 3px;
+    margin: 0 4px;
+    transition: all 0.15s ease;
+    min-height: 24px;
+}
+
+.action-item:hover {
+    background: var(--hover-bg);
+}
+
+.action-item.primary {
+    background: var(--button-bg);
+    color: var(--button-fg);
+}
+
+.action-item.primary:hover {
+    background: var(--button-hover);
+}
+
+.action-item.warning:hover {
+    background: var(--warning-color);
+    color: var(--panel-bg);
+}
+
+.action-icon {
+    font-size: 12px;
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.action-label {
+    font-size: 12px;
+    font-weight: 500;
+    flex: 1;
+}
+
+.action-hint {
+    font-size: 10px;
+    color: var(--secondary-fg);
+    margin-left: auto;
+}
+
+/* Item Lists - For agents, tasks, etc */
+.item-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin: 0 4px;
+}
+
+.list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 3px;
+    transition: all 0.15s ease;
+    min-height: 22px;
+}
+
+.list-item:hover {
+    background: var(--hover-bg);
+}
+
+.item-icon {
+    font-size: 11px;
+    width: 12px;
+    text-align: center;
+}
+
+.item-label {
+    font-size: 11px;
+    flex: 1;
+}
+
+.item-status {
+    font-size: 10px;
+    color: var(--secondary-fg);
+    margin-left: auto;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-dot.active {
+    background: var(--success-color);
+}
+
+.status-dot.busy {
+    background: var(--warning-color);
+}
+
+.status-dot.error {
+    background: var(--vscode-errorForeground);
+}
+
+/* Agent Type Grid - Compact spawn options */
+.agent-types {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+    padding: 0 8px;
+}
+
+/* Responsive layout for agent grid */
+@media (max-width: 280px) {
+    .agent-types {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 200px) {
+    .agent-types {
+        grid-template-columns: 1fr;
+    }
+}
+
+.agent-type-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    min-height: 24px;
+}
+
+.agent-type-item:hover {
+    background: var(--hover-bg);
+    border-color: var(--accent-color);
+}
+
+.type-icon {
+    font-size: 10px;
+}
+
+.type-label {
+    font-size: 9px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Progress Stats - Task overview */
+.progress-stats {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 12px;
+    gap: 8px;
+}
+
+.stat-item {
+    flex: 1;
+    text-align: center;
+    padding: 8px 4px;
+    border-radius: 4px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+}
+
+.stat-label {
+    display: block;
+    font-size: 9px;
+    color: var(--secondary-fg);
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.stat-value {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--panel-fg);
+}
+
+/* Empty States */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 16px;
+    color: var(--secondary-fg);
+    text-align: center;
+}
+
+.empty-icon {
+    font-size: 16px;
+    opacity: 0.7;
+}
+
+.empty-text {
+    font-size: 11px;
+    font-style: italic;
+}
+
+/* Scrollbar */
+.tab-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.tab-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tab-content::-webkit-scrollbar-thumb {
+    background: var(--vscode-scrollbarSlider-background);
+    border-radius: 2px;
+}
+
+.tab-content::-webkit-scrollbar-thumb:hover {
+    background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+/* Animations */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.tab-pane.active {
+    animation: slideIn 0.2s ease-out;
+}
+
+/* Focus states for accessibility */
+.tab-button:focus,
+.action-item:focus,
+.agent-type-item:focus,
+.section-action:focus {
+    outline: 1px solid var(--accent-color);
+    outline-offset: 1px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 200px) {
+    .tab-label {
+        display: none;
+    }
+    
+    .agent-types {
+        grid-template-columns: 1fr;
+    }
+    
+    .action-hint {
+        display: none;
+    }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .action-item,
+    .agent-type-item,
+    .stat-item {
+        border-width: 2px;
+    }
+    
+    .status-dot {
+        border: 1px solid var(--panel-fg);
+    }
+}
+
+/* Dark theme optimizations */
+@media (prefers-color-scheme: dark) {
+    .status-item {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .stat-item {
+        background: rgba(255, 255, 255, 0.03);
+    }
+}

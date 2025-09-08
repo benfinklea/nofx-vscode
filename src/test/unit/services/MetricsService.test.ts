@@ -1,5 +1,17 @@
 import { MetricsService } from '../../../services/MetricsService';
 import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
+
+import {
     IConfigurationService,
     ILoggingService,
     IEventBus,
@@ -19,6 +31,9 @@ describe('MetricsService', () => {
     let mockEventBus: jest.Mocked<IEventBus>;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockConfigService = createMockConfigurationService();
         jest.useFakeTimers();
         // Reset mocks
         jest.clearAllMocks();

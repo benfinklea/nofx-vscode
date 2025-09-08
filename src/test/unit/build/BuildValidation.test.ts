@@ -1,7 +1,23 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
+jest.mock('vscode');
+
+jest.setTimeout(10000);
+
+jest.mock('ws');
 describe('Build Validation', () => {
     const projectRoot = path.resolve(__dirname, '../../../..');
     const outDir = path.join(projectRoot, 'out');

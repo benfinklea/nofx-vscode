@@ -12,11 +12,27 @@ import { MetricsService } from '../../services/MetricsService';
 import { CommandService } from '../../services/CommandService';
 import { setupMockWorkspace, clearMockWorkspace } from './setup';
 import { TestHarness } from './testHarness';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
 
 /**
  * Comprehensive smoke tests for all commands registered in package.json
  * This test suite verifies that all commands can be executed without throwing unhandled exceptions
  */
+jest.mock('vscode');
+
+jest.setTimeout(10000);
+
+jest.mock('ws');
 describe('Command Smoke Tests', () => {
     let container: Container;
     let context: vscode.ExtensionContext;
@@ -219,6 +235,10 @@ describe('Command Smoke Tests', () => {
     describe('Command Execution Without Errors', () => {
         // Mock UI interactions
         beforeEach(() => {
+            const mockWorkspace = {
+                getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() })
+            };
+            (global as any).vscode = { workspace: mockWorkspace };
             // Mock quick pick
             jest.spyOn(vscode.window, 'showQuickPick').mockImplementation(async (items: any) => {
                 if (Array.isArray(items)) {

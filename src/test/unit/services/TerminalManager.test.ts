@@ -2,6 +2,17 @@ import * as vscode from 'vscode';
 import { TerminalManager } from '../../../services/TerminalManager';
 import { IConfigurationService, ILoggingService, IEventBus, IErrorHandler } from '../../../services/interfaces';
 import { DOMAIN_EVENTS } from '../../../services/EventConstants';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 jest.mock('vscode');
 
@@ -15,6 +26,9 @@ describe('TerminalManager', () => {
     let onDidCloseTerminalCallback: ((terminal: vscode.Terminal) => void) | undefined;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockConfigService = createMockConfigurationService();
         jest.clearAllMocks();
         jest.useFakeTimers();
 
@@ -49,41 +63,13 @@ describe('TerminalManager', () => {
         (vscode as any).ThemeIcon = jest.fn().mockImplementation(icon => ({ icon }));
 
         // Mock configuration service
-        mockConfigService = {
-            getAiPath: jest.fn().mockReturnValue('claude'),
-            isClaudeSkipPermissions: jest.fn().mockReturnValue(false),
-            isShowAgentTerminalOnSpawn: jest.fn().mockReturnValue(true),
-            get: jest.fn(),
-            getAll: jest.fn(),
-            update: jest.fn(),
-            validateAll: jest.fn(),
-            getLogLevel: jest.fn(),
-            onDidChange: jest.fn().mockReturnValue({ dispose: jest.fn() }),
-            dispose: jest.fn()
-        } as any;
+        mockConfigService = createMockConfigurationService();
 
         // Mock logging service
-        mockLoggingService = {
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            time: jest.fn(),
-            timeEnd: jest.fn(),
-            isLevelEnabled: jest.fn(),
-            getChannel: jest.fn(),
-            onDidChangeConfiguration: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        mockLoggingService = createMockLoggingService();
 
         // Mock event bus
-        mockEventBus = {
-            publish: jest.fn(),
-            subscribe: jest.fn(),
-            unsubscribe: jest.fn(),
-            clear: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        mockEventBus = createMockEventBus();
 
         // Mock error handler
         mockErrorHandler = {
@@ -251,6 +237,141 @@ describe('TerminalManager', () => {
     describe('initializeAgentTerminal', () => {
         beforeEach(() => {
             (vscode.window as any).activeTerminal = mockTerminal;
+        });
+
+        describe('Two-Stage Prompt Injection (Regression Test)', () => {
+            it('should use SHORT system prompt to launch Claude, then inject detailed prompt', async () => {
+                // This test ensures we don't regress to trying to pass both prompts in the system prompt
+                const shortSystemPrompt = 'You are a Backend Development Specialist. Part of a NofX.dev team.';
+                const longDetailedPrompt =
+                    'You are an elite Backend Development Specialist with mastery of server-side architecture, distributed systems, and infrastructure. '.repeat(
+                        50
+                    ); // Simulate a very long prompt
+
+                const agent = {
+                    id: 'agent-1',
+                    name: 'Backend Specialist',
+                    type: 'backend-specialist',
+                    template: {
+                        systemPrompt: shortSystemPrompt,
+                        detailedPrompt: longDetailedPrompt,
+                        id: 'backend-specialist'
+                    }
+                };
+
+                terminalManager.createTerminal('agent-1', agent);
+
+                // Start the initialization
+                const promise = terminalManager.initializeAgentTerminal(agent);
+
+                // Run initial timers for Claude launch
+                jest.advanceTimersByTime(2000);
+
+                // Should launch with SHORT prompt only
+                const claudeCommand = mockTerminal.sendText.mock.calls.find(
+                    call => call[0]?.includes('claude') && call[0]?.includes('--append-system-prompt')
+                );
+                expect(claudeCommand).toBeDefined();
+                expect(claudeCommand[0]).toContain(shortSystemPrompt);
+                expect(claudeCommand[0]).not.toContain(longDetailedPrompt);
+
+                // Continue advancing timers for detailed prompt injection
+                jest.advanceTimersByTime(4000); // Wait for Claude to be ready
+
+                // Should inject the detailed prompt as text (not as a command)
+                const detailedPromptCall = mockTerminal.sendText.mock.calls.find(
+                    call => call[0] === longDetailedPrompt && call[1] === false // false = don't execute
+                );
+                expect(detailedPromptCall).toBeDefined();
+
+                jest.advanceTimersByTime(1500); // Wait for text to be typed
+
+                // Should send Enter key to submit the detailed prompt
+                const enterKeyCall = mockTerminal.sendText.mock.calls.find(
+                    call => call[0] === '' && call[1] === true // empty string with execute=true sends Enter
+                );
+                expect(enterKeyCall).toBeDefined();
+
+                // Complete the promise
+                jest.runAllTimers();
+                await promise;
+
+                // Verify the sequence
+                const sendTextCalls = mockTerminal.sendText.mock.calls;
+                const claudeCommandIndex = sendTextCalls.findIndex(
+                    call => call[0]?.includes('claude') && call[0]?.includes('--append-system-prompt')
+                );
+                const detailedPromptIndex = sendTextCalls.findIndex(call => call[0] === longDetailedPrompt);
+                const enterKeyIndex = sendTextCalls.findIndex(call => call[0] === '' && call[1] === true);
+
+                // Ensure correct order: Claude launch -> detailed prompt -> Enter key
+                expect(claudeCommandIndex).toBeGreaterThan(-1);
+                expect(detailedPromptIndex).toBeGreaterThan(claudeCommandIndex);
+                expect(enterKeyIndex).toBeGreaterThan(detailedPromptIndex);
+            });
+
+            it('should NOT inject detailed prompt if template only has systemPrompt', async () => {
+                const agent = {
+                    id: 'agent-1',
+                    name: 'Simple Agent',
+                    type: 'general',
+                    template: {
+                        systemPrompt: 'You are a simple agent.'
+                        // No detailedPrompt
+                    }
+                };
+
+                terminalManager.createTerminal('agent-1', agent);
+
+                const promise = terminalManager.initializeAgentTerminal(agent);
+                jest.runAllTimers();
+                await promise;
+
+                // Should launch with system prompt
+                const claudeCommand = mockTerminal.sendText.mock.calls.find(
+                    call => call[0]?.includes('claude') && call[0]?.includes('--append-system-prompt')
+                );
+                expect(claudeCommand).toBeDefined();
+
+                // Should NOT send any empty execute commands (no Enter key for detailed prompt)
+                const enterKeyCalls = mockTerminal.sendText.mock.calls.filter(
+                    call => call[0] === '' && call[1] === true
+                );
+                // There might be one for initial setup, but not for detailed prompt
+                expect(enterKeyCalls.length).toBeLessThanOrEqual(1);
+            });
+
+            it('should handle extremely long detailed prompts without command line overflow', async () => {
+                const shortSystemPrompt = 'Short prompt';
+                // Create a prompt that would definitely exceed command line limits
+                const veryLongDetailedPrompt = 'A'.repeat(100000); // 100KB prompt
+
+                const agent = {
+                    id: 'agent-1',
+                    name: 'Test Agent',
+                    type: 'test',
+                    template: {
+                        systemPrompt: shortSystemPrompt,
+                        detailedPrompt: veryLongDetailedPrompt
+                    }
+                };
+
+                terminalManager.createTerminal('agent-1', agent);
+
+                const promise = terminalManager.initializeAgentTerminal(agent);
+                jest.runAllTimers();
+                await promise;
+
+                // Should NOT include the long prompt in the Claude command
+                const claudeCommand = mockTerminal.sendText.mock.calls.find(call => call[0]?.includes('claude'));
+                expect(claudeCommand[0].length).toBeLessThan(1000); // Command should be short
+
+                // Should inject the long prompt as text input
+                const longPromptCall = mockTerminal.sendText.mock.calls.find(
+                    call => call[0] === veryLongDetailedPrompt && call[1] === false
+                );
+                expect(longPromptCall).toBeDefined();
+            });
         });
 
         it('should initialize terminal with system prompt', async () => {

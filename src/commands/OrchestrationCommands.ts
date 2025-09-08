@@ -18,6 +18,7 @@ import { OrchestrationServer } from '../orchestration/OrchestrationServer';
 import { MessageFlowDashboard } from '../dashboard/MessageFlowDashboard';
 import { EnhancedConductorPanel } from '../panels/EnhancedConductorPanel';
 import { AgentPersistence } from '../persistence/AgentPersistence';
+import { ConductorTerminal } from '../conductor/ConductorTerminal';
 
 export class OrchestrationCommands implements ICommandHandler {
     private readonly agentManager: AgentManager;
@@ -61,7 +62,9 @@ export class OrchestrationCommands implements ICommandHandler {
     register(): void {
         this.commandService.register('nofx.showOrchestrator', this.showOrchestrator.bind(this));
         this.commandService.register('nofx.openMessageFlow', this.openMessageFlow.bind(this));
+        this.commandService.register('nofx.openConversationalConductor', this.openConversationalConductor.bind(this));
         this.commandService.register('nofx.resetNofX', this.resetNofX.bind(this));
+        this.commandService.register('nofx.generateTestMessages', this.generateTestMessages.bind(this));
     }
 
     private async showOrchestrator(): Promise<void> {
@@ -75,17 +78,64 @@ export class OrchestrationCommands implements ICommandHandler {
     }
 
     private async openMessageFlow(): Promise<void> {
-        if (!this.orchestrationServer) {
-            await this.notificationService.showError('Orchestration server not running');
-            return;
-        }
+        try {
+            // Ensure orchestration server is running
+            if (!this.orchestrationServer) {
+                await this.notificationService.showError(
+                    'Orchestration server is not running. Please start NofX first.'
+                );
+                return;
+            }
 
-        if (!this.messageFlowDashboard) {
-            // Use the factory to create the dashboard on demand
-            this.messageFlowDashboard = this.container.resolve(SERVICE_TOKENS.MessageFlowDashboard);
-        }
+            // Check if orchestration server is actually started
+            if (!this.orchestrationServer.isServerRunning()) {
+                this.loggingService.warn('Orchestration server exists but is not running, attempting to start...');
+                try {
+                    await this.orchestrationServer.start();
+                } catch (error) {
+                    await this.notificationService.showError('Failed to start orchestration server');
+                    return;
+                }
+            }
 
-        await this.messageFlowDashboard.show();
+            // Create or get existing dashboard
+            if (!this.messageFlowDashboard) {
+                try {
+                    this.messageFlowDashboard = this.container.resolve(SERVICE_TOKENS.MessageFlowDashboard);
+                    this.loggingService.info('Dashboard resolved from container');
+                } catch (error) {
+                    this.loggingService.error('Failed to resolve dashboard from container', error);
+                    await this.notificationService.showError('Failed to create message flow dashboard');
+                    return;
+                }
+            }
+
+            // Initialize and show dashboard
+            await this.messageFlowDashboard.show();
+            this.loggingService.info('Message Flow Dashboard opened successfully');
+        } catch (error) {
+            this.loggingService.error('Error opening Message Flow Dashboard', error);
+            await this.notificationService.showError(
+                `Failed to open dashboard: ${error instanceof Error ? error.message : 'Unknown error'}`
+            );
+        }
+    }
+
+    private async openConversationalConductor(): Promise<void> {
+        try {
+            this.loggingService.info('Opening Conductor Terminal');
+
+            // Use ConductorTerminal - simple terminal-based conductor interface
+            const conductor = new ConductorTerminal(this.agentManager, this.taskQueue);
+            await conductor.start();
+
+            this.loggingService.info('Conductor Terminal opened successfully');
+        } catch (error) {
+            this.loggingService.error('Error opening Conductor Terminal', error);
+            await this.notificationService.showError(
+                `Failed to open Conductor Terminal: ${error instanceof Error ? error.message : 'Unknown error'}`
+            );
+        }
     }
 
     private async resetNofX(): Promise<void> {
@@ -197,6 +247,23 @@ export class OrchestrationCommands implements ICommandHandler {
 
         // For other directories or .nofx without templates, remove completely
         await fsPromises.rm(dirPath, { recursive: true, force: true });
+    }
+
+    private async generateTestMessages(): Promise<void> {
+        if (!this.orchestrationServer) {
+            await this.notificationService.showError('Orchestration server not running');
+            return;
+        }
+
+        try {
+            this.orchestrationServer.generateTestMessages();
+            await this.notificationService.showInformation(
+                '🧪 Test messages generated! Check the Message Flow Dashboard to see them.'
+            );
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            await this.notificationService.showError(`Failed to generate test messages: ${err.message}`);
+        }
     }
 
     dispose(): void {

@@ -11,9 +11,12 @@ import {
     IEventBus,
     IErrorHandler,
     IAgentReader,
-    IMetricsService
+    IMetricsService,
+    ISessionPersistenceService
 } from '../services/interfaces';
 import { DOMAIN_EVENTS } from '../services/EventConstants';
+import { AgentCapacityScore, LoadBalancingEvent } from '../intelligence';
+import { AgentHealthMonitor, AgentHealthStatus } from '../services/AgentHealthMonitor';
 
 export class AgentManager implements IAgentReader {
     private agents: Map<string, Agent> = new Map();
@@ -33,6 +36,14 @@ export class AgentManager implements IAgentReader {
     private eventBus?: IEventBus;
     private errorHandler?: IErrorHandler;
     private metricsService?: IMetricsService;
+    private sessionPersistenceService?: ISessionPersistenceService;
+
+    // Health monitoring integration
+    private healthMonitor?: AgentHealthMonitor;
+
+    // Load balancing integration
+    private agentCapacityScores: Map<string, AgentCapacityScore> = new Map();
+    private agentLoadTracking: Map<string, { currentLoad: number; maxCapacity: number; lastUpdate: Date }> = new Map();
 
     constructor(context: vscode.ExtensionContext, persistence?: AgentPersistence) {
         this.context = context;
@@ -50,7 +61,8 @@ export class AgentManager implements IAgentReader {
         loggingService?: ILoggingService,
         eventBus?: IEventBus,
         errorHandler?: IErrorHandler,
-        metricsService?: IMetricsService
+        metricsService?: IMetricsService,
+        sessionPersistenceService?: ISessionPersistenceService
     ) {
         this.agentLifecycleManager = agentLifecycleManager;
         this.terminalManager = terminalManager;
@@ -61,6 +73,15 @@ export class AgentManager implements IAgentReader {
         this.eventBus = eventBus;
         this.errorHandler = errorHandler;
         this.metricsService = metricsService;
+        this.sessionPersistenceService = sessionPersistenceService;
+
+        // Initialize health monitor
+        this.healthMonitor = new AgentHealthMonitor(
+            this.terminalManager,
+            this.loggingService,
+            this.eventBus,
+            this.configService
+        );
 
         // Set up terminal close event listener
         const terminalCloseDisposable = this.terminalManager.onTerminalClosed(terminal => {
@@ -76,6 +97,12 @@ export class AgentManager implements IAgentReader {
                     agent.status = 'idle';
                     const task = agent.currentTask;
                     agent.currentTask = null;
+
+                    // Stop task monitoring for interrupted task
+                    if (this.agentLifecycleManager) {
+                        this.agentLifecycleManager.stopTaskMonitoring(agent.id);
+                    }
+
                     this._onAgentUpdate.fire();
 
                     // Publish event to EventBus
@@ -98,18 +125,20 @@ export class AgentManager implements IAgentReader {
     }
 
     async initialize(showSetupDialog: boolean = false) {
+        this.loggingService?.agents('AgentManager: Initializing...');
+
         if (!this.agentLifecycleManager || !this.configService) {
             throw new Error('AgentManager dependencies not set. Call setDependencies() first.');
         }
 
         // Log persistence status
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        this.loggingService?.debug(`Workspace folder: ${workspaceFolder?.uri.fsPath || 'None'}`);
+        this.loggingService?.trace(`AgentManager: Workspace folder: ${workspaceFolder?.uri.fsPath || 'None'}`);
 
         if (this.persistence) {
-            this.loggingService?.debug('Persistence initialized');
+            this.loggingService?.trace('AgentManager: Persistence initialized');
         } else {
-            this.loggingService?.warn('No persistence available - agent state will not be saved');
+            this.loggingService?.warn('AgentManager: No persistence available - agent state will not be saved');
         }
 
         // Initialize the agent lifecycle manager
@@ -189,14 +218,34 @@ export class AgentManager implements IAgentReader {
               );
 
         if (restore === 'Yes, Restore' || userRequested) {
+            // Import template manager to load actual templates
+            const { AgentTemplateManager } = await import('../agents/AgentTemplateManager');
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            const templateManager = workspaceFolder ? new AgentTemplateManager(workspaceFolder.uri.fsPath) : null;
+
             let restoredCount = 0;
             for (const savedAgent of savedAgents) {
                 try {
-                    // Recreate agent with saved data
+                    // Load the actual template if it's just a string ID
+                    let template = savedAgent.template;
+                    if (typeof savedAgent.template === 'string' && templateManager) {
+                        this.loggingService?.debug(
+                            `Loading template ${savedAgent.template} for agent ${savedAgent.name}`
+                        );
+                        template = await templateManager.getTemplate(savedAgent.template);
+                        if (!template) {
+                            this.loggingService?.warn(
+                                `Template ${savedAgent.template} not found, using ID as fallback`
+                            );
+                            template = savedAgent.template;
+                        }
+                    }
+
+                    // Recreate agent with saved data and loaded template
                     const config: AgentConfig = {
                         name: savedAgent.name,
                         type: savedAgent.type,
-                        template: savedAgent.template
+                        template: template
                     };
 
                     const agent = await this.spawnAgent(config, savedAgent.id);
@@ -235,6 +284,9 @@ export class AgentManager implements IAgentReader {
     }
 
     async spawnAgent(config: AgentConfig, restoredId?: string): Promise<Agent> {
+        this.loggingService?.agents(`AgentManager: Spawning agent '${config.name}' (type: ${config.type})`);
+        this.loggingService?.trace('AgentManager: Agent config:', config);
+
         if (!this.agentLifecycleManager) {
             throw new Error('AgentLifecycleManager not available');
         }
@@ -261,6 +313,25 @@ export class AgentManager implements IAgentReader {
                 name: agent.name,
                 type: agent.type
             });
+        }
+
+        // Create session for the agent (if not restoring from existing session)
+        if (this.sessionPersistenceService && !config.context?.sessionId) {
+            try {
+                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                await this.sessionPersistenceService.createSession(agent, workspaceFolder?.uri.fsPath);
+                this.loggingService?.debug(`Session created for agent ${agent.name}`);
+            } catch (error) {
+                // Session creation failure shouldn't prevent agent creation
+                this.loggingService?.warn(`Failed to create session for agent ${agent.name}:`, error);
+            }
+        }
+
+        // Start health monitoring for the new agent
+        const terminal = this.terminalManager?.getTerminal(agent.id);
+        if (terminal && this.healthMonitor) {
+            this.healthMonitor.startMonitoring(agent.id, terminal);
+            this.loggingService?.debug(`Health monitoring started for agent ${agent.name}`);
         }
 
         // Save agent state after adding
@@ -308,6 +379,12 @@ export class AgentManager implements IAgentReader {
         // Update agent status
         agent.status = 'working';
         agent.currentTask = task;
+
+        // Start task monitoring for inactivity alerts
+        if (this.agentLifecycleManager) {
+            this.agentLifecycleManager.startTaskMonitoring(agentId);
+        }
+
         this._onAgentUpdate.fire();
 
         // Record task assignment metrics
@@ -456,6 +533,12 @@ export class AgentManager implements IAgentReader {
         agent.status = 'idle';
         agent.currentTask = null;
         agent.tasksCompleted++;
+
+        // Stop task monitoring for inactivity alerts
+        if (this.agentLifecycleManager) {
+            this.agentLifecycleManager.stopTaskMonitoring(agentId);
+        }
+
         this._onAgentUpdate.fire();
 
         // Publish event to EventBus
@@ -478,7 +561,12 @@ export class AgentManager implements IAgentReader {
 
     async removeAgent(agentId: string) {
         const agent = this.agents.get(agentId);
-        if (!agent) return;
+        if (!agent) {
+            this.loggingService?.trace(`AgentManager: Cannot remove agent ${agentId} - not found`);
+            return;
+        }
+
+        this.loggingService?.agents(`AgentManager: Removing agent '${agent.name}' (${agentId})`);
 
         if (!this.agentLifecycleManager) {
             const error = new Error('AgentLifecycleManager not available');
@@ -495,6 +583,12 @@ export class AgentManager implements IAgentReader {
                 agentType: agent.type,
                 totalAgents: (this.agents.size - 1).toString()
             });
+
+            // Stop health monitoring for the removed agent
+            if (this.healthMonitor) {
+                this.healthMonitor.stopMonitoring(agentId);
+                this.loggingService?.debug(`Health monitoring stopped for agent ${agent.name}`);
+            }
 
             // Remove from our map
             this.agents.delete(agentId);
@@ -513,7 +607,9 @@ export class AgentManager implements IAgentReader {
     }
 
     getActiveAgents(): Agent[] {
-        return Array.from(this.agents.values());
+        const agents = Array.from(this.agents.values());
+        this.loggingService?.trace(`AgentManager: Getting active agents (${agents.length} total)`);
+        return agents;
     }
 
     getAgent(agentId: string): Agent | undefined {
@@ -675,6 +771,34 @@ export class AgentManager implements IAgentReader {
         }
     }
 
+    // Health monitoring public methods
+    public getAgentHealthStatus(agentId: string): AgentHealthStatus | undefined {
+        return this.healthMonitor?.getHealthStatus(agentId);
+    }
+
+    public getAllAgentHealthStatuses(): AgentHealthStatus[] {
+        return this.healthMonitor?.getAllHealthStatuses() || [];
+    }
+
+    public getAgentHealthSummary(): {
+        total: number;
+        healthy: number;
+        unhealthy: number;
+        recovering: number;
+        failed: number;
+    } {
+        return (
+            this.healthMonitor?.getHealthSummary() || { total: 0, healthy: 0, unhealthy: 0, recovering: 0, failed: 0 }
+        );
+    }
+
+    public async performAgentHealthCheck(agentId: string): Promise<boolean> {
+        if (!this.healthMonitor) {
+            return false;
+        }
+        return this.healthMonitor.performHealthCheck(agentId);
+    }
+
     async dispose(): Promise<void> {
         // Set disposing flag to prevent double-dispose
         this.isDisposing = true;
@@ -689,11 +813,251 @@ export class AgentManager implements IAgentReader {
         this.agentLifecycleManager?.dispose();
         this.terminalManager?.dispose();
         this.worktreeService?.dispose();
+        this.healthMonitor?.dispose();
+
+        // Clean up load balancing data
+        this.agentCapacityScores.clear();
+        this.agentLoadTracking.clear();
 
         // Dispose all subscriptions
         this.disposables.forEach(d => d?.dispose());
         this.disposables = [];
+    }
 
-        this._onAgentUpdate.dispose();
+    // ============================================================================
+    // LOAD BALANCING INTEGRATION
+    // ============================================================================
+
+    /**
+     * Get agent capacity information for load balancing
+     */
+    getAgentCapacity(agentId: string): { currentLoad: number; maxCapacity: number; isAvailable: boolean } {
+        const agent = this.agents.get(agentId);
+        if (!agent) {
+            return { currentLoad: 0, maxCapacity: 0, isAvailable: false };
+        }
+
+        const loadInfo = this.agentLoadTracking.get(agentId);
+        const currentLoad = loadInfo?.currentLoad || 0;
+        const maxCapacity = loadInfo?.maxCapacity || agent.maxConcurrentTasks || 5;
+        const isAvailable = agent.status === 'idle' || agent.status === 'online';
+
+        return { currentLoad, maxCapacity, isAvailable };
+    }
+
+    /**
+     * Update agent load for load balancing tracking
+     */
+    updateAgentLoad(agentId: string, currentLoad: number, maxCapacity?: number): void {
+        const agent = this.agents.get(agentId);
+        if (!agent) return;
+
+        const existingLoad = this.agentLoadTracking.get(agentId);
+        const newMaxCapacity = maxCapacity || existingLoad?.maxCapacity || agent.maxConcurrentTasks || 5;
+
+        this.agentLoadTracking.set(agentId, {
+            currentLoad,
+            maxCapacity: newMaxCapacity,
+            lastUpdate: new Date()
+        });
+
+        // Emit per-agent load gauge for dashboard support
+        const cap = Math.max(1, newMaxCapacity || 0);
+        const utilization = (currentLoad / cap) * 100;
+        this.metricsService?.recordLoadBalancingMetric('agent_load_percentage', utilization, {
+            agentId,
+            agentType: agent.type
+        });
+
+        // Publish load change event
+        this.eventBus?.publish(DOMAIN_EVENTS.LOAD_BALANCING_EVENT, {
+            type: 'agent_load_updated',
+            agentId,
+            currentLoad,
+            maxCapacity: newMaxCapacity,
+            timestamp: new Date()
+        });
+
+        this.loggingService?.debug(`Updated load for agent ${agentId}: ${currentLoad}/${newMaxCapacity}`);
+    }
+
+    /**
+     * Get available agents for load balancing (excluding overloaded agents)
+     */
+    getAvailableAgents(): Agent[] {
+        const allAgents = Array.from(this.agents.values());
+        return allAgents.filter(agent => {
+            if (agent.status !== 'idle' && agent.status !== 'online') return false;
+
+            const loadInfo = this.agentLoadTracking.get(agent.id);
+            if (!loadInfo) return true; // No load info, assume available
+
+            const cap = Math.max(1, loadInfo.maxCapacity || 0);
+            const utilization = (loadInfo.currentLoad / cap) * 100;
+            return utilization < 90; // Consider available if under 90% utilization
+        });
+    }
+
+    /**
+     * Get overloaded agents for load balancing
+     */
+    getOverloadedAgents(threshold: number = 80): Agent[] {
+        const allAgents = Array.from(this.agents.values());
+        return allAgents.filter(agent => {
+            const loadInfo = this.agentLoadTracking.get(agent.id);
+            if (!loadInfo) return false;
+
+            const cap = Math.max(1, loadInfo.maxCapacity || 0);
+            const utilization = (loadInfo.currentLoad / cap) * 100;
+            return utilization > threshold;
+        });
+    }
+
+    /**
+     * Get optimal agents for a task with capacity consideration
+     */
+    getOptimalAgentsForTask(task: any, maxAgents: number = 5): Agent[] {
+        const availableAgents = this.getAvailableAgents();
+
+        // Score agents based on capacity and capabilities
+        const scoredAgents = availableAgents.map(agent => {
+            const loadInfo = this.agentLoadTracking.get(agent.id);
+            const currentLoad = loadInfo?.currentLoad || 0;
+            const maxCapacity = loadInfo?.maxCapacity || agent.maxConcurrentTasks || 5;
+            const availableCapacity = maxCapacity - currentLoad;
+
+            // Simple scoring: higher available capacity = better score
+            const cap = Math.max(1, maxCapacity || 0);
+            const capacityScore = (availableCapacity / cap) * 100;
+
+            return {
+                agent,
+                capacityScore,
+                availableCapacity
+            };
+        });
+
+        // Sort by capacity score (descending) and return top agents
+        return scoredAgents
+            .sort((a, b) => b.capacityScore - a.capacityScore)
+            .slice(0, maxAgents)
+            .map(item => item.agent);
+    }
+
+    /**
+     * Record agent capacity score for load balancing
+     */
+    recordAgentCapacityScore(agentId: string, capacityScore: AgentCapacityScore): void {
+        this.agentCapacityScores.set(agentId, capacityScore);
+
+        // Update metrics
+        this.metricsService?.recordGauge('agent_capacity_score', capacityScore.overallScore, { agentId });
+        this.metricsService?.recordGauge('agent_capacity_utilization', capacityScore.capacityScore, { agentId });
+        this.metricsService?.recordGauge('agent_performance_score', capacityScore.performanceScore, { agentId });
+        this.metricsService?.recordGauge('agent_availability_score', capacityScore.availabilityScore, { agentId });
+
+        this.loggingService?.debug(`Recorded capacity score for agent ${agentId}: ${capacityScore.overallScore}`);
+    }
+
+    /**
+     * Get agent capacity scores
+     */
+    getAgentCapacityScores(): Map<string, AgentCapacityScore> {
+        return new Map(this.agentCapacityScores);
+    }
+
+    /**
+     * Get agent load tracking information
+     */
+    getAgentLoadTracking(): Map<string, { currentLoad: number; maxCapacity: number; lastUpdate: Date }> {
+        return new Map(this.agentLoadTracking);
+    }
+
+    /**
+     * Calculate agent utilization percentage
+     */
+    getAgentUtilization(agentId: string): number {
+        const loadInfo = this.agentLoadTracking.get(agentId);
+        if (!loadInfo) return 0;
+
+        const cap = Math.max(1, loadInfo.maxCapacity || 0);
+        return (loadInfo.currentLoad / cap) * 100;
+    }
+
+    /**
+     * Check if agent is available for new tasks
+     */
+    isAgentAvailable(agentId: string): boolean {
+        const agent = this.agents.get(agentId);
+        if (!agent) return false;
+
+        if (agent.status !== 'idle' && agent.status !== 'online') return false;
+
+        const utilization = this.getAgentUtilization(agentId);
+        return utilization < 90; // Available if under 90% utilization
+    }
+
+    /**
+     * Get agent availability score for load balancing
+     */
+    getAgentAvailabilityScore(agentId: string): number {
+        const agent = this.agents.get(agentId);
+        if (!agent) return 0;
+
+        const utilization = this.getAgentUtilization(agentId);
+        const statusScore = agent.status === 'idle' ? 100 : agent.status === 'online' ? 80 : 0;
+
+        // Combine status and utilization scores
+        return Math.round(statusScore * 0.6 + (100 - utilization) * 0.4);
+    }
+
+    /**
+     * Publish load balancing event
+     */
+    private publishLoadBalancingEvent(event: LoadBalancingEvent): void {
+        this.eventBus?.publish(DOMAIN_EVENTS.LOAD_BALANCING_EVENT, event);
+        this.loggingService?.debug(`Published load balancing event: ${event.type} for agent ${event.agentId}`);
+    }
+
+    /**
+     * Get all agents (for compatibility with existing code)
+     */
+    getAgents(): Agent[] {
+        return Array.from(this.agents.values());
+    }
+
+    /**
+     * Get agent statistics including load balancing information
+     */
+    getAgentStatsWithLoadBalancing(): {
+        total: number;
+        idle: number;
+        working: number;
+        error: number;
+        offline: number;
+        overloaded: number;
+        averageUtilization: number;
+    } {
+        const allAgents = Array.from(this.agents.values());
+        const overloadedAgents = this.getOverloadedAgents();
+
+        const utilizationValues = Array.from(this.agentLoadTracking.values()).map(load => {
+            const cap = Math.max(1, load.maxCapacity || 0);
+            return (load.currentLoad / cap) * 100;
+        });
+        const averageUtilization =
+            utilizationValues.length > 0
+                ? utilizationValues.reduce((sum, util) => sum + util, 0) / utilizationValues.length
+                : 0;
+
+        return {
+            total: allAgents.length,
+            idle: allAgents.filter(a => a.status === 'idle').length,
+            working: allAgents.filter(a => a.status === 'working').length,
+            error: allAgents.filter(a => a.status === 'error').length,
+            offline: allAgents.filter(a => a.status === 'offline').length,
+            overloaded: overloadedAgents.length,
+            averageUtilization: Math.round(averageUtilization)
+        };
     }
 }

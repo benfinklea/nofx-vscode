@@ -572,7 +572,7 @@ Remember: Sub-agents work independently and cannot modify files. They provide an
             'general-purpose',
             'code-lead-reviewer'
         ]);
-        
+
         if (!allowedTypes.includes(request.type)) {
             this.logger.debug(`Sub-agent type '${request.type}' not in auto-execute whitelist`, {
                 allowedTypes,
@@ -584,18 +584,22 @@ Remember: Sub-agents work independently and cannot modify files. They provide an
         // Check agent-specific limits
         const maxConcurrentPerAgent = this.configService.get<number>('nofx.subAgents.maxPerAgent', 3);
         const currentAgentTasks = this.taskToolBridge.getAgentTasks(agentId).length;
-        
+
         if (currentAgentTasks >= maxConcurrentPerAgent) {
-            this.logger.debug(`Agent ${agentId} has reached max concurrent sub-agents (${currentAgentTasks}/${maxConcurrentPerAgent})`);
+            this.logger.debug(
+                `Agent ${agentId} has reached max concurrent sub-agents (${currentAgentTasks}/${maxConcurrentPerAgent})`
+            );
             return false;
         }
 
         // Check system-wide limits
         const maxConcurrentTotal = this.configService.get<number>('nofx.subAgents.maxTotal', 10);
         const stats = this.taskToolBridge.getStats();
-        
+
         if (stats.activeTaskCount >= maxConcurrentTotal) {
-            this.logger.debug(`System has reached max concurrent sub-agents (${stats.activeTaskCount}/${maxConcurrentTotal})`);
+            this.logger.debug(
+                `System has reached max concurrent sub-agents (${stats.activeTaskCount}/${maxConcurrentTotal})`
+            );
             return false;
         }
 

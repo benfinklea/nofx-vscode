@@ -118,7 +118,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 try {
                     const loggingService = container.resolveOptional<ILoggingService>(SERVICE_TOKENS.LoggingService);
                     console.log('[NofX Debug] LoggingService resolved for EventBus (optional):', !!loggingService);
-                    
+
                     const eventBus = new EventBus(loggingService);
                     console.log('[NofX Debug] EventBus created successfully');
                     return eventBus;
@@ -130,7 +130,7 @@ export async function activate(context: vscode.ExtensionContext) {
             'singleton'
         );
         container.register(
-            SERVICE_TOKENS.NotificationService, 
+            SERVICE_TOKENS.NotificationService,
             () => {
                 console.log('[NofX Debug] Creating NotificationService...');
                 try {
@@ -141,7 +141,7 @@ export async function activate(context: vscode.ExtensionContext) {
                     console.error('[NofX Debug] Failed to create NotificationService:', error);
                     throw error;
                 }
-            }, 
+            },
             'singleton'
         );
 
@@ -153,10 +153,12 @@ export async function activate(context: vscode.ExtensionContext) {
                 try {
                     const loggingService = container.resolveOptional<ILoggingService>(SERVICE_TOKENS.LoggingService);
                     console.log('[NofX Debug] LoggingService resolved (optional):', !!loggingService);
-                    
-                    const notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
+
+                    const notificationService = container.resolve<INotificationService>(
+                        SERVICE_TOKENS.NotificationService
+                    );
                     console.log('[NofX Debug] NotificationService resolved for validator');
-                    
+
                     const validator = new ConfigurationValidator(loggingService, notificationService);
                     console.log('[NofX Debug] ConfigurationValidator created successfully');
                     return validator;
@@ -174,25 +176,27 @@ export async function activate(context: vscode.ExtensionContext) {
             container => {
                 try {
                     console.log('[NofX Debug] Creating ConfigurationService...');
-                    
+
                     // Check dependencies exist before resolving
                     console.log('[NofX Debug] Resolving ConfigurationValidator...');
-                    const validator = container.resolve(SERVICE_TOKENS.ConfigurationValidator) as ConfigurationValidator;
+                    const validator = container.resolve(
+                        SERVICE_TOKENS.ConfigurationValidator
+                    ) as ConfigurationValidator;
                     console.log('[NofX Debug] ConfigurationValidator resolved successfully');
-                    
+
                     console.log('[NofX Debug] Resolving EventBus...');
                     const eventBus = container.resolve<IEventBus>(SERVICE_TOKENS.EventBus);
                     console.log('[NofX Debug] EventBus resolved successfully');
-                    
+
                     console.log('[NofX Debug] Creating ConfigurationService instance...');
                     const configService = new ConfigurationService(validator, eventBus);
                     console.log('[NofX Debug] ConfigurationService created successfully');
-                    
+
                     return configService;
                 } catch (error) {
                     console.error('[NofX Debug] Failed to create ConfigurationService:', error);
                     console.error('[NofX Debug] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-                    
+
                     // Try to create without dependencies as fallback
                     console.log('[NofX Debug] Attempting to create ConfigurationService without dependencies...');
                     try {
@@ -253,7 +257,8 @@ export async function activate(context: vscode.ExtensionContext) {
         container.register(
             SERVICE_TOKENS.AgentNotificationService,
             container => {
-                const AgentNotificationService = require('./services/AgentNotificationService').AgentNotificationService;
+                const AgentNotificationService =
+                    require('./services/AgentNotificationService').AgentNotificationService;
                 return new AgentNotificationService(
                     container.resolve<vscode.ExtensionContext>(SERVICE_TOKENS.ExtensionContext),
                     container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService)

@@ -8,6 +8,17 @@ import { LoggingService } from '../../../services/LoggingService';
 import { MetricsService } from '../../../services/MetricsService';
 import { MessageType, Message, MessagePriority } from '../../../types/Message';
 import { EventBus } from '../../../services/EventBus';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock all dependencies
 jest.mock('../../../services/MessageValidator');
@@ -42,6 +53,8 @@ describe('MessageRouter', () => {
     };
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.clearAllMocks();
         jest.useFakeTimers();
 

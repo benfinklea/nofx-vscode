@@ -30,12 +30,12 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeItem> {
         // Subscribe to sub-agent task changes
         if (this.taskToolBridge) {
             const refreshTreeView = () => this._onDidChangeTreeData.fire();
-            
+
             this.taskToolBridge.on('taskStarted', refreshTreeView);
             this.taskToolBridge.on('taskCompleted', refreshTreeView);
             this.taskToolBridge.on('taskCancelled', refreshTreeView);
             this.taskToolBridge.on('taskFailed', refreshTreeView);
-            
+
             // Clean up event listeners on dispose
             this.disposables.push({
                 dispose: () => {
@@ -63,10 +63,12 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeItem> {
 
         // Handle expanding team section
         if (element instanceof TeamSectionItem) {
-            return Promise.resolve(element.agents.map(agent => {
-                const subAgents = this.taskToolBridge ? this.taskToolBridge.getAgentTasks(agent.id) : [];
-                return new AgentItem(agent, subAgents);
-            }));
+            return Promise.resolve(
+                element.agents.map(agent => {
+                    const subAgents = this.taskToolBridge ? this.taskToolBridge.getAgentTasks(agent.id) : [];
+                    return new AgentItem(agent, subAgents);
+                })
+            );
         }
 
         // Handle expanding agent to show sub-agents
@@ -205,12 +207,14 @@ class MessageItem extends TreeItem {
 
 // Agent item
 class AgentItem extends TreeItem {
-    constructor(public readonly agent: any, public readonly subAgentTasks: TaskRequest[] = []) {
+    constructor(
+        public readonly agent: any,
+        public readonly subAgentTasks: TaskRequest[] = []
+    ) {
         // Determine collapsible state based on sub-agents
-        const collapsibleState = subAgentTasks.length > 0 
-            ? vscode.TreeItemCollapsibleState.Collapsed 
-            : vscode.TreeItemCollapsibleState.None;
-            
+        const collapsibleState =
+            subAgentTasks.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
+
         // Call super first
         super(`  ${agent.name}`, collapsibleState);
 
@@ -315,23 +319,22 @@ class AgentItem extends TreeItem {
 // Sub-Agent item
 class SubAgentItem extends TreeItem {
     constructor(public readonly task: TaskRequest) {
-        const shortDescription = task.description.length > 40 
-            ? task.description.substring(0, 37) + '...' 
-            : task.description;
-            
+        const shortDescription =
+            task.description.length > 40 ? task.description.substring(0, 37) + '...' : task.description;
+
         super(`    🤖 ${shortDescription}`, vscode.TreeItemCollapsibleState.None);
-        
+
         this.tooltip = `Sub-Agent Task\nType: ${task.type}\nDescription: ${task.description}\nCreated: ${task.createdAt.toLocaleTimeString()}`;
-        
+
         // Set icon based on sub-agent type
         this.iconPath = this.getSubAgentIcon(task.type);
-        
+
         // Add subtle description for task status
         this.description = this.getTaskStatusDescription(task);
-        
+
         this.contextValue = 'subAgent';
     }
-    
+
     private getSubAgentIcon(type: string): vscode.ThemeIcon {
         const iconMap: { [key: string]: string } = {
             'general-purpose': 'tools',
@@ -339,14 +342,14 @@ class SubAgentItem extends TreeItem {
             'statusline-setup': 'settings-gear',
             'output-style-setup': 'paintcan'
         };
-        
+
         return new vscode.ThemeIcon(iconMap[type] || 'robot');
     }
-    
+
     private getTaskStatusDescription(task: TaskRequest): string {
         const elapsed = Date.now() - task.createdAt.getTime();
         const seconds = Math.floor(elapsed / 1000);
-        
+
         if (seconds < 60) {
             return `${seconds}s ago`;
         } else {

@@ -12,10 +12,23 @@ import { Agent, AgentTemplate } from '../../types/agent';
 import { AgentPersistence } from '../../persistence/AgentPersistence';
 import { setupMockWorkspace, clearMockWorkspace } from './setup';
 import { TestHarness } from './testHarness';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
 
 /**
  * Comprehensive tests for agent lifecycle management based on AgentCommands.ts and AgentManager.ts
  */
+jest.mock('vscode');
+
 describe('Agent Lifecycle', () => {
     let container: Container;
     let context: vscode.ExtensionContext;
@@ -268,7 +281,7 @@ describe('Agent Lifecycle', () => {
 
         test('should emit AGENT_CREATED event', async () => {
             const eventSpy = jest.fn();
-            eventBus.on(DOMAIN_EVENTS.AGENT_CREATED, eventSpy);
+            eventBus.subscribe(DOMAIN_EVENTS.AGENT_CREATED, eventSpy);
 
             jest.spyOn(vscode.window, 'showQuickPick')
                 .mockResolvedValueOnce({
@@ -526,7 +539,7 @@ describe('Agent Lifecycle', () => {
 
         test('should emit AGENT_REMOVED event', async () => {
             const eventSpy = jest.fn();
-            eventBus.on(DOMAIN_EVENTS.AGENT_REMOVED, eventSpy);
+            eventBus.subscribe(DOMAIN_EVENTS.AGENT_REMOVED, eventSpy);
 
             jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue({
                 label: testAgents[0].name,
@@ -707,7 +720,7 @@ describe('Agent Lifecycle', () => {
 
         test('should emit events for restored agents', async () => {
             const eventSpy = jest.fn();
-            eventBus.on(DOMAIN_EVENTS.AGENT_CREATED, eventSpy);
+            eventBus.subscribe(DOMAIN_EVENTS.AGENT_CREATED, eventSpy);
 
             jest.spyOn(agentPersistence, 'loadAgents').mockResolvedValue([
                 {

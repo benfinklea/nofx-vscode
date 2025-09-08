@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Smoke Tests" tests="11" failures="0" errors="0" time="2.599">
+  <testsuite name="🔥 SMOKE TESTS - Critical Paths" errors="0" failures="0" skipped="0" timestamp="2025-09-08T14:37:25" time="2.16" tests="11">
+    <testcase classname="🔥 SMOKE TESTS - Critical Paths › 1. Extension Activation" name="extension should activate without errors" time="0.002" file="src/test/smoke/critical-paths.smoke.test.ts">
+    </testcase>
+    <testcase classname="🔥 SMOKE TESTS - Critical Paths › 1. Extension Activation" name="critical services should be available" time="0" file="src/test/smoke/critical-paths.smoke.test.ts">
+    </testcase>
+    <testcase classname="🔥 SMOKE TESTS - Critical Paths › 2. WebSocket Server" name="WebSocket server should start" time="0.002" file="src/test/smoke/critical-paths.smoke.test.ts">
+    </testcase>
+    <testcase classname="🔥 SMOKE TESTS - Critical Paths › 2. WebSocket Server" name="WebSocket should accept connections" time="0" file="src/test/smoke/critical-paths.smoke.test.ts">
+    </testcase>
+    <testcase classname="🔥 SMOKE TESTS - Critical Paths › 3. Agent Management" name="should create agent" time="0" file="src/test/smoke/critical-paths.smoke.test.ts">
+    </testcase>
+    <testcase classname="🔥 SMOKE TESTS - Critical Paths › 3. Agent Management" name="should list agents" time="0.001" file="src/test/smoke/critical-paths.smoke.test.ts">
+    </testcase>
+    <testcase classname="🔥 SMOKE TESTS - Critical Paths › 4. Message Protocol" name="should handle core message types" time="0" file="src/test/smoke/critical-paths.smoke.test.ts">
+    </testcase>
+    <testcase classname="🔥 SMOKE TESTS - Critical Paths › 5. Dashboard Endpoints" name="health endpoint should respond" time="0" file="src/test/smoke/critical-paths.smoke.test.ts">
+    </testcase>
+    <testcase classname="🔥 SMOKE TESTS - Critical Paths › 6. Configuration" name="critical config should be accessible" time="0" file="src/test/smoke/critical-paths.smoke.test.ts">
+    </testcase>
+    <testcase classname="🔥 SMOKE TESTS - Critical Paths › 7. Error Recovery" name="should handle invalid agent spawn gracefully" time="0.019" file="src/test/smoke/critical-paths.smoke.test.ts">
+    </testcase>
+    <testcase classname="🔥 SMOKE TESTS - Critical Paths › 7. Error Recovery" name="should handle WebSocket errors gracefully" time="0" file="src/test/smoke/critical-paths.smoke.test.ts">
+    </testcase>
+  </testsuite>
+</testsuites>

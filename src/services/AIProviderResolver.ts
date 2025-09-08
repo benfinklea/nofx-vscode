@@ -66,7 +66,7 @@ export class AIProviderResolver {
      */
     getAiCommand(): string {
         const provider = this.configService.getAiProvider();
-        
+
         if (provider === 'custom') {
             return this.configService.getAiPath();
         }
@@ -86,7 +86,7 @@ export class AIProviderResolver {
      */
     getFullCommand(): string {
         const provider = this.configService.getAiProvider();
-        
+
         if (provider === 'custom') {
             return this.configService.getAiPath();
         }
@@ -104,22 +104,28 @@ export class AIProviderResolver {
      */
     getSystemPromptCommand(prompt: string): string {
         const provider = this.configService.getAiProvider();
-        
+
         if (provider === 'custom') {
             // For custom providers, assume they work like Claude
-            const escapedPrompt = prompt.replace(/'/g, "'\\''");
+            // Replace newlines with spaces to keep command on single line
+            const cleanPrompt = prompt.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+            const escapedPrompt = cleanPrompt.replace(/'/g, "'\\''");
             return `${this.configService.getAiPath()} --append-system-prompt '${escapedPrompt}'`;
         }
 
         const config = AIProviderResolver.PROVIDERS[provider];
         if (!config) {
             // Fallback
-            const escapedPrompt = prompt.replace(/'/g, "'\\''");
+            // Replace newlines with spaces to keep command on single line
+            const cleanPrompt = prompt.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+            const escapedPrompt = cleanPrompt.replace(/'/g, "'\\''");
             return `${this.configService.getAiPath()} --append-system-prompt '${escapedPrompt}'`;
         }
 
         if (config.supportsSystemPrompt && config.systemPromptFlag) {
-            const escapedPrompt = prompt.replace(/'/g, "'\\''");
+            // Replace newlines with spaces to keep command on single line
+            const cleanPrompt = prompt.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+            const escapedPrompt = cleanPrompt.replace(/'/g, "'\\''");
             return `${config.command} ${config.systemPromptFlag} '${escapedPrompt}'`;
         } else {
             // For providers that don't support system prompts, just launch them normally
@@ -148,7 +154,7 @@ export class AIProviderResolver {
      */
     supportsSystemPrompt(): boolean {
         const provider = this.configService.getAiProvider();
-        
+
         if (provider === 'custom') {
             // Assume custom providers work like Claude by default
             return true;
@@ -163,7 +169,7 @@ export class AIProviderResolver {
      */
     getCurrentProviderDescription(): string {
         const provider = this.configService.getAiProvider();
-        
+
         if (provider === 'custom') {
             return `Custom command: ${this.configService.getAiPath()}`;
         }

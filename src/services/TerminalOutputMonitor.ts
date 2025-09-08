@@ -17,6 +17,14 @@ export interface TerminalActivity {
     timestamp: Date;
 }
 
+export interface ClaudeReadyIndicators {
+    claudeReady: RegExp;
+    claudeError: RegExp;
+    claudeTimeout: RegExp;
+    claudePromptAccepted: RegExp;
+    systemPromptSuccess: RegExp;
+}
+
 export class TerminalOutputMonitor extends EventEmitter {
     private patterns: TerminalPattern = {
         completion: /task complete|finished|done|completed successfully|successfully completed|all tests pass/i,
@@ -25,6 +33,16 @@ export class TerminalOutputMonitor extends EventEmitter {
         waiting: /press enter|\[y\/n\]|continue\?|waiting for|please respond|awaiting input|your choice/i,
         error: /error:|failed:|exception:|permission denied|cannot|unable to|failure|crash/i,
         thinking: /analyzing|processing|thinking|calculating|searching|looking|examining|reviewing/i
+    };
+
+    private claudePatterns: ClaudeReadyIndicators = {
+        claudeReady:
+            /Claude\s*3\.|I'm Claude|Hello! I'm Claude|Ready to help|How can I help|What would you like|system prompt.*accepted/i,
+        claudeError:
+            /command not found.*claude|claude.*error|permission denied.*claude|failed to start|connection.*failed/i,
+        claudeTimeout: /timeout|timed out|no response|connection.*timeout/i,
+        claudePromptAccepted: /system prompt.*accepted|prompt.*applied|ready to assist|how may I help/i,
+        systemPromptSuccess: /NofX-Agent-Ready-Check|health-check.*received|echo.*NofX/i
     };
 
     private terminalWriteEmitters: Map<vscode.Terminal, vscode.EventEmitter<string>> = new Map();
@@ -90,7 +108,7 @@ export class TerminalOutputMonitor extends EventEmitter {
         for (const line of lines) {
             if (!line.trim()) continue;
 
-            // Check each pattern
+            // Check standard patterns
             for (const [patternName, pattern] of Object.entries(this.patterns)) {
                 if (pattern.test(line)) {
                     const activity: TerminalActivity = {
@@ -107,6 +125,35 @@ export class TerminalOutputMonitor extends EventEmitter {
 
                     // Log for debugging
                     console.log(`[TerminalMonitor] Detected ${patternName} pattern for agent ${agentId}: ${line}`);
+                }
+            }
+
+            // Check Claude-specific patterns
+            for (const [patternName, pattern] of Object.entries(this.claudePatterns)) {
+                if (pattern.test(line)) {
+                    const activity: TerminalActivity = {
+                        agentId,
+                        terminal,
+                        pattern: patternName as keyof TerminalPattern,
+                        match: line,
+                        timestamp: new Date()
+                    };
+
+                    // Emit Claude-specific events
+                    this.emit(`claude:${patternName}`, activity);
+                    this.emit('claude-activity', activity);
+
+                    // Log for debugging
+                    console.log(
+                        `[TerminalMonitor] Detected Claude ${patternName} pattern for agent ${agentId}: ${line}`
+                    );
+
+                    // Special handling for ready/error states
+                    if (patternName === 'claudeReady' || patternName === 'claudePromptAccepted') {
+                        this.emit('claude-ready', { agentId, terminal, line, timestamp: new Date() });
+                    } else if (patternName === 'claudeError' || patternName === 'claudeTimeout') {
+                        this.emit('claude-error', { agentId, terminal, line, timestamp: new Date(), error: line });
+                    }
                 }
             }
         }

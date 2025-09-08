@@ -393,7 +393,52 @@ export class OrchestrationServer {
      */
     clearDashboardCallback(): void {
         // Delegate to message router
-        this.messageRouter?.setDashboardCallback(undefined);
+        this.messageRouter?.clearDashboardCallback();
+    }
+
+    /**
+     * Check if the orchestration server is running
+     */
+    isServerRunning(): boolean {
+        return this.isRunning;
+    }
+
+    /**
+     * Generate test messages for dashboard verification
+     */
+    generateTestMessages(): void {
+        if (!this.isRunning) {
+            this.loggingService?.warn('Cannot generate test messages: server not running');
+            return;
+        }
+
+        const testMessages: OrchestratorMessage[] = [
+            createMessage('system', 'dashboard', MessageType.SYSTEM_STATUS, {
+                type: 'test',
+                message: 'Test message for dashboard verification',
+                timestamp: new Date().toISOString()
+            }),
+            createMessage('conductor', 'all-agents', MessageType.ASSIGN_TASK, {
+                taskId: 'test-task-001',
+                title: 'Test Task',
+                description: 'This is a test task for dashboard verification',
+                priority: 'medium'
+            }),
+            createMessage('agent-001', 'conductor', MessageType.TASK_COMPLETE, {
+                taskId: 'test-task-001',
+                status: 'completed',
+                result: 'Task completed successfully'
+            })
+        ];
+
+        this.loggingService?.info('Generating test messages for dashboard verification');
+
+        testMessages.forEach((message, index) => {
+            setTimeout(() => {
+                this.messageRouter?.route(message);
+                this.loggingService?.debug('Generated test message', { messageId: message.id, type: message.type });
+            }, index * 1000); // Space out messages by 1 second
+        });
     }
 
     /**

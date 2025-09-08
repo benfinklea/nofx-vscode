@@ -4,10 +4,24 @@ import {
     createMockTask,
     waitForEvent,
     measureTime
-} from '../utils/TestHelpers';
+} from './../utils/TestHelpers';
 import { IContainer, SERVICE_TOKENS } from '../../services/interfaces';
 import { createMessage, MessageType } from '../../orchestration/MessageProtocol';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
 
+jest.setTimeout(30000); // Increase timeout for integration tests
+
+jest.mock('ws');
 describe('Agent Workflow Integration Tests', () => {
     let container: IContainer;
     let agentManager: any;
@@ -30,7 +44,7 @@ describe('Agent Workflow Integration Tests', () => {
             await orchestrationServer.stop();
         }
         if (container) {
-            container.dispose();
+            await container.dispose();
         }
     });
 
@@ -44,7 +58,9 @@ describe('Agent Workflow Integration Tests', () => {
                     capabilities: ['general', 'testing']
                 };
 
+                console.log('Before spawnAgent');
                 const agent = await agentManager.spawnAgent(agentConfig);
+                console.log('After spawnAgent', agent);
                 expect(agent).toBeDefined();
                 expect(agent.id).toBeTruthy();
                 expect(agent.status).toBe('idle');

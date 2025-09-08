@@ -1,6 +1,19 @@
 import { ActivityMonitor, AgentActivityStatus } from '../../../services/ActivityMonitor';
 import { Agent } from '../../../agents/types';
 import * as vscode from 'vscode';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
+
+jest.mock('vscode');
 
 describe('ActivityMonitor', () => {
     let monitor: ActivityMonitor;
@@ -8,6 +21,8 @@ describe('ActivityMonitor', () => {
     let mockTerminal: vscode.Terminal;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         monitor = new ActivityMonitor();
 
         mockTerminal = {

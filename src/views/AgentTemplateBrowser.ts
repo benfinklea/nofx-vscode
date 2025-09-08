@@ -13,7 +13,7 @@ export class AgentTemplateBrowser {
         const items = templates.map(template => ({
             label: `${template.icon} ${template.name}`,
             description: template.description,
-            detail: `Tags: ${template.tags.join(', ')} | Languages: ${template.capabilities.languages.join(', ')}`,
+            detail: `Tags: ${template.tags?.join(', ') || 'None'} | Languages: ${template.capabilities.languages.join(', ')}`,
             template
         }));
 
@@ -163,30 +163,30 @@ export class AgentTemplateBrowser {
 ${template.description}
 
 ## Tags
-${template.tags.map(t => `\`${t}\``).join(', ')}
+${template.tags?.map((t: string) => `\`${t}\``).join(', ') || 'None'}
 
 ## Capabilities
 
 ### Languages
-${template.capabilities.languages.map(l => `- ${l}`).join('\n')}
+${template.capabilities.languages.map((l: string) => `- ${l}`).join('\n')}
 
 ### Frameworks
-${template.capabilities.frameworks.map(f => `- ${f}`).join('\n')}
+${template.capabilities.frameworks.map((f: string) => `- ${f}`).join('\n')}
 
 ### Tools
-${template.capabilities.tools.map(t => `- ${t}`).join('\n')}
+${template.capabilities.tools.map((t: string) => `- ${t}`).join('\n')}
 
 ### Testing
-${template.capabilities.testing.map(t => `- ${t}`).join('\n')}
+${template.capabilities.testing.map((t: string) => `- ${t}`).join('\n')}
 
 ### Specialties
-${template.capabilities.specialties.map(s => `- ${s}`).join('\n')}
+${template.capabilities.specialties.map((s: string) => `- ${s}`).join('\n')}
 
 ## Task Preferences
 
-**Preferred:** ${template.taskPreferences.preferred.join(', ')}
-**Avoid:** ${template.taskPreferences.avoid.join(', ')}
-**Priority:** ${template.taskPreferences.priority}
+**Preferred:** ${template.taskPreferences?.preferred.join(', ') || 'None'}
+**Avoid:** ${template.taskPreferences?.avoid.join(', ') || 'None'}
+**Priority:** ${template.taskPreferences?.priority || 'Normal'}
 
 ## System Prompt
 \`\`\`

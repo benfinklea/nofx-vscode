@@ -78,7 +78,21 @@ import {
 } from '../../../services/interfaces';
 import { OrchestratorMessage, MessageType } from '../../../orchestration/MessageProtocol';
 import { ORCH_EVENTS } from '../../../services/EventConstants';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
+jest.setTimeout(10000);
+
+jest.mock('ws');
 describe('OrchestrationServer', () => {
     let orchestrationServer: OrchestrationServer;
     let mockLoggingService: jest.Mocked<ILoggingService>;
@@ -91,6 +105,8 @@ describe('OrchestrationServer', () => {
     let mockMetricsService: jest.Mocked<IMetricsService>;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Reset all mocks
         jest.clearAllMocks();
 

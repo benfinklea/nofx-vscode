@@ -37,8 +37,43 @@ export enum MessageType {
     CONNECTION_LOST = 'connection_lost',
     HEARTBEAT = 'heartbeat',
     SYSTEM_ERROR = 'system_error',
+    SYSTEM_STATUS = 'system_status',
     SYSTEM_ACK = 'system_ack',
-    BROADCAST = 'broadcast'
+    BROADCAST = 'broadcast',
+
+    // Additional test/protocol messages
+    CONDUCTOR_REGISTER = 'conductor_register',
+    AGENT_REGISTER = 'agent_register',
+    AGENT_RECONNECT = 'agent_reconnect',
+    RECONNECT_ACK = 'reconnect_ack',
+    RATE_LIMIT_WARNING = 'rate_limit_warning',
+    CREATE_TASK = 'create_task',
+    TASK_CREATED = 'task_created',
+    TASK_REJECTED = 'task_rejected',
+    TASK_CANCELLED = 'task_cancelled',
+    TASK_RETRY = 'task_retry',
+    DATA_TRANSFER = 'data_transfer',
+    DATA_RECEIVED = 'data_received',
+    AUTO_ASSIGN_TASK = 'auto_assign_task',
+    QUEUE_TASK = 'queue_task',
+    PROCESS_QUEUE = 'process_queue',
+    CANCEL_TASK = 'cancel_task',
+    GET_TASK_RESULT = 'get_task_result',
+    TASK_RESULT = 'task_result',
+    GET_AGENT_METRICS = 'get_agent_metrics',
+    AGENT_METRICS = 'agent_metrics',
+    UPDATE_AGENT_TEMPLATE = 'update_agent_template',
+    AGENT_TEMPLATE_UPDATED = 'agent_template_updated',
+
+    // Worktree messages
+    ENABLE_WORKTREES = 'enable_worktrees',
+    WORKTREE_CREATED = 'worktree_created',
+    WORKTREE_REMOVED = 'worktree_removed',
+    WORKTREE_MERGED = 'worktree_merged',
+    MERGE_AGENT_WORK = 'merge_agent_work',
+    MERGE_CONFLICT = 'merge_conflict',
+    GET_WORKTREE_METRICS = 'get_worktree_metrics',
+    WORKTREE_METRICS = 'worktree_metrics'
 }
 
 export interface OrchestratorMessage {

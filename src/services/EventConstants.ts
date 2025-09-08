@@ -82,19 +82,19 @@ export const DOMAIN_EVENTS = {
     SESSION_EXPIRY_WARNING: 'session.expiry.warning',
     SESSION_TASK_STARTED: 'session.task.started',
     SESSION_TASK_COMPLETED: 'session.task.completed',
-    
+
     // Persistence events
     PERSISTENCE_OPERATION_COMPLETE: 'persistence.operation.complete',
-    
+
     // Dashboard events
     DASHBOARD_COMMAND: 'dashboard.command',
-    
+
     // System events
     SYSTEM_ERROR: 'system.error',
-    
+
     // Metrics events
     METRICS_UPDATED: 'metrics.updated',
-    
+
     // Load balancing events
     LOAD_BALANCING_EVENT: 'load.balancing.event'
 } as const;

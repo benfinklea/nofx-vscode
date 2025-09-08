@@ -119,7 +119,7 @@ export class CodebaseAnalyzer {
             const metrics = this.calculateWorkspaceMetrics();
 
             const result: WorkspaceAnalysis = {
-                components: new Map(this.components),
+                components: Object.fromEntries(this.components),
                 dependencies: this.dependencyGraph,
                 metrics,
                 timestamp: new Date()

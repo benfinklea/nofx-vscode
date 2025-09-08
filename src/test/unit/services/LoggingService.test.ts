@@ -1,6 +1,17 @@
 import * as vscode from 'vscode';
 import { LoggingService } from '../../../services/LoggingService';
 import { IConfigurationService, LogLevel } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 jest.mock('vscode');
 
@@ -14,6 +25,9 @@ describe('LoggingService', () => {
     let consoleErrorSpy: jest.SpyInstance;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockConfigService = createMockConfigurationService();
         // Mock output channel
         mockMainChannel = {
             appendLine: jest.fn(),
@@ -27,28 +41,7 @@ describe('LoggingService', () => {
         };
 
         // Mock configuration service
-        mockConfigService = {
-            getLogLevel: jest.fn().mockReturnValue('info'),
-            onDidChange: jest.fn().mockReturnValue({ dispose: jest.fn() }),
-            get: jest.fn(),
-            getAll: jest.fn(),
-            update: jest.fn(),
-            validateAll: jest.fn(),
-            validateKey: jest.fn(),
-            validateObject: jest.fn(),
-            getRecentProjects: jest.fn(),
-            addRecentProject: jest.fn(),
-            removeRecentProject: jest.fn(),
-            clearRecentProjects: jest.fn(),
-            getApiCredentials: jest.fn(),
-            setApiCredentials: jest.fn(),
-            clearApiCredentials: jest.fn(),
-            getQuickPickSettings: jest.fn(),
-            updateQuickPickSettings: jest.fn(),
-            getFeatureFlags: jest.fn(),
-            isFeatureEnabled: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        mockConfigService = createMockConfigurationService();
 
         // Spy on console methods
         consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();

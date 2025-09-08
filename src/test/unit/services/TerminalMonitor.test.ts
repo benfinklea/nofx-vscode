@@ -1,139 +1,156 @@
-import { expect } from 'chai';
-import * as sinon from 'sinon';
+import { jest } from '@jest/globals';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockErrorHandler,
+    createMockMetricsService,
+    createMockContainer,
+    createMockExtensionContext,
+    setupVSCodeMocks,
+    resetAllMocks
+} from './../../helpers/mockFactories';
 import * as vscode from 'vscode';
 import { EventEmitter } from 'events';
 import { TerminalMonitor, ParsedSubAgentRequest } from '../../../services/TerminalMonitor';
 import { TaskToolBridge, SubAgentType, TaskResult } from '../../../services/TaskToolBridge';
-import { ILoggingService } from '../../../services/interfaces';
+import { ILoggingService, IConfigurationService } from '../../../services/interfaces';
+
+jest.mock('vscode');
 
 describe('TerminalMonitor', () => {
     let sandbox: sinon.SinonSandbox;
     let terminalMonitor: TerminalMonitor;
     let mockLoggingService: sinon.SinonStubbedInstance<ILoggingService>;
+    let mockConfigService: sinon.SinonStubbedInstance<IConfigurationService>;
     let mockTaskToolBridge: sinon.SinonStubbedInstance<TaskToolBridge>;
     let mockTerminal: sinon.SinonStubbedInstance<vscode.Terminal>;
     let onDidCloseTerminalStub: sinon.SinonStub;
 
     beforeEach(() => {
-        sandbox = sinon.createSandbox();
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockTerminal = createMockTerminal();
+        mockConfigService = createMockConfigurationService();
+        // Jest handles mock cleanup automatically
 
         // Create mock services
-        mockLoggingService = {
-            info: sandbox.stub(),
-            warn: sandbox.stub(),
-            error: sandbox.stub(),
-            debug: sandbox.stub()
-        } as any;
+        mockLoggingService = createMockLoggingService();
+
+        mockConfigService = createMockConfigurationService();
 
         // Create mock TaskToolBridge
-        mockTaskToolBridge = sandbox.createStubInstance(TaskToolBridge) as any;
-        mockTaskToolBridge.on = sandbox.stub().returns(mockTaskToolBridge);
-        mockTaskToolBridge.executeTaskForAgent = sandbox.stub();
+        mockTaskToolBridge = {
+            on: jest.fn().mockReturnValueThis(),
+            executeTaskForAgent: jest.fn(),
+            emit: jest.fn(),
+            removeAllListeners: jest.fn(),
+            listenerCount: jest.fn().mockReturnValue(0)
+        } as any;
 
         // Create mock terminal
         mockTerminal = {
             name: 'Test Terminal',
-            sendText: sandbox.stub(),
-            dispose: sandbox.stub()
+            sendText: jest.fn(),
+            dispose: jest.fn()
         } as any;
 
         // Stub VS Code window events
-        onDidCloseTerminalStub = sandbox.stub();
+        onDidCloseTerminalStub = jest.fn();
         (vscode.window as any).onDidCloseTerminal = onDidCloseTerminalStub;
-        onDidCloseTerminalStub.returns({ dispose: sandbox.stub() });
+        onDidCloseTerminalStub.mockReturnValue({ dispose: jest.fn() });
 
         // Create TerminalMonitor instance
-        terminalMonitor = new TerminalMonitor(mockLoggingService, mockTaskToolBridge as any);
+        terminalMonitor = new TerminalMonitor(mockLoggingService, mockConfigService, mockTaskToolBridge as any);
     });
 
     afterEach(() => {
         terminalMonitor.dispose();
-        sandbox.restore();
+        jest.clearAllMocks();
     });
 
     describe('Constructor', () => {
         it('should initialize with correct setup', () => {
-            expect(terminalMonitor).to.be.instanceof(TerminalMonitor);
-            expect(mockLoggingService.info).to.have.been.calledWith('TerminalMonitor initialized');
+            expect(terminalMonitor).toBeInstanceOf(TerminalMonitor);
+            expect(mockLoggingService.info).toHaveBeenCalledWith('TerminalMonitor initialized', expect.any(Object));
         });
 
         it('should set up TaskToolBridge listeners', () => {
-            expect(mockTaskToolBridge.on).to.have.been.calledWith('taskProgress');
-            expect(mockTaskToolBridge.on).to.have.been.calledWith('taskCompleted');
-            expect(mockTaskToolBridge.on).to.have.been.calledWith('taskFailed');
+            expect(mockTaskToolBridge.on).toHaveBeenCalledWith('taskProgress');
+            expect(mockTaskToolBridge.on).toHaveBeenCalledWith('taskCompleted');
+            expect(mockTaskToolBridge.on).toHaveBeenCalledWith('taskFailed');
         });
     });
 
     describe('startMonitoring', () => {
         it('should start monitoring a terminal', () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             terminalMonitor.on('monitoringStarted', eventSpy);
 
             terminalMonitor.startMonitoring(mockTerminal as any, 'agent-1');
 
-            expect(mockLoggingService.info).to.have.been.calledWith('Starting terminal monitoring for agent agent-1');
-            expect(eventSpy).to.have.been.calledOnce;
+            expect(mockLoggingService.info).toHaveBeenCalledWith('Starting terminal monitoring for agent agent-1');
+            expect(eventSpy).toHaveBeenCalledTimes(1);
 
-            const event = eventSpy.getCall(0).args[0];
-            expect(event.terminal).to.equal(mockTerminal);
-            expect(event.agentId).to.equal('agent-1');
+            const event = eventSpy.mock.calls[0][0];
+            expect(event.terminal).toBe(mockTerminal);
+            expect(event.agentId).toBe('agent-1');
         });
 
         it('should warn if terminal already monitored', () => {
             terminalMonitor.startMonitoring(mockTerminal as any, 'agent-1');
             terminalMonitor.startMonitoring(mockTerminal as any, 'agent-2');
 
-            expect(mockLoggingService.warn).to.have.been.calledWith(
-                'Terminal already being monitored for agent agent-2'
-            );
+            expect(mockLoggingService.warn).toHaveBeenCalledWith('Terminal already being monitored for agent agent-2');
         });
 
         it('should register terminal close listener', () => {
             terminalMonitor.startMonitoring(mockTerminal as any, 'agent-1');
 
-            expect(onDidCloseTerminalStub).to.have.been.calledOnce;
+            expect(onDidCloseTerminalStub).toHaveBeenCalledTimes(1);
         });
 
         it('should stop monitoring when terminal closes', () => {
             terminalMonitor.startMonitoring(mockTerminal as any, 'agent-1');
 
-            const closeCallback = onDidCloseTerminalStub.getCall(0).args[0];
+            const closeCallback = onDidCloseTerminalStub.mock.calls[0][0];
             closeCallback(mockTerminal);
 
-            expect(mockLoggingService.info).to.have.been.calledWith('Stopping terminal monitoring for agent agent-1');
+            expect(mockLoggingService.info).toHaveBeenCalledWith('Stopping terminal monitoring for agent agent-1');
         });
     });
 
     describe('stopMonitoring', () => {
         it('should stop monitoring a terminal', () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             terminalMonitor.on('monitoringStopped', eventSpy);
 
             terminalMonitor.startMonitoring(mockTerminal as any, 'agent-1');
             terminalMonitor.stopMonitoring(mockTerminal as any);
 
-            expect(mockLoggingService.info).to.have.been.calledWith('Stopping terminal monitoring for agent agent-1');
-            expect(eventSpy).to.have.been.calledOnce;
+            expect(mockLoggingService.info).toHaveBeenCalledWith('Stopping terminal monitoring for agent agent-1');
+            expect(eventSpy).toHaveBeenCalledTimes(1);
 
-            const event = eventSpy.getCall(0).args[0];
-            expect(event.terminal).to.equal(mockTerminal);
-            expect(event.agentId).to.equal('agent-1');
+            const event = eventSpy.mock.calls[0][0];
+            expect(event.terminal).toBe(mockTerminal);
+            expect(event.agentId).toBe('agent-1');
         });
 
         it('should do nothing if terminal not monitored', () => {
             terminalMonitor.stopMonitoring(mockTerminal as any);
 
-            expect(mockLoggingService.info).to.not.have.been.calledWith('Stopping terminal monitoring');
+            expect(mockLoggingService.info).not.toHaveBeenCalledWith('Stopping terminal monitoring');
         });
 
         it('should dispose of terminal listeners', () => {
-            const disposeSpy = sandbox.spy();
-            onDidCloseTerminalStub.returns({ dispose: disposeSpy });
+            const disposeSpy = jest.fn();
+            onDidCloseTerminalStub.mockReturnValue({ dispose: disposeSpy });
 
             terminalMonitor.startMonitoring(mockTerminal as any, 'agent-1');
             terminalMonitor.stopMonitoring(mockTerminal as any);
 
-            expect(disposeSpy).to.have.been.calledOnce;
+            expect(disposeSpy).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -143,7 +160,7 @@ describe('TerminalMonitor', () => {
         });
 
         it('should detect JSON sub-agent request', async () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             terminalMonitor.on('subAgentRequestDetected', eventSpy);
 
             const taskResult: TaskResult = {
@@ -156,7 +173,7 @@ describe('TerminalMonitor', () => {
                 completedAt: new Date()
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             const data = `
 Some terminal output...
@@ -171,17 +188,17 @@ More output...
 
             await terminalMonitor.processTerminalData(mockTerminal as any, data);
 
-            expect(eventSpy).to.have.been.calledOnce;
-            const event = eventSpy.getCall(0).args[0];
-            expect(event.agentId).to.equal('agent-1');
-            expect(event.request.type).to.equal(SubAgentType.GENERAL_PURPOSE);
-            expect(event.request.description).to.equal('Test task');
-            expect(event.request.prompt).to.equal('Do something');
-            expect(event.request.priority).to.equal(8);
+            expect(eventSpy).toHaveBeenCalledTimes(1);
+            const event = eventSpy.mock.calls[0][0];
+            expect(event.agentId).toBe('agent-1');
+            expect(event.request.type).toBe(SubAgentType.GENERAL_PURPOSE);
+            expect(event.request.description).toBe('Test task');
+            expect(event.request.prompt).toBe('Do something');
+            expect(event.request.priority).toBe(8);
         });
 
         it('should detect code review pattern', async () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             terminalMonitor.on('subAgentRequestDetected', eventSpy);
 
             const taskResult: TaskResult = {
@@ -194,7 +211,7 @@ More output...
                 completedAt: new Date()
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             const data = `
 REVIEW_CODE:
@@ -206,14 +223,14 @@ END_REVIEW
 
             await terminalMonitor.processTerminalData(mockTerminal as any, data);
 
-            expect(eventSpy).to.have.been.calledOnce;
-            const event = eventSpy.getCall(0).args[0];
-            expect(event.request.type).to.equal(SubAgentType.CODE_LEAD_REVIEWER);
-            expect(event.request.description).to.equal('Code review request');
+            expect(eventSpy).toHaveBeenCalledTimes(1);
+            const event = eventSpy.mock.calls[0][0];
+            expect(event.request.type).toBe(SubAgentType.CODE_LEAD_REVIEWER);
+            expect(event.request.description).toBe('Code review request');
         });
 
         it('should detect research pattern', async () => {
-            const eventSpy = sandbox.spy();
+            const eventSpy = jest.fn();
             terminalMonitor.on('subAgentRequestDetected', eventSpy);
 
             const taskResult: TaskResult = {
@@ -226,7 +243,7 @@ END_REVIEW
                 completedAt: new Date()
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             const data = `
 RESEARCH:
@@ -236,10 +253,10 @@ END_RESEARCH
 
             await terminalMonitor.processTerminalData(mockTerminal as any, data);
 
-            expect(eventSpy).to.have.been.calledOnce;
-            const event = eventSpy.getCall(0).args[0];
-            expect(event.request.type).to.equal(SubAgentType.GENERAL_PURPOSE);
-            expect(event.request.description).to.equal('Research task');
+            expect(eventSpy).toHaveBeenCalledTimes(1);
+            const event = eventSpy.mock.calls[0][0];
+            expect(event.request.type).toBe(SubAgentType.GENERAL_PURPOSE);
+            expect(event.request.description).toBe('Research task');
         });
 
         it('should handle buffer overflow', async () => {
@@ -248,7 +265,7 @@ END_RESEARCH
             await terminalMonitor.processTerminalData(mockTerminal as any, longData);
 
             // Should truncate but not crash
-            expect(mockLoggingService.error).to.not.have.been.called;
+            expect(mockLoggingService.error).not.toHaveBeenCalled;
         });
 
         it('should clear buffer after processing request', async () => {
@@ -262,7 +279,7 @@ END_RESEARCH
                 completedAt: new Date()
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             // First request
             await terminalMonitor.processTerminalData(
@@ -276,7 +293,7 @@ END_RESEARCH
                 'SUB_AGENT_REQUEST: {"type":"general-purpose","prompt":"Test2"}'
             );
 
-            expect(mockTaskToolBridge.executeTaskForAgent).to.have.been.calledTwice;
+            expect(mockTaskToolBridge.executeTaskForAgent).toHaveBeenCalledTimes(2);
         });
 
         it('should ignore data from unmonitored terminals', async () => {
@@ -284,7 +301,7 @@ END_RESEARCH
 
             await terminalMonitor.processTerminalData(unmonitoredTerminal, 'SUB_AGENT_REQUEST: {"prompt":"Test"}');
 
-            expect(mockTaskToolBridge.executeTaskForAgent).to.not.have.been.called;
+            expect(mockTaskToolBridge.executeTaskForAgent).not.toHaveBeenCalled;
         });
     });
 
@@ -294,7 +311,7 @@ END_RESEARCH
         });
 
         it('should handle successful sub-agent execution', async () => {
-            const completeSpy = sandbox.spy();
+            const completeSpy = jest.fn();
             terminalMonitor.on('subAgentRequestCompleted', completeSpy);
 
             const taskResult: TaskResult = {
@@ -308,46 +325,46 @@ END_RESEARCH
                 metadata: { key: 'value' }
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             await terminalMonitor.processTerminalData(
                 mockTerminal as any,
                 'SUB_AGENT_REQUEST: {"type":"general-purpose","prompt":"Test task"}'
             );
 
-            expect(completeSpy).to.have.been.calledOnce;
-            const event = completeSpy.getCall(0).args[0];
-            expect(event.result.status).to.equal('success');
-            expect(event.responseTime).to.be.greaterThan(0);
+            expect(completeSpy).toHaveBeenCalledTimes(1);
+            const event = completeSpy.mock.calls[0][0];
+            expect(event.result.status).toBe('success');
+            expect(event.responseTime).toBeGreaterThan(0);
 
             // Check result was sent to terminal
-            expect(mockTerminal.sendText).to.have.been.called;
-            const terminalOutput = mockTerminal.sendText.getCall(0).args[0];
-            expect(terminalOutput).to.include('SUB_AGENT_RESULT');
-            expect(terminalOutput).to.include('Status: success');
-            expect(terminalOutput).to.include('Task completed successfully');
+            expect(mockTerminal.sendText).toHaveBeenCalled();
+            const terminalOutput = mockTerminal.sendText.mock.calls[0][0];
+            expect(terminalOutput).toContain('SUB_AGENT_RESULT');
+            expect(terminalOutput).toContain('Status: success');
+            expect(terminalOutput).toContain('Task completed successfully');
         });
 
         it('should handle failed sub-agent execution', async () => {
-            const failSpy = sandbox.spy();
+            const failSpy = jest.fn();
             terminalMonitor.on('subAgentRequestFailed', failSpy);
 
-            mockTaskToolBridge.executeTaskForAgent.rejects(new Error('Execution failed'));
+            mockTaskToolBridge.executeTaskForAgent.mockRejectedValue(new Error('Execution failed'));
 
             await terminalMonitor.processTerminalData(
                 mockTerminal as any,
                 'SUB_AGENT_REQUEST: {"type":"general-purpose","prompt":"Test task"}'
             );
 
-            expect(failSpy).to.have.been.calledOnce;
-            const event = failSpy.getCall(0).args[0];
-            expect(event.error).to.equal('Execution failed');
+            expect(failSpy).toHaveBeenCalledTimes(1);
+            const event = failSpy.mock.calls[0][0];
+            expect(event.error).toBe('Execution failed');
 
             // Check error was sent to terminal
-            expect(mockTerminal.sendText).to.have.been.called;
-            const terminalOutput = mockTerminal.sendText.getCall(0).args[0];
-            expect(terminalOutput).to.include('SUB_AGENT_ERROR');
-            expect(terminalOutput).to.include('Execution failed');
+            expect(mockTerminal.sendText).toHaveBeenCalled();
+            const terminalOutput = mockTerminal.sendText.mock.calls[0][0];
+            expect(terminalOutput).toContain('SUB_AGENT_ERROR');
+            expect(terminalOutput).toContain('Execution failed');
         });
 
         it('should handle task with error status', async () => {
@@ -361,16 +378,16 @@ END_RESEARCH
                 completedAt: new Date()
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             await terminalMonitor.processTerminalData(
                 mockTerminal as any,
                 'SUB_AGENT_REQUEST: {"type":"general-purpose","prompt":"Test"}'
             );
 
-            const terminalOutput = mockTerminal.sendText.getCall(0).args[0];
-            expect(terminalOutput).to.include('Status: error');
-            expect(terminalOutput).to.include('Task failed with error');
+            const terminalOutput = mockTerminal.sendText.mock.calls[0][0];
+            expect(terminalOutput).toContain('Status: error');
+            expect(terminalOutput).toContain('Task failed with error');
         });
 
         it('should track statistics correctly', async () => {
@@ -384,7 +401,7 @@ END_RESEARCH
                 completedAt: new Date()
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             // Execute multiple requests
             await terminalMonitor.processTerminalData(
@@ -395,12 +412,12 @@ END_RESEARCH
             await terminalMonitor.processTerminalData(mockTerminal as any, 'REVIEW_CODE:\ncode here\nEND_REVIEW');
 
             const stats = terminalMonitor.getStats();
-            expect(stats.totalRequestsDetected).to.equal(2);
-            expect(stats.successfulRequests).to.equal(2);
-            expect(stats.failedRequests).to.equal(0);
-            expect(stats.averageResponseTime).to.be.greaterThan(0);
-            expect(stats.requestsByType.get(SubAgentType.GENERAL_PURPOSE)).to.equal(1);
-            expect(stats.requestsByType.get(SubAgentType.CODE_LEAD_REVIEWER)).to.equal(1);
+            expect(stats.totalRequestsDetected).toBe(2);
+            expect(stats.successfulRequests).toBe(2);
+            expect(stats.failedRequests).toBe(0);
+            expect(stats.averageResponseTime).toBeGreaterThan(0);
+            expect(stats.requestsByType.get(SubAgentType.GENERAL_PURPOSE)).toBe(1);
+            expect(stats.requestsByType.get(SubAgentType.CODE_LEAD_REVIEWER)).toBe(1);
         });
     });
 
@@ -409,11 +426,11 @@ END_RESEARCH
             const originalPrompt = 'You are a backend specialist.';
             const injectedPrompt = terminalMonitor.injectSubAgentInstructions(originalPrompt, 'backend');
 
-            expect(injectedPrompt).to.include(originalPrompt);
-            expect(injectedPrompt).to.include('Sub-Agent Capabilities');
-            expect(injectedPrompt).to.include('REVIEW_CODE');
-            expect(injectedPrompt).to.include('RESEARCH');
-            expect(injectedPrompt).to.include('SUB_AGENT_REQUEST');
+            expect(injectedPrompt).toContain(originalPrompt);
+            expect(injectedPrompt).toContain('Sub-Agent Capabilities');
+            expect(injectedPrompt).toContain('REVIEW_CODE');
+            expect(injectedPrompt).toContain('RESEARCH');
+            expect(injectedPrompt).toContain('SUB_AGENT_REQUEST');
         });
     });
 
@@ -421,18 +438,18 @@ END_RESEARCH
         it('should return list of monitored agents', () => {
             terminalMonitor.startMonitoring(mockTerminal as any, 'agent-1');
 
-            const terminal2 = { name: 'Terminal 2', sendText: sandbox.stub() } as any;
+            const terminal2 = { name: 'Terminal 2', sendText: jest.fn() } as any;
             terminalMonitor.startMonitoring(terminal2, 'agent-2');
 
             const agents = terminalMonitor.getMonitoredAgents();
-            expect(agents).to.deep.equal(['agent-1', 'agent-2']);
+            expect(agents).toEqual(['agent-1', 'agent-2']);
         });
 
         it('should check if agent is monitored', () => {
             terminalMonitor.startMonitoring(mockTerminal as any, 'agent-1');
 
-            expect(terminalMonitor.isAgentMonitored('agent-1')).to.be.true;
-            expect(terminalMonitor.isAgentMonitored('agent-2')).to.be.false;
+            expect(terminalMonitor.isAgentMonitored('agent-1')).toBe(true);
+            expect(terminalMonitor.isAgentMonitored('agent-2')).toBe(false);
         });
     });
 
@@ -452,7 +469,7 @@ END_RESEARCH
                 completedAt: new Date()
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             const data = `
 Please review the following code:
@@ -464,7 +481,7 @@ function test() {
 
             await terminalMonitor.processTerminalData(mockTerminal as any, data);
 
-            expect(mockTaskToolBridge.executeTaskForAgent).to.have.been.calledWith(
+            expect(mockTaskToolBridge.executeTaskForAgent).toHaveBeenCalledWith(
                 'agent-1',
                 SubAgentType.CODE_LEAD_REVIEWER,
                 'Code review request',
@@ -483,13 +500,13 @@ function test() {
                 completedAt: new Date()
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             const data = 'Find all authentication implementations in the codebase';
 
             await terminalMonitor.processTerminalData(mockTerminal as any, data);
 
-            expect(mockTaskToolBridge.executeTaskForAgent).to.have.been.calledWith(
+            expect(mockTaskToolBridge.executeTaskForAgent).toHaveBeenCalledWith(
                 'agent-1',
                 SubAgentType.GENERAL_PURPOSE,
                 'Search task',
@@ -508,7 +525,7 @@ function test() {
                 completedAt: new Date()
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             const data = `
 ANALYZE:
@@ -518,7 +535,7 @@ END_ANALYZE
 
             await terminalMonitor.processTerminalData(mockTerminal as any, data);
 
-            expect(mockTaskToolBridge.executeTaskForAgent).to.have.been.calledWith(
+            expect(mockTaskToolBridge.executeTaskForAgent).toHaveBeenCalledWith(
                 'agent-1',
                 SubAgentType.GENERAL_PURPOSE,
                 'Analysis task',
@@ -531,8 +548,8 @@ END_ANALYZE
 
             await terminalMonitor.processTerminalData(mockTerminal as any, data);
 
-            expect(mockLoggingService.error).to.have.been.calledWith('Failed to parse SUB_AGENT_REQUEST JSON');
-            expect(mockTaskToolBridge.executeTaskForAgent).to.not.have.been.called;
+            expect(mockLoggingService.error).toHaveBeenCalledWith('Failed to parse SUB_AGENT_REQUEST JSON');
+            expect(mockTaskToolBridge.executeTaskForAgent).not.toHaveBeenCalled();
         });
     });
 
@@ -550,7 +567,7 @@ END_ANALYZE
                 completedAt: new Date()
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             // Stop monitoring before result delivery
             terminalMonitor.stopMonitoring(mockTerminal as any);
@@ -561,7 +578,7 @@ END_ANALYZE
             );
 
             // Should not crash
-            expect(mockLoggingService.warn).to.not.have.been.called;
+            expect(mockLoggingService.warn).not.toHaveBeenCalled();
         });
 
         it('should handle multiple rapid requests', async () => {
@@ -577,7 +594,7 @@ END_ANALYZE
                 completedAt: new Date()
             };
 
-            mockTaskToolBridge.executeTaskForAgent.resolves(taskResult);
+            mockTaskToolBridge.executeTaskForAgent.mockResolvedValue(taskResult);
 
             // Send multiple requests rapidly
             const promises = [];
@@ -592,35 +609,35 @@ END_ANALYZE
 
             await Promise.all(promises);
 
-            expect(mockTaskToolBridge.executeTaskForAgent).to.have.been.callCount(5);
+            expect(mockTaskToolBridge.executeTaskForAgent).toHaveBeenCalledTimes(5);
 
             const stats = terminalMonitor.getStats();
-            expect(stats.totalRequestsDetected).to.equal(5);
-            expect(stats.successfulRequests).to.equal(5);
+            expect(stats.totalRequestsDetected).toBe(5);
+            expect(stats.successfulRequests).toBe(5);
         });
     });
 
     describe('Disposal', () => {
         it('should clean up all resources', () => {
-            const terminal1 = { name: 'T1', sendText: sandbox.stub() } as any;
-            const terminal2 = { name: 'T2', sendText: sandbox.stub() } as any;
+            const terminal1 = { name: 'T1', sendText: jest.fn() } as any;
+            const terminal2 = { name: 'T2', sendText: jest.fn() } as any;
 
             terminalMonitor.startMonitoring(terminal1, 'agent-1');
             terminalMonitor.startMonitoring(terminal2, 'agent-2');
 
             terminalMonitor.dispose();
 
-            expect(terminalMonitor.getMonitoredAgents()).to.have.lengthOf(0);
-            expect(mockLoggingService.info).to.have.been.calledWith('TerminalMonitor disposed');
+            expect(terminalMonitor.getMonitoredAgents()).toHaveLength(0);
+            expect(mockLoggingService.info).toHaveBeenCalledWith('TerminalMonitor disposed');
         });
 
         it('should remove all event listeners', () => {
             terminalMonitor.on('test', () => {});
-            expect(terminalMonitor.listenerCount('test')).to.equal(1);
+            expect(terminalMonitor.listenerCount('test')).toBe(1);
 
             terminalMonitor.dispose();
 
-            expect(terminalMonitor.listenerCount('test')).to.equal(0);
+            expect(terminalMonitor.listenerCount('test')).toBe(0);
         });
     });
 });

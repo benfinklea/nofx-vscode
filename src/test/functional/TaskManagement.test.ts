@@ -15,6 +15,19 @@ import { Task, TaskStatus } from '../../types/task';
 import { Agent } from '../../types/agent';
 import { setupMockWorkspace, clearMockWorkspace } from './setup';
 import { TestHarness } from './testHarness';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
+
+jest.mock('vscode');
 
 describe('Task Management', () => {
     let container: Container;
@@ -33,6 +46,8 @@ describe('Task Management', () => {
     });
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Reset container state between tests but preserve command registrations
         TestHarness.resetContainer();
 

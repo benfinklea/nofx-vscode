@@ -19,6 +19,13 @@ import {
 } from '../setup';
 import * as vscode from 'vscode';
 
+// Mock VS Code EventEmitter for integration tests
+(vscode as any).EventEmitter = jest.fn().mockImplementation(() => ({
+    event: jest.fn().mockReturnValue({ dispose: jest.fn() }),
+    fire: jest.fn(),
+    dispose: jest.fn()
+}));
+
 // Re-export commonly used test utilities
 export { createMockAgent, createMockTask, waitForEvent, measureTime };
 
@@ -279,6 +286,9 @@ export const createIntegrationContainer = (): IContainer => {
 
     const agentManager = new AgentManager(mockContext);
 
+    // Mock the VS Code Event for onAgentUpdate
+    (agentManager as any).onAgentUpdate = jest.fn().mockReturnValue({ dispose: jest.fn() });
+
     // Create mock dependencies for AgentManager
     const mockAgentLifecycleManager = {
         initialize: jest.fn().mockResolvedValue(undefined),
@@ -292,6 +302,8 @@ export const createIntegrationContainer = (): IContainer => {
             return agent;
         }),
         removeAgent: jest.fn().mockResolvedValue(true),
+        startTaskMonitoring: jest.fn().mockResolvedValue(undefined),
+        stopTaskMonitoring: jest.fn().mockResolvedValue(undefined),
         dispose: jest.fn()
     };
 
@@ -324,6 +336,11 @@ export const createIntegrationContainer = (): IContainer => {
         createMockErrorHandler(),
         metricsService
     );
+
+    // Initialize AgentManager
+    agentManager.initialize(false).catch((err: any) => {
+        console.warn('AgentManager initialization failed in test:', err);
+    });
 
     container.registerInstance(SERVICE_TOKENS.AgentManager, agentManager);
 

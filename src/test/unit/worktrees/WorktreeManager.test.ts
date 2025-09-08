@@ -4,10 +4,34 @@ import { execSync } from 'child_process';
 import { WorktreeManager } from '../../../worktrees/WorktreeManager';
 import { Agent } from '../../../agents/types';
 import { ILoggingService, INotificationService } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
-jest.mock('fs');
-jest.mock('child_process');
-jest.mock('path');
+jest.mock('fs', () => ({
+    existsSync: jest.fn(),
+    mkdirSync: jest.fn(),
+    writeFileSync: jest.fn(),
+    readFileSync: jest.fn(),
+    appendFileSync: jest.fn(),
+    rmSync: jest.fn(),
+    readdir: jest.fn()
+}));
+jest.mock('child_process', () => ({
+    execSync: jest.fn()
+}));
+jest.mock('path', () => ({
+    join: jest.fn(),
+    dirname: jest.fn()
+}));
 
 describe('WorktreeManager', () => {
     let worktreeManager: WorktreeManager;
@@ -31,19 +55,10 @@ describe('WorktreeManager', () => {
     };
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Mock logging service
-        mockLoggingService = {
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            isLevelEnabled: jest.fn().mockReturnValue(false),
-            getChannel: jest.fn(),
-            time: jest.fn(),
-            timeEnd: jest.fn(),
-            onDidChangeConfiguration: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        mockLoggingService = createMockLoggingService();
 
         // Mock notification service
         mockNotificationService = {
@@ -60,12 +75,12 @@ describe('WorktreeManager', () => {
         workspacePath = '/test/workspace';
 
         // Mock fs methods
-        mockFs.existsSync = jest.fn().mockReturnValue(true);
-        mockFs.mkdirSync = jest.fn();
-        mockFs.writeFileSync = jest.fn();
-        mockFs.readFileSync = jest.fn();
-        mockFs.appendFileSync = jest.fn();
-        mockFs.rmSync = jest.fn();
+        (mockFs.existsSync as jest.Mock).mockReturnValue(true);
+        (mockFs.mkdirSync as jest.Mock).mockImplementation(() => {});
+        (mockFs.writeFileSync as jest.Mock).mockImplementation(() => {});
+        (mockFs.readFileSync as jest.Mock).mockReturnValue('{}');
+        (mockFs.appendFileSync as jest.Mock).mockImplementation(() => {});
+        (mockFs.rmSync as jest.Mock).mockImplementation(() => {});
 
         // Mock execSync
         mockExecSync.mockReturnValue('mock output' as any);
@@ -98,7 +113,7 @@ describe('WorktreeManager', () => {
         });
 
         it('should create worktrees directory if it does not exist', () => {
-            mockFs.existsSync = jest.fn().mockReturnValue(false);
+            (mockFs.existsSync as jest.Mock).mockReturnValue(false);
 
             new WorktreeManager(workspacePath, mockLoggingService, mockNotificationService);
 

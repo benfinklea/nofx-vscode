@@ -4,6 +4,17 @@ import { AgentManager } from '../../../agents/AgentManager';
 import { TaskQueue } from '../../../tasks/TaskQueue';
 import { Agent, AgentStatus } from '../../../types/Agent';
 import { Task, TaskStatus, TaskPriority } from '../../../types/Task';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock all dependencies
 jest.mock('../../../agents/AgentManager');
@@ -44,6 +55,8 @@ Object.defineProperty(vscode.workspace, 'getConfiguration', {
     }),
     configurable: true
 });
+
+jest.mock('vscode');
 
 describe('IntelligentConductor', () => {
     let intelligentConductor: IntelligentConductor;
@@ -120,6 +133,9 @@ describe('IntelligentConductor', () => {
     ];
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockTerminal = createMockTerminal();
         jest.clearAllMocks();
         jest.clearAllTimers();
         jest.useFakeTimers();

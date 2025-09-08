@@ -10,8 +10,9 @@ export interface InactivityConfig {
 export interface InactivityStatus {
     agentId: string;
     lastActivity: Date;
-    status: 'active' | 'thinking' | 'inactive' | 'stuck' | 'waiting';
+    status: 'idle' | 'working' | 'thinking' | 'inactive' | 'stuck' | 'waiting';
     inactiveSeconds: number;
+    isWorkingOnTask: boolean;
 }
 
 export class InactivityMonitor extends EventEmitter {
@@ -20,6 +21,7 @@ export class InactivityMonitor extends EventEmitter {
     private alertTimers: Map<string, NodeJS.Timeout> = new Map();
     private heartbeatTimers: Map<string, NodeJS.Timeout> = new Map();
     private agentStatus: Map<string, InactivityStatus['status']> = new Map();
+    private agentTaskStatus: Map<string, boolean> = new Map(); // Track if agent is working on a task
 
     private config: InactivityConfig = {
         warningThreshold: 30,
@@ -35,23 +37,63 @@ export class InactivityMonitor extends EventEmitter {
     }
 
     /**
-     * Start monitoring inactivity for an agent
+     * Start monitoring inactivity for an agent (agent is idle by default)
      */
     public startMonitoring(agentId: string): void {
         // Initialize activity timestamp
         this.lastActivity.set(agentId, new Date());
-        this.agentStatus.set(agentId, 'active');
+        this.agentStatus.set(agentId, 'idle'); // Start as idle, not active
+        this.agentTaskStatus.set(agentId, false); // Not working on a task initially
 
-        // Set up warning timer (30 seconds)
-        this.setupWarningTimer(agentId);
+        // Don't set up timers for idle agents - they should be allowed to be inactive
+        // Timers will be set up when a task is assigned
 
-        // Set up alert timer (2 minutes)
-        this.setupAlertTimer(agentId);
-
-        // Set up heartbeat check
+        // Set up heartbeat check for status reporting
         this.setupHeartbeat(agentId);
 
-        console.log(`[InactivityMonitor] Started monitoring agent ${agentId}`);
+        console.log(`[InactivityMonitor] Started monitoring agent ${agentId} (idle)`);
+    }
+
+    /**
+     * Start task monitoring for an agent (called when task is assigned)
+     */
+    public startTaskMonitoring(agentId: string): void {
+        if (!this.lastActivity.has(agentId)) {
+            console.log(`[InactivityMonitor] Warning: Agent ${agentId} not initialized, initializing now`);
+            this.startMonitoring(agentId);
+        }
+
+        // Mark as working on a task
+        this.agentTaskStatus.set(agentId, true);
+        this.updateStatus(agentId, 'working');
+
+        // Reset activity timestamp
+        this.lastActivity.set(agentId, new Date());
+
+        // Now set up alert timers since the agent should be active
+        this.resetTimers(agentId);
+        this.setupWarningTimer(agentId);
+        this.setupAlertTimer(agentId);
+
+        console.log(`[InactivityMonitor] Started task monitoring for agent ${agentId}`);
+    }
+
+    /**
+     * Stop task monitoring for an agent (called when task is completed/failed)
+     */
+    public stopTaskMonitoring(agentId: string): void {
+        if (!this.lastActivity.has(agentId)) {
+            return;
+        }
+
+        // Mark as not working on a task
+        this.agentTaskStatus.set(agentId, false);
+        this.updateStatus(agentId, 'idle');
+
+        // Clear alert timers since idle agents shouldn't be alerted
+        this.resetTimers(agentId);
+
+        console.log(`[InactivityMonitor] Stopped task monitoring for agent ${agentId} (now idle)`);
     }
 
     /**
@@ -61,33 +103,48 @@ export class InactivityMonitor extends EventEmitter {
         const now = new Date();
         this.lastActivity.set(agentId, now);
 
-        // Reset timers
-        this.resetTimers(agentId);
+        const isWorkingOnTask = this.agentTaskStatus.get(agentId) || false;
 
-        // Update status based on activity type
-        const currentStatus = this.agentStatus.get(agentId);
-        if (currentStatus === 'inactive' || currentStatus === 'stuck') {
-            this.updateStatus(agentId, 'active');
+        // Only reset timers and update status if the agent is working on a task
+        if (isWorkingOnTask) {
+            // Reset timers
+            this.resetTimers(agentId);
+
+            // Update status based on activity type
+            const currentStatus = this.agentStatus.get(agentId);
+            if (currentStatus === 'inactive' || currentStatus === 'stuck') {
+                this.updateStatus(agentId, 'working');
+            }
+
+            // Re-setup timers
+            this.setupWarningTimer(agentId);
+            this.setupAlertTimer(agentId);
+
+            console.log(
+                `[InactivityMonitor] Activity recorded for working agent ${agentId}: ${activityType || 'general'}`
+            );
+        } else {
+            // Just log activity for idle agents, no alerts needed
+            console.log(
+                `[InactivityMonitor] Activity recorded for idle agent ${agentId}: ${activityType || 'general'} (no alerts)`
+            );
         }
-
-        // Re-setup timers
-        this.setupWarningTimer(agentId);
-        this.setupAlertTimer(agentId);
-
-        console.log(`[InactivityMonitor] Activity recorded for agent ${agentId}: ${activityType || 'general'}`);
     }
 
     /**
-     * Set up warning timer (30 seconds of inactivity)
+     * Set up warning timer (30 seconds of inactivity) - only for agents working on tasks
      */
     private setupWarningTimer(agentId: string): void {
         const timer = setTimeout(() => {
+            const isWorkingOnTask = this.agentTaskStatus.get(agentId) || false;
             const status = this.getInactivityStatus(agentId);
-            if (status && status.inactiveSeconds >= this.config.warningThreshold) {
+
+            // Only emit warning if agent is working on a task
+            if (isWorkingOnTask && status && status.inactiveSeconds >= this.config.warningThreshold) {
                 this.updateStatus(agentId, 'inactive');
                 this.emit('warning', {
                     agentId,
-                    message: `Agent ${agentId} has been inactive for ${this.config.warningThreshold} seconds`,
+                    message: `Agent ${agentId} working on task has been inactive for ${this.config.warningThreshold} seconds`,
                     status
                 });
             }
@@ -97,16 +154,19 @@ export class InactivityMonitor extends EventEmitter {
     }
 
     /**
-     * Set up alert timer (2 minutes of inactivity)
+     * Set up alert timer (2 minutes of inactivity) - only for agents working on tasks
      */
     private setupAlertTimer(agentId: string): void {
         const timer = setTimeout(() => {
+            const isWorkingOnTask = this.agentTaskStatus.get(agentId) || false;
             const status = this.getInactivityStatus(agentId);
-            if (status && status.inactiveSeconds >= this.config.alertThreshold) {
+
+            // Only emit alert if agent is working on a task
+            if (isWorkingOnTask && status && status.inactiveSeconds >= this.config.alertThreshold) {
                 this.updateStatus(agentId, 'stuck');
                 this.emit('alert', {
                     agentId,
-                    message: `Agent ${agentId} needs immediate attention - inactive for ${this.config.alertThreshold} seconds`,
+                    message: `Agent ${agentId} working on task needs immediate attention - inactive for ${this.config.alertThreshold} seconds`,
                     status
                 });
             }
@@ -124,11 +184,18 @@ export class InactivityMonitor extends EventEmitter {
             if (status) {
                 this.emit('heartbeat', status);
 
-                // Check for state transitions
-                if (status.inactiveSeconds < 5) {
-                    this.updateStatus(agentId, 'active');
-                } else if (status.inactiveSeconds < 30) {
-                    this.updateStatus(agentId, 'thinking');
+                const isWorkingOnTask = this.agentTaskStatus.get(agentId) || false;
+
+                // Check for state transitions based on whether agent is working on task
+                if (isWorkingOnTask) {
+                    if (status.inactiveSeconds < 5) {
+                        this.updateStatus(agentId, 'working');
+                    } else if (status.inactiveSeconds < 30) {
+                        this.updateStatus(agentId, 'thinking');
+                    }
+                } else {
+                    // Idle agents stay idle regardless of activity timing
+                    this.updateStatus(agentId, 'idle');
                 }
             }
         }, this.config.heartbeatInterval * 1000);
@@ -163,13 +230,15 @@ export class InactivityMonitor extends EventEmitter {
 
         const now = new Date();
         const inactiveSeconds = Math.floor((now.getTime() - lastActivity.getTime()) / 1000);
-        const status = this.agentStatus.get(agentId) || 'active';
+        const status = this.agentStatus.get(agentId) || 'idle';
+        const isWorkingOnTask = this.agentTaskStatus.get(agentId) || false;
 
         return {
             agentId,
             lastActivity,
             status,
-            inactiveSeconds
+            inactiveSeconds,
+            isWorkingOnTask
         };
     }
 
@@ -223,6 +292,7 @@ export class InactivityMonitor extends EventEmitter {
         // Remove from maps
         this.lastActivity.delete(agentId);
         this.agentStatus.delete(agentId);
+        this.agentTaskStatus.delete(agentId);
 
         console.log(`[InactivityMonitor] Stopped monitoring agent ${agentId}`);
     }
@@ -256,6 +326,7 @@ export class InactivityMonitor extends EventEmitter {
         this.heartbeatTimers.clear();
         this.lastActivity.clear();
         this.agentStatus.clear();
+        this.agentTaskStatus.clear();
 
         // Remove all listeners
         this.removeAllListeners();

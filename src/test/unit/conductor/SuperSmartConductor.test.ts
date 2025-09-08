@@ -6,6 +6,18 @@ import { TaskQueue } from '../../../tasks/TaskQueue';
 import { CodebaseAnalyzer } from '../../../intelligence/CodebaseAnalyzer';
 import { Agent, AgentStatus } from '../../../agents/types';
 import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
+
+import {
     CodeComponent,
     AgentPerformance,
     ProjectArchitecture,
@@ -72,6 +84,8 @@ Object.defineProperty(vscode.workspace, 'getConfiguration', {
     }),
     configurable: true
 });
+
+jest.mock('vscode');
 
 describe('SuperSmartConductor', () => {
     let superSmartConductor: SuperSmartConductor;
@@ -165,6 +179,9 @@ describe('SuperSmartConductor', () => {
     ];
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockTerminal = createMockTerminal();
         jest.clearAllMocks();
         jest.clearAllTimers();
         jest.useFakeTimers();
@@ -779,6 +796,7 @@ describe('SuperSmartConductor', () => {
 
     describe('analyzeAndDecompose method', () => {
         beforeEach(() => {
+            mockTerminal = createMockTerminal();
             jest.clearAllMocks();
         });
 
@@ -1218,6 +1236,7 @@ describe('SuperSmartConductor', () => {
         let mockContainer: any;
 
         beforeEach(() => {
+            mockTerminal = createMockTerminal();
             // Mock CapabilityMatcher
             mockCapabilityMatcher = {
                 rankAgents: jest.fn().mockResolvedValue([{ score: 0.8 }])

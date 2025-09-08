@@ -11,15 +11,17 @@ export interface Agent {
     tasksCompleted: number;
     capabilities?: string[];
     template?: any; // Agent template with system prompt and capabilities
+    maxConcurrentTasks?: number; // Maximum tasks this agent can handle concurrently
 }
 
-export type AgentStatus = 'idle' | 'working' | 'error' | 'offline';
+export type AgentStatus = 'idle' | 'working' | 'error' | 'offline' | 'online';
 
 export interface AgentConfig {
     name: string;
     type: string;
     autoStart?: boolean;
     template?: any; // Optional template with prompts
+    context?: any; // Optional context from restored session
 }
 
 export interface Task {
@@ -33,6 +35,8 @@ export interface Task {
     files?: string[];
     createdAt: Date;
     completedAt?: Date;
+    assignedAt?: Date; // When the task was assigned to an agent
+    lastProgressAt?: Date; // When the task last showed progress
     dependsOn?: string[];
     prefers?: string[];
     blockedBy?: string[];

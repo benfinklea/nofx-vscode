@@ -24,8 +24,8 @@ export class ConductorTerminal {
     private loggingService?: ILoggingService;
 
     constructor(
-        agentManager: AgentManager, 
-        taskQueue: TaskQueue, 
+        agentManager: AgentManager,
+        taskQueue: TaskQueue,
         taskToolBridge?: TaskToolBridge,
         loggingService?: ILoggingService,
         eventBus?: IEventBus,
@@ -37,17 +37,12 @@ export class ConductorTerminal {
         this.loggingService = loggingService;
         this.aiPath = vscode.workspace.getConfiguration('nofx').get<string>('aiPath') || 'claude';
         this.notificationService = notificationService;
-        
+
         // Initialize natural language service
         this.naturalLanguageService = new NaturalLanguageService(loggingService);
-        
+
         // Initialize command router
-        this.commandRouter = new TerminalCommandRouter(
-            agentManager,
-            taskQueue,
-            loggingService,
-            eventBus
-        );
+        this.commandRouter = new TerminalCommandRouter(agentManager, taskQueue, loggingService, eventBus);
     }
 
     async start() {
@@ -95,13 +90,13 @@ export class ConductorTerminal {
 Tell me what you want to build, and I'll coordinate the team to make it happen.`;
         // Send the greeting text first
         this.terminal.sendText(greeting, false); // false = no newline yet
-        
+
         // Small delay to ensure the text is in the terminal
         await new Promise(resolve => setTimeout(resolve, 100));
-        
+
         // Now send Enter to submit it
         this.terminal.sendText('', true); // Send empty string with Enter to submit
-        
+
         // Start monitoring terminal output for commands with error handling
         if (this.commandRouter && this.terminal) {
             try {
@@ -111,7 +106,7 @@ Tell me what you want to build, and I'll coordinate the team to make it happen.`
                 // Continue anyway - conductor can still function without auto-execution
             }
         }
-        
+
         // Show natural language help
         setTimeout(() => {
             if (this.terminal) {
@@ -122,7 +117,7 @@ Tell me what you want to build, and I'll coordinate the team to make it happen.`
                 this.terminal.sendText('# Or use JSON: {"type": "spawn", "role": "frontend-specialist"}\n');
             }
         }, 2000);
-        
+
         // Update system status bar
         if (this.notificationService) {
             this.notificationService.updateSystemStatus(
@@ -202,19 +197,19 @@ Total system limit: 10 concurrent sub-agents`;
         if (this.commandRouter) {
             this.commandRouter.stopMonitoring();
         }
-        
+
         // Dispose input listener
         if (this.inputListener) {
             this.inputListener.dispose();
             this.inputListener = undefined;
         }
-        
+
         // Dispose terminal
         if (this.terminal) {
             this.terminal.dispose();
             this.terminal = undefined;
         }
-        
+
         // Reset status bar
         if (this.notificationService) {
             this.notificationService.resetSystemMetrics();

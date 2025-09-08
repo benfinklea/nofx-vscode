@@ -3,6 +3,17 @@ import { MessageFlowDashboard } from '../../../dashboard/MessageFlowDashboard';
 import { IDashboardViewModel, ILoggingService, IWebviewHost } from '../../../services/interfaces';
 import { DashboardTemplate } from '../../../templates/DashboardTemplate';
 import { DashboardViewState } from '../../../types/ui';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 jest.mock('vscode');
 jest.mock('../../../templates/DashboardTemplate');
@@ -49,6 +60,8 @@ describe('MessageFlowDashboard', () => {
     };
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Mock extension context
         mockContext = {
             extensionUri: vscode.Uri.file('/mock/extension/path')
@@ -81,18 +94,7 @@ describe('MessageFlowDashboard', () => {
         } as any;
 
         // Mock logging service
-        mockLoggingService = {
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            isLevelEnabled: jest.fn().mockReturnValue(false),
-            getChannel: jest.fn(),
-            time: jest.fn(),
-            timeEnd: jest.fn(),
-            onDidChangeConfiguration: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        mockLoggingService = createMockLoggingService();
 
         // Mock template
         mockTemplate = {
@@ -449,7 +451,7 @@ describe('MessageFlowDashboard', () => {
             const stateUpdateCallback = (mockViewModel.subscribe as jest.Mock).mock.calls[0][0];
 
             // Should not throw, but should handle the error internally
-            await expect(stateUpdateCallback(mockDashboardState)).resolves.toBeUndefined();
+            await expect(stateUpdateCallback(mockDashboardState)).mockResolvedValue.toBeUndefined();
         });
 
         it('should handle subscription errors during dispose', async () => {

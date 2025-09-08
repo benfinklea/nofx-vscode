@@ -1,6 +1,19 @@
 import * as vscode from 'vscode';
+import { DOMAIN_EVENTS } from '../../services/EventBus';
 import { AgentLifecycleManager } from '../../../services/AgentLifecycleManager';
 import { Agent, AgentConfig, AgentStatus } from '../../../agents/types';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
+import { DOMAIN_EVENTS } from '../../../services/EventConstants';
 
 // Mock interfaces for testing
 interface ITerminalManager {
@@ -95,6 +108,8 @@ Object.defineProperty(vscode.window, 'createOutputChannel', {
     configurable: true
 });
 
+jest.mock('vscode');
+
 describe('AgentLifecycleManager', () => {
     let lifecycleManager: AgentLifecycleManager;
     let mockTerminalManager: jest.Mocked<ITerminalManager>;
@@ -119,6 +134,10 @@ describe('AgentLifecycleManager', () => {
     };
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockTerminal = createMockTerminal();
+        mockConfigService = createMockConfigurationService();
         jest.clearAllMocks();
 
         // Setup mock terminal manager

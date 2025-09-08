@@ -4,6 +4,17 @@ import { promises as fsPromises } from 'fs';
 import { AgentPersistence } from '../../../persistence/AgentPersistence';
 import { Agent } from '../../../agents/types';
 import { ILoggingService } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 jest.mock('fs');
 jest.mock('fs', () => ({
@@ -25,19 +36,10 @@ describe('AgentPersistence', () => {
     const mockFsPromises = fsPromises as jest.Mocked<typeof fsPromises>;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Mock logging service
-        mockLoggingService = {
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            isLevelEnabled: jest.fn().mockReturnValue(false),
-            getChannel: jest.fn(),
-            time: jest.fn(),
-            timeEnd: jest.fn(),
-            onDidChangeConfiguration: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        mockLoggingService = createMockLoggingService();
 
         workspaceRoot = '/test/workspace';
 

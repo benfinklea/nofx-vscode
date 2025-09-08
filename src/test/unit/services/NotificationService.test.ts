@@ -1,5 +1,16 @@
 import * as vscode from 'vscode';
 import { NotificationService } from '../../../services/NotificationService';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 jest.mock('vscode');
 
@@ -13,6 +24,8 @@ describe('NotificationService', () => {
     let mockWithProgress: jest.MockedFunction<typeof vscode.window.withProgress>;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Mock VS Code window methods
         mockShowInformationMessage = vscode.window.showInformationMessage as jest.MockedFunction<
             typeof vscode.window.showInformationMessage

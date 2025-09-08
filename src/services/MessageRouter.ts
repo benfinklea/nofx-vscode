@@ -5,7 +5,7 @@ import {
     ILoggingService,
     IEventBus,
     IErrorHandler,
-    MessageFilter,
+    MessageFilter
 } from './interfaces';
 import { TaskToolBridge } from './TaskToolBridge';
 import { OrchestratorMessage, MessageType } from '../orchestration/MessageProtocol';
@@ -158,6 +158,15 @@ export class MessageRouter implements IMessageRouter {
                 await this.sendAcknowledgment(message);
             }
 
+            // Send all messages to dashboard for monitoring
+            if (this.dashboardCallback) {
+                try {
+                    this.dashboardCallback(message);
+                } catch (error) {
+                    this.loggingService.warn('Dashboard callback failed', { error, messageId: message.id });
+                }
+            }
+
             // Publish routing event
             this.eventBus.publish(ORCH_EVENTS.MESSAGE_ROUTED, {
                 messageId: message.id,
@@ -195,8 +204,12 @@ export class MessageRouter implements IMessageRouter {
         });
     }
 
-    setDashboardCallback(callback: (message: OrchestratorMessage) => void): void {
+    setDashboardCallback(callback?: (message: OrchestratorMessage) => void): void {
         this.dashboardCallback = callback;
+    }
+
+    clearDashboardCallback(): void {
+        this.dashboardCallback = undefined;
     }
 
     getDeliveryStats() {

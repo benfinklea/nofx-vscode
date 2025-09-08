@@ -8,6 +8,19 @@ import { LoggingService } from '../../../services/LoggingService';
 import { ConfigurationService } from '../../../services/ConfigurationService';
 import { AgentManager } from '../../../agents/AgentManager';
 import { CommandService } from '../../../services/CommandService';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
+
+jest.mock('vscode');
 
 describe('Command Registration', () => {
     const projectRoot = path.resolve(__dirname, '../../../..');
@@ -21,6 +34,8 @@ describe('Command Registration', () => {
     });
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Set test mode
         process.env.NOFX_TEST_MODE = 'true';
 

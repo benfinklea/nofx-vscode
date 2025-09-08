@@ -15,6 +15,7 @@ import {
     IMetricsService
 } from '../services/interfaces';
 import { DOMAIN_EVENTS } from '../services/EventConstants';
+import { LoadBalancingStrategy, AgentCapacityScore, TaskReassignmentReason } from '../intelligence';
 
 // Utility function to safely publish events
 function safePublish(eventBus: any, logger: any, event: string, data: any) {
@@ -54,6 +55,12 @@ export class TaskQueue implements ITaskReader {
     private metricsService?: IMetricsService;
     private subscriptions: vscode.Disposable[] = [];
 
+    // Load balancing integration
+    private loadBalancingStrategy: LoadBalancingStrategy = LoadBalancingStrategy.BALANCED;
+    private loadBalancingEnabled: boolean = true;
+    private reassignmentsThisCycle: number = 0;
+    private maxReassignmentsPerCycle: number = 10; // Configurable rate limit
+
     constructor(
         agentManager: AgentManager,
         loggingService?: ILoggingService,
@@ -84,10 +91,29 @@ export class TaskQueue implements ITaskReader {
         this.dependencyManager = dependencyManager;
         this.metricsService = metricsService;
 
+        // Set TaskQueue as the task reader for TaskStateMachine dependency validation
+        if (this.taskStateMachine && 'setTaskReader' in this.taskStateMachine) {
+            (this.taskStateMachine as any).setTaskReader(this);
+        }
+
         // Auto-assign tasks when agents become available
         this.agentManager.onAgentUpdate(() => {
             this.tryAssignTasks();
         });
+
+        // Initialize load balancing configuration
+        this.initializeLoadBalancingConfig();
+
+        // Subscribe to configuration changes
+        if (this.configService) {
+            this.subscriptions.push(
+                this.configService.onDidChange((e: vscode.ConfigurationChangeEvent) => {
+                    if (e.affectsConfiguration('nofx.loadBalancing')) {
+                        this.initializeLoadBalancingConfig();
+                    }
+                })
+            );
+        }
 
         // Subscribe to agent events from EventBus
         if (this.eventBus) {
@@ -278,6 +304,10 @@ export class TaskQueue implements ITaskReader {
                         this.loggingService?.warn('Task readiness transition failed:', readinessErrors);
                         // Set blockedBy to dependencies for UI visibility
                         task.blockedBy = task.dependsOn || [];
+                        // If task has unsatisfied dependencies, transition to blocked
+                        if (readinessErrors.some(e => e.code === 'DEPENDENCIES_NOT_SATISFIED')) {
+                            this.taskStateMachine.transition(task, 'blocked');
+                        }
                         // Publish waiting event for observability
                         safePublish(this.eventBus, this.loggingService, DOMAIN_EVENTS.TASK_WAITING, {
                             taskId: task.id,
@@ -293,6 +323,10 @@ export class TaskQueue implements ITaskReader {
                     this.loggingService?.warn('Task readiness transition failed:', readinessErrors);
                     // Set blockedBy to dependencies for UI visibility
                     task.blockedBy = task.dependsOn || [];
+                    // If task has unsatisfied dependencies, transition to blocked
+                    if (readinessErrors.some(e => e.code === 'DEPENDENCIES_NOT_SATISFIED')) {
+                        this.taskStateMachine.transition(task, 'blocked');
+                    }
                     // Publish waiting event for observability
                     this.eventBus?.publish(DOMAIN_EVENTS.TASK_WAITING, {
                         taskId: task.id,
@@ -333,10 +367,10 @@ export class TaskQueue implements ITaskReader {
             return false;
         }
 
-        const idleAgents = this.agentManager.getIdleAgents();
-        this.loggingService?.debug(`Idle agents available: ${idleAgents.length}`);
+        const availableAgents = this.agentManager.getAvailableAgents();
+        this.loggingService?.debug(`Available agents: ${availableAgents.length}`);
 
-        if (idleAgents.length === 0) {
+        if (availableAgents.length === 0) {
             return false;
         }
 
@@ -368,7 +402,7 @@ export class TaskQueue implements ITaskReader {
 
         // Compute match scores for UI transparency
         if (this.capabilityMatcher) {
-            const scoredAgents = this.capabilityMatcher.rankAgents(idleAgents, task);
+            const scoredAgents = this.capabilityMatcher.rankAgents(availableAgents, task);
             if (scoredAgents.length > 0) {
                 task.agentMatchScore = scoredAgents[0].score;
                 // Publish match score event for UI
@@ -380,12 +414,13 @@ export class TaskQueue implements ITaskReader {
             }
         }
 
-        // Find best agent using capability matcher
-        const agent = this.capabilityMatcher?.findBestAgent(idleAgents, task);
+        // Find best agent using capability matcher with load balancing consideration
+        const agent = this.findBestAgentWithLoadBalancing(availableAgents, task);
 
         if (agent) {
-            // Set assignedTo before transition to ensure required fields validate
+            // Set assignedTo and assignedAt before transition to ensure required fields validate
             task.assignedTo = agent.id;
+            task.assignedAt = new Date();
 
             // Use state machine to transition to assigned
             if (this.taskStateMachine) {
@@ -482,14 +517,14 @@ export class TaskQueue implements ITaskReader {
 
         // Recompute queue size and idle agents per iteration
         while (attempts < 10) {
-            const idleAgents = this.agentManager.getIdleAgents();
+            const availableAgents = this.agentManager.getAvailableAgents();
             const queueSize = this.priorityQueue?.size() || 0;
 
             this.loggingService?.debug(
-                `Assignment attempt ${attempts + 1}: Queue: ${queueSize}, Idle agents: ${idleAgents.length}`
+                `Assignment attempt ${attempts + 1}: Queue: ${queueSize}, Available agents: ${availableAgents.length}`
             );
 
-            if (queueSize === 0 || idleAgents.length === 0) {
+            if (queueSize === 0 || availableAgents.length === 0) {
                 break;
             }
 
@@ -504,10 +539,10 @@ export class TaskQueue implements ITaskReader {
         }
 
         if (!assigned) {
-            const idleCount = this.agentManager.getIdleAgents().length;
+            const availableCount = this.agentManager.getAvailableAgents().length;
             const queueSize = this.priorityQueue?.size() || 0;
-            this.loggingService?.debug(`No assignment made. Queue: ${queueSize}, Idle: ${idleCount}`);
-            if (idleCount === 0) {
+            this.loggingService?.debug(`No assignment made. Queue: ${queueSize}, Available: ${availableCount}`);
+            if (availableCount === 0) {
                 this.notificationService?.showInformation('📋 Task queued. All agents are busy.');
             } else {
                 this.notificationService?.showWarning('📋 Task added but not assigned. Check agent status.');
@@ -550,8 +585,8 @@ export class TaskQueue implements ITaskReader {
 
         // Check for dependent tasks that become ready
         if (this.dependencyManager) {
-            const allTasks = this.getTasks();
-            const readyTasks = this.dependencyManager.getReadyTasks(allTasks);
+            const allTasksForDeps = this.getTasks();
+            const readyTasks = this.dependencyManager.getReadyTasks(allTasksForDeps);
 
             // Transition and enqueue newly ready tasks
             for (const readyTask of readyTasks) {
@@ -571,12 +606,9 @@ export class TaskQueue implements ITaskReader {
                         }
                         this.loggingService?.warn(`Task ${readyTask.id} blocked due to conflicts:`, conflicts);
                     } else {
-                        // Clear conflictsWith and conflict-related blockedBy entries when transitioning to ready
-                        if (conflicts.length === 0) {
-                            const prevConflicts = (readyTask.conflictsWith || []).slice();
-                            readyTask.conflictsWith = [];
-                            readyTask.blockedBy = (readyTask.blockedBy || []).filter(id => !prevConflicts.includes(id));
-                        }
+                        // Clear conflictsWith and blockedBy when task becomes ready
+                        readyTask.conflictsWith = [];
+                        readyTask.blockedBy = []; // Clear all blockedBy entries when dependencies are satisfied
 
                         // Transition to ready state
                         if (this.taskStateMachine) {
@@ -594,7 +626,8 @@ export class TaskQueue implements ITaskReader {
             }
 
             // Check for tasks with soft dependencies on the completed task
-            const softDependents = this.dependencyManager.getSoftDependents(taskId);
+            const allTasks = this.getTasks();
+            const softDependents = this.dependencyManager.getSoftDependents(taskId, allTasks);
             for (const softDepTaskId of softDependents) {
                 const softDepTask = this.tasks.get(softDepTaskId);
                 if (softDepTask && this.priorityQueue && this.priorityQueue.contains(softDepTaskId)) {
@@ -718,8 +751,9 @@ export class TaskQueue implements ITaskReader {
             this.priorityQueue.remove(taskId);
         }
 
-        // Set assignedTo and use state machine to transition to assigned
+        // Set assignedTo and assignedAt and use state machine to transition to assigned
         task.assignedTo = agentId;
+        task.assignedAt = new Date();
         if (this.taskStateMachine) {
             const transitionErrors = this.taskStateMachine.transition(task, 'assigned');
             if (transitionErrors.length > 0) {
@@ -745,7 +779,7 @@ export class TaskQueue implements ITaskReader {
         this.loggingService?.info(`Executing task ${taskId} on agent ${agentId}`);
 
         try {
-            this.agentManager.executeTask(agentId, task);
+            await this.agentManager.executeTask(agentId, task);
 
             // Transition to in-progress
             if (this.taskStateMachine) {
@@ -776,6 +810,11 @@ export class TaskQueue implements ITaskReader {
                 taskPriority: task.priority
             });
 
+            // Update agent load to keep both sides consistent
+            const newLoad = this.getAgentCurrentLoad(agentId);
+            const maxCapacity = this.getAgentMaxCapacity(agentId);
+            this.agentManager.updateAgentLoad(agentId, newLoad, maxCapacity);
+
             return true;
         } catch (error: any) {
             const err = error instanceof Error ? error : new Error(String(error));
@@ -788,12 +827,17 @@ export class TaskQueue implements ITaskReader {
                 error: err.message
             });
 
-            // Revert via state machine on failure
+            // Revert via state machine on failure - assigned can only go to failed, then to ready
             if (this.taskStateMachine) {
-                const transitionErrors = this.taskStateMachine.transition(task, 'ready');
-                if (transitionErrors.length === 0 && this.priorityQueue) {
-                    // Use moveToReady helper to cleanly migrate tasks
-                    this.priorityQueue.moveToReady(task);
+                // First transition to failed
+                const failedErrors = this.taskStateMachine.transition(task, 'failed');
+                if (failedErrors.length === 0) {
+                    // Then transition to ready (allowed from failed state)
+                    const readyErrors = this.taskStateMachine.transition(task, 'ready');
+                    if (readyErrors.length === 0 && this.priorityQueue) {
+                        // Use moveToReady helper to cleanly migrate tasks
+                        this.priorityQueue.moveToReady(task);
+                    }
                 }
             } else {
                 task.status = 'ready';
@@ -1122,6 +1166,462 @@ export class TaskQueue implements ITaskReader {
         this.metricsService.setGauge('active_tasks_count', stats.inProgress);
         this.metricsService.setGauge('completed_tasks_count', stats.completed);
         this.metricsService.setGauge('failed_tasks_count', stats.failed);
+    }
+
+    // ============================================================================
+    // LOAD BALANCING INTEGRATION
+    // ============================================================================
+
+    /**
+     * Find best agent for task with load balancing consideration
+     */
+    private findBestAgentWithLoadBalancing(availableAgents: any[], task: Task): any | null {
+        if (!this.loadBalancingEnabled || availableAgents.length === 0) {
+            // Fall back to capability matcher if load balancing is disabled
+            return this.capabilityMatcher?.findBestAgent(availableAgents, task) || null;
+        }
+
+        // Get agents with capacity information
+        const agentsWithCapacity = this.getAvailableCapacityAgents(availableAgents);
+        if (agentsWithCapacity.length === 0) {
+            return this.capabilityMatcher?.findBestAgent(availableAgents, task) || null;
+        }
+
+        // Apply load balancing strategy
+        switch (this.loadBalancingStrategy) {
+            case LoadBalancingStrategy.BALANCED:
+                return this.findBalancedAgent(agentsWithCapacity, task);
+            case LoadBalancingStrategy.PERFORMANCE_OPTIMIZED:
+                return this.findPerformanceOptimizedAgent(agentsWithCapacity, task);
+            case LoadBalancingStrategy.CAPACITY_OPTIMIZED:
+                return this.findCapacityOptimizedAgent(agentsWithCapacity, task);
+            default:
+                return this.capabilityMatcher?.findBestAgent(availableAgents, task) || null;
+        }
+    }
+
+    /**
+     * Get available agents with capacity information
+     */
+    private getAvailableCapacityAgents(availableAgents: any[]): any[] {
+        return availableAgents.filter(agent => {
+            // Check if agent has capacity information
+            const agentInfo = this.agentManager.getAgent(agent.id);
+            return agentInfo && (agentInfo.status === 'online' || agentInfo.status === 'idle');
+        });
+    }
+
+    /**
+     * Find agent using balanced load balancing strategy
+     */
+    private findBalancedAgent(agents: any[], task: Task): any | null {
+        // Calculate load for each agent
+        const agentLoads = agents.map(agent => {
+            const currentLoad = this.getAgentCurrentLoad(agent.id);
+            const maxCapacity = this.getAgentMaxCapacity(agent.id);
+            const cap = Math.max(1, maxCapacity || 0);
+            const utilization = (currentLoad / cap) * 100;
+
+            return {
+                agent,
+                currentLoad,
+                maxCapacity,
+                utilization,
+                availableCapacity: maxCapacity - currentLoad
+            };
+        });
+
+        // Sort by available capacity (descending) and capability match
+        agentLoads.sort((a, b) => {
+            // Primary sort: available capacity
+            if (a.availableCapacity !== b.availableCapacity) {
+                return b.availableCapacity - a.availableCapacity;
+            }
+
+            // Secondary sort: capability match if available
+            if (this.capabilityMatcher) {
+                const aCapabilities = a.agent.capabilities || [];
+                const bCapabilities = b.agent.capabilities || [];
+                const taskCapabilities = task.requiredCapabilities || [];
+                const aScore = this.capabilityMatcher.calculateMatchScore(aCapabilities, taskCapabilities);
+                const bScore = this.capabilityMatcher.calculateMatchScore(bCapabilities, taskCapabilities);
+                return bScore - aScore;
+            }
+
+            return 0;
+        });
+
+        return agentLoads.length > 0 ? agentLoads[0].agent : null;
+    }
+
+    /**
+     * Find agent using performance-optimized load balancing strategy
+     */
+    private findPerformanceOptimizedAgent(agents: any[], task: Task): any | null {
+        let bestAgent: any | null = null;
+        let bestScore = 0;
+
+        for (const agent of agents) {
+            const currentLoad = this.getAgentCurrentLoad(agent.id);
+            const maxCapacity = this.getAgentMaxCapacity(agent.id);
+            const cap = Math.max(1, maxCapacity || 0);
+            const utilization = (currentLoad / cap) * 100;
+
+            // Performance score based on utilization and capability match
+            let performanceScore = 100 - utilization; // Lower utilization = higher score
+
+            if (this.capabilityMatcher) {
+                const agentCapabilities = agent.capabilities || [];
+                const taskCapabilities = task.requiredCapabilities || [];
+                const capabilityScore = this.capabilityMatcher.calculateMatchScore(agentCapabilities, taskCapabilities);
+                performanceScore = performanceScore * 0.6 + capabilityScore * 0.4;
+            }
+
+            if (performanceScore > bestScore) {
+                bestScore = performanceScore;
+                bestAgent = agent;
+            }
+        }
+
+        return bestAgent;
+    }
+
+    /**
+     * Find agent using capacity-optimized load balancing strategy
+     */
+    private findCapacityOptimizedAgent(agents: any[], task: Task): any | null {
+        // Find agent with highest available capacity
+        let bestAgent: any | null = null;
+        let maxAvailableCapacity = 0;
+
+        for (const agent of agents) {
+            const currentLoad = this.getAgentCurrentLoad(agent.id);
+            const maxCapacity = this.getAgentMaxCapacity(agent.id);
+            const availableCapacity = maxCapacity - currentLoad;
+
+            if (availableCapacity > maxAvailableCapacity) {
+                maxAvailableCapacity = availableCapacity;
+                bestAgent = agent;
+            }
+        }
+
+        return bestAgent;
+    }
+
+    /**
+     * Get current load for an agent
+     */
+    private getAgentCurrentLoad(agentId: string): number {
+        // Query AgentManager for capacity information
+        const cap = this.agentManager.getAgentCapacity(agentId);
+        if (cap.maxCapacity > 0) {
+            return cap.currentLoad;
+        }
+
+        // Fallback to counting active tasks in TaskQueue
+        const activeTasks = Array.from(this.tasks.values()).filter(
+            task => task.assignedTo === agentId && (task.status === 'assigned' || task.status === 'in-progress')
+        );
+
+        return activeTasks.length;
+    }
+
+    /**
+     * Get maximum capacity for an agent
+     */
+    private getAgentMaxCapacity(agentId: string): number {
+        // Use AgentManager capacity information when available
+        const cap = this.agentManager.getAgentCapacity(agentId);
+        if (cap.maxCapacity > 0) {
+            return cap.maxCapacity;
+        }
+
+        // Fallback to agent configuration
+        const agent = this.agentManager.getAgent(agentId);
+        if (!agent) return 1;
+
+        return agent.maxConcurrentTasks || 5;
+    }
+
+    /**
+     * Assign task with load balancing considerations
+     */
+    assignTaskWithLoadBalancing(taskId: string, preferredAgentId?: string): Promise<boolean> {
+        const task = this.tasks.get(taskId);
+        if (!task) {
+            this.loggingService?.warn(`Task ${taskId} not found for load balancing assignment`);
+            return Promise.resolve(false);
+        }
+
+        if (preferredAgentId) {
+            // Check if preferred agent has capacity
+            const agent = this.agentManager.getAgent(preferredAgentId);
+            if (agent && this.canAgentHandleTask(agent, task)) {
+                return this.assignTask(taskId, preferredAgentId);
+            }
+        }
+
+        // Find best agent using load balancing
+        const availableAgents = this.agentManager.getAvailableAgents();
+        const bestAgent = this.findBestAgentWithLoadBalancing(availableAgents, task);
+
+        if (bestAgent) {
+            return this.assignTask(taskId, bestAgent.id);
+        }
+
+        this.loggingService?.warn(`No suitable agent found for task ${taskId} with load balancing`);
+        return Promise.resolve(false);
+    }
+
+    /**
+     * Check if agent can handle a task considering capacity
+     */
+    private canAgentHandleTask(agent: any, task: Task): boolean {
+        if (!agent || (agent.status !== 'online' && agent.status !== 'idle')) return false;
+
+        const currentLoad = this.getAgentCurrentLoad(agent.id);
+        const maxCapacity = this.getAgentMaxCapacity(agent.id);
+
+        if (currentLoad >= maxCapacity) return false;
+
+        // Check capabilities if capability matcher is available
+        if (this.capabilityMatcher) {
+            const agentCapabilities = agent.capabilities || [];
+            const taskCapabilities = task.requiredCapabilities || [];
+            const matchScore = this.capabilityMatcher.calculateMatchScore(agentCapabilities, taskCapabilities);
+            return matchScore > 0.5; // Minimum capability threshold
+        }
+
+        return true;
+    }
+
+    /**
+     * Reassign task for load balancing purposes
+     */
+    async reassignForLoadBalancing(
+        taskId: string,
+        reason: TaskReassignmentReason,
+        maxReassignmentsPerCycle?: number
+    ): Promise<boolean> {
+        // Check rate limiting
+        const limit = maxReassignmentsPerCycle || this.maxReassignmentsPerCycle;
+        if (this.reassignmentsThisCycle >= limit) {
+            this.loggingService?.warn(
+                `Reassignment rate limit reached (${this.reassignmentsThisCycle}/${limit}). Skipping reassignment of task ${taskId}`
+            );
+            return false;
+        }
+
+        const task = this.tasks.get(taskId);
+        if (!task) {
+            this.loggingService?.warn(`Task ${taskId} not found for load balancing reassignment`);
+            return false;
+        }
+
+        const currentAgentId = task.assignedTo;
+        if (!currentAgentId) {
+            this.loggingService?.warn(`Task ${taskId} has no assigned agent for reassignment`);
+            return false;
+        }
+
+        // Delegate to the new method with available agents as candidates
+        const candidates = this.agentManager.getAvailableAgents().filter(a => a.id !== currentAgentId);
+        const success = await this.reassignTaskWithCandidates(taskId, candidates, reason);
+
+        if (success) {
+            this.reassignmentsThisCycle++;
+        }
+
+        return success;
+    }
+
+    /**
+     * Reassign task with explicit candidate list and reason for conductor-friendly API
+     */
+    async reassignTaskWithCandidates(
+        taskId: string,
+        candidates: any[],
+        reason: TaskReassignmentReason
+    ): Promise<boolean> {
+        const task = this.tasks.get(taskId);
+        if (!task) {
+            this.loggingService?.warn(`Task ${taskId} not found for reassignment`);
+            return false;
+        }
+
+        const currentAgentId = task.assignedTo;
+        if (!currentAgentId) {
+            this.loggingService?.warn(`Task ${taskId} has no assigned agent for reassignment`);
+            return false;
+        }
+
+        // Filter candidates by canAgentHandleTask and exclude current agent
+        const filteredCandidates = candidates.filter(
+            agent => agent.id !== currentAgentId && this.canAgentHandleTask(agent, task)
+        );
+
+        if (filteredCandidates.length === 0) {
+            this.loggingService?.warn(`No suitable candidates found for reassignment of task ${taskId}`);
+            return false;
+        }
+
+        // Pick best agent from filtered candidates
+        const bestAgent = this.findBestAgentWithLoadBalancing(filteredCandidates, task);
+        if (!bestAgent) {
+            this.loggingService?.warn(`No suitable alternative agent found for task ${taskId}`);
+            return false;
+        }
+
+        // Emit metrics using the correct method
+        this.metricsService?.recordLoadBalancingMetric('task_reassignments', 1, {
+            reason,
+            fromAgent: currentAgentId,
+            toAgent: bestAgent.id
+        });
+
+        // Emit reason-specific counters for monitoring granularity
+        if (reason === TaskReassignmentReason.STUCK) {
+            this.metricsService?.recordLoadBalancingMetric('stuck_agents_detected', 1, {
+                agentId: currentAgentId
+            });
+        } else if (reason === TaskReassignmentReason.OVERLOADED) {
+            this.metricsService?.recordLoadBalancingMetric('overloaded_agents_detected', 1, {
+                agentId: currentAgentId
+            });
+        }
+
+        // Publish load balancing event
+        safePublish(this.eventBus, this.loggingService, DOMAIN_EVENTS.LOAD_BALANCING_EVENT, {
+            type: 'task_reassigned',
+            taskId,
+            agentId: bestAgent.id,
+            reason,
+            timestamp: new Date()
+        });
+
+        // Perform reassignment
+        const success = await this.assignTask(taskId, bestAgent.id);
+
+        if (success) {
+            this.loggingService?.info(
+                `Task ${taskId} reassigned from ${currentAgentId} to ${bestAgent.id} for ${reason}`
+            );
+
+            // Update load for both agents to keep both sides consistent
+            const currentAgentLoad = this.getAgentCurrentLoad(currentAgentId);
+            const currentAgentMaxCapacity = this.getAgentMaxCapacity(currentAgentId);
+            this.agentManager.updateAgentLoad(currentAgentId, currentAgentLoad, currentAgentMaxCapacity);
+
+            const newAgentLoad = this.getAgentCurrentLoad(bestAgent.id);
+            const newAgentMaxCapacity = this.getAgentMaxCapacity(bestAgent.id);
+            this.agentManager.updateAgentLoad(bestAgent.id, newAgentLoad, newAgentMaxCapacity);
+        }
+
+        return success;
+    }
+
+    /**
+     * Update queue metrics with load balancing information (duplicate removed - see line 1124)
+     */
+    private updateQueueMetricsLoadBalancing(): void {
+        if (!this.metricsService) return;
+
+        const totalTasks = this.tasks.size;
+        const readyTasks = Array.from(this.tasks.values()).filter(t => t.status === 'ready').length;
+        const assignedTasks = Array.from(this.tasks.values()).filter(t => t.status === 'assigned').length;
+        const inProgressTasks = Array.from(this.tasks.values()).filter(t => t.status === 'in-progress').length;
+
+        // Record basic queue metrics
+        this.metricsService.recordGauge('queue_total_tasks', totalTasks);
+        this.metricsService.recordGauge('queue_ready_tasks', readyTasks);
+        this.metricsService.recordGauge('queue_assigned_tasks', assignedTasks);
+        this.metricsService.recordGauge('queue_in_progress_tasks', inProgressTasks);
+
+        // Record load balancing metrics
+        if (this.loadBalancingEnabled) {
+            const availableAgents = this.agentManager.getAvailableAgents();
+            const totalAgents = this.agentManager.getAgents().length;
+            const agentUtilization = totalAgents > 0 ? ((totalAgents - availableAgents.length) / totalAgents) * 100 : 0;
+
+            this.metricsService.recordLoadBalancingMetric('agent_load_percentage', agentUtilization);
+            this.metricsService.recordLoadBalancingMetric('available_agents_count', availableAgents.length);
+        }
+    }
+
+    /**
+     * Set load balancing strategy
+     */
+    setLoadBalancingStrategy(strategy: LoadBalancingStrategy): void {
+        this.loadBalancingStrategy = strategy;
+        this.loggingService?.info(`Load balancing strategy changed to: ${strategy}`);
+    }
+
+    /**
+     * Enable or disable load balancing
+     */
+    setLoadBalancingEnabled(enabled: boolean): void {
+        this.loadBalancingEnabled = enabled;
+        this.loggingService?.info(`Load balancing ${enabled ? 'enabled' : 'disabled'}`);
+    }
+
+    /**
+     * Get current load balancing configuration
+     */
+    getLoadBalancingConfig(): { strategy: LoadBalancingStrategy; enabled: boolean } {
+        return {
+            strategy: this.loadBalancingStrategy,
+            enabled: this.loadBalancingEnabled
+        };
+    }
+
+    /**
+     * Initialize load balancing configuration from settings
+     */
+    private initializeLoadBalancingConfig(): void {
+        if (!this.configService) return;
+
+        const enabled = this.configService.get<boolean>('nofx.loadBalancing.enabled', true);
+        const strategy = this.configService.get<string>('nofx.loadBalancing.strategy', LoadBalancingStrategy.BALANCED);
+        const utilizationThreshold = this.configService.get<number>('nofx.loadBalancing.utilizationThreshold', 80);
+        const maxReassignmentsPerCycle = this.configService.get<number>(
+            'nofx.loadBalancing.maxReassignmentsPerCycle',
+            10
+        );
+
+        this.setLoadBalancingEnabled(enabled);
+        this.setLoadBalancingStrategy(strategy as LoadBalancingStrategy);
+        this.maxReassignmentsPerCycle = maxReassignmentsPerCycle;
+
+        this.loggingService?.debug(
+            `Load balancing config updated: enabled=${enabled}, strategy=${strategy}, threshold=${utilizationThreshold}, maxReassignments=${maxReassignmentsPerCycle}`
+        );
+    }
+
+    /**
+     * Reset reassignment counter for new cycle
+     */
+    resetReassignmentCycle(): void {
+        this.reassignmentsThisCycle = 0;
+    }
+
+    /**
+     * Emit current utilizations for all active agents to keep metrics fresh
+     */
+    private emitCurrentAgentUtilizations(): void {
+        if (!this.metricsService) return;
+
+        const activeAgents = this.agentManager.getActiveAgents();
+        for (const agent of activeAgents) {
+            const currentLoad = this.getAgentCurrentLoad(agent.id);
+            const maxCapacity = this.getAgentMaxCapacity(agent.id);
+            const cap = Math.max(1, maxCapacity || 0);
+            const utilization = (currentLoad / cap) * 100;
+
+            this.metricsService.recordLoadBalancingMetric('agent_load_percentage', utilization, {
+                agentId: agent.id,
+                agentType: agent.type
+            });
+        }
     }
 
     dispose() {

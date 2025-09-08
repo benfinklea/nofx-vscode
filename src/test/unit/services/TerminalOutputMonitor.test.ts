@@ -1,5 +1,16 @@
 import * as vscode from 'vscode';
 import { TerminalOutputMonitor, TerminalPattern, TerminalActivity } from '../../../services/TerminalOutputMonitor';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock vscode
 jest.mock('vscode');
@@ -11,6 +22,8 @@ describe('TerminalOutputMonitor', () => {
     let mockEventEmitter: vscode.EventEmitter<string>;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         monitor = new TerminalOutputMonitor();
 
         mockTerminal = {
@@ -575,6 +588,271 @@ describe('TerminalOutputMonitor', () => {
             handler('Analyzing...\nDone!\nError: Failed');
 
             expect(events).toEqual(['thinking', 'completion', 'error']);
+        });
+    });
+
+    describe('Claude-specific patterns (Robustness Feature)', () => {
+        beforeEach(() => {
+            monitor.monitorTerminal(mockTerminal, 'agent-1');
+        });
+
+        describe('Claude ready patterns', () => {
+            it('should detect Claude version indicators', () => {
+                const readySpy = jest.fn();
+                const activitySpy = jest.fn();
+                monitor.on('claude-ready', readySpy);
+                monitor.on('claude-activity', activitySpy);
+
+                const handler = (mockEventEmitter as any).handler;
+                handler('Claude 3.5 Sonnet');
+
+                expect(readySpy).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        agentId: 'agent-1',
+                        terminal: mockTerminal,
+                        line: 'Claude 3.5 Sonnet',
+                        timestamp: expect.any(Date)
+                    })
+                );
+                expect(activitySpy).toHaveBeenCalledTimes(1);
+            });
+
+            it('should detect Claude introductions', () => {
+                const readySpy = jest.fn();
+                monitor.on('claude-ready', readySpy);
+
+                const handler = (mockEventEmitter as any).handler;
+
+                const testCases = [
+                    "I'm Claude, an AI assistant",
+                    "Hello! I'm Claude",
+                    'Ready to help you',
+                    'How can I help you today?',
+                    'What would you like me to do?'
+                ];
+
+                testCases.forEach(testCase => {
+                    handler(testCase);
+                });
+
+                expect(readySpy).toHaveBeenCalledTimes(testCases.length);
+            });
+
+            it('should detect system prompt acceptance', () => {
+                const readySpy = jest.fn();
+                monitor.on('claude-ready', readySpy);
+
+                const handler = (mockEventEmitter as any).handler;
+                handler('System prompt has been accepted');
+
+                expect(readySpy).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        line: 'System prompt has been accepted'
+                    })
+                );
+            });
+        });
+
+        describe('Claude error patterns', () => {
+            it('should detect Claude command not found', () => {
+                const errorSpy = jest.fn();
+                monitor.on('claude-error', errorSpy);
+
+                const handler = (mockEventEmitter as any).handler;
+                handler('command not found: claude');
+
+                expect(errorSpy).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        agentId: 'agent-1',
+                        terminal: mockTerminal,
+                        line: 'command not found: claude',
+                        error: 'command not found: claude',
+                        timestamp: expect.any(Date)
+                    })
+                );
+            });
+
+            it('should detect Claude connection errors', () => {
+                const errorSpy = jest.fn();
+                monitor.on('claude-error', errorSpy);
+
+                const handler = (mockEventEmitter as any).handler;
+
+                const errorCases = [
+                    'claude: error connecting to server',
+                    'permission denied: claude',
+                    'Failed to start Claude',
+                    'Connection to Claude failed'
+                ];
+
+                errorCases.forEach(errorCase => {
+                    handler(errorCase);
+                });
+
+                expect(errorSpy).toHaveBeenCalledTimes(errorCases.length);
+            });
+        });
+
+        describe('Claude timeout patterns', () => {
+            it('should detect connection timeouts', () => {
+                const errorSpy = jest.fn();
+                monitor.on('claude-error', errorSpy);
+
+                const handler = (mockEventEmitter as any).handler;
+
+                const timeoutCases = [
+                    'Connection timeout',
+                    'Request timed out',
+                    'No response from server',
+                    'connection timeout occurred'
+                ];
+
+                timeoutCases.forEach(timeoutCase => {
+                    handler(timeoutCase);
+                });
+
+                expect(errorSpy).toHaveBeenCalledTimes(timeoutCases.length);
+            });
+        });
+
+        describe('System health check patterns', () => {
+            it('should detect NofX health check responses', () => {
+                const readySpy = jest.fn();
+                monitor.on('claude-ready', readySpy);
+
+                const handler = (mockEventEmitter as any).handler;
+
+                const healthCheckCases = [
+                    'NofX-Agent-Ready-Check',
+                    'health-check received successfully',
+                    'echo: NofX test message'
+                ];
+
+                healthCheckCases.forEach(healthCase => {
+                    handler(healthCase);
+                });
+
+                expect(readySpy).toHaveBeenCalledTimes(healthCheckCases.length);
+            });
+        });
+
+        describe('Claude event emission', () => {
+            it('should emit both Claude-specific and generic events', () => {
+                const claudeActivitySpy = jest.fn();
+                const claudeReadySpy = jest.fn();
+                const patternSpy = jest.fn();
+
+                monitor.on('claude-activity', claudeActivitySpy);
+                monitor.on('claude-ready', claudeReadySpy);
+                monitor.on('claude:claudeReady', patternSpy);
+
+                const handler = (mockEventEmitter as any).handler;
+                handler("I'm Claude");
+
+                expect(claudeActivitySpy).toHaveBeenCalledTimes(1);
+                expect(claudeReadySpy).toHaveBeenCalledTimes(1);
+                expect(patternSpy).toHaveBeenCalledTimes(1);
+            });
+
+            it('should log Claude pattern detection', () => {
+                const handler = (mockEventEmitter as any).handler;
+                handler('Claude 3.5 initialized');
+
+                expect(consoleLogSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('[TerminalMonitor] Detected Claude claudeReady pattern for agent agent-1')
+                );
+            });
+        });
+
+        describe('Pattern priority and overlap', () => {
+            it('should detect both standard and Claude patterns in same line', () => {
+                const completionSpy = jest.fn();
+                const claudeReadySpy = jest.fn();
+
+                monitor.on('pattern:completion', completionSpy);
+                monitor.on('claude-ready', claudeReadySpy);
+
+                const handler = (mockEventEmitter as any).handler;
+                handler("I'm Claude and I'm ready to help! Setup complete");
+
+                expect(completionSpy).toHaveBeenCalledTimes(1);
+                expect(claudeReadySpy).toHaveBeenCalledTimes(1);
+            });
+        });
+    });
+
+    describe('Robustness Features Integration', () => {
+        it('should handle agent initialization sequence', () => {
+            const events: string[] = [];
+
+            monitor.on('claude-ready', () => events.push('claude-ready'));
+            monitor.on('pattern:completion', () => events.push('completion'));
+            monitor.on('pattern:thinking', () => events.push('thinking'));
+
+            monitor.monitorTerminal(mockTerminal, 'agent-1');
+            const handler = (mockEventEmitter as any).handler;
+
+            // Simulate typical agent initialization sequence
+            handler('Starting Claude...');
+            handler('Analyzing system requirements');
+            handler('Claude 3.5 Sonnet initialized');
+            handler('System prompt has been accepted');
+            handler('Agent setup completed successfully');
+            handler('NofX-Agent-Ready-Check');
+
+            expect(events).toContain('thinking');
+            expect(events).toContain('claude-ready');
+            expect(events).toContain('completion');
+            expect(events.filter(e => e === 'claude-ready').length).toBe(3); // Multiple ready indicators
+        });
+
+        it('should detect initialization failures', () => {
+            const errorEvents: string[] = [];
+
+            monitor.on('claude-error', () => errorEvents.push('claude-error'));
+            monitor.on('pattern:error', () => errorEvents.push('error'));
+
+            monitor.monitorTerminal(mockTerminal, 'agent-1');
+            const handler = (mockEventEmitter as any).handler;
+
+            // Simulate initialization failure sequence
+            handler('Starting Claude...');
+            handler('claude: command not found');
+            handler('Error: Failed to initialize agent');
+            handler('Connection timeout occurred');
+
+            expect(errorEvents).toContain('claude-error');
+            expect(errorEvents).toContain('error');
+            expect(errorEvents.filter(e => e === 'claude-error').length).toBe(2); // Command not found + timeout
+        });
+
+        it('should track agent health check responses', () => {
+            const healthEvents: { type: string; line: string }[] = [];
+
+            monitor.on('claude-ready', (event: any) => {
+                if (event.line.includes('health-check') || event.line.includes('NofX-Agent-Ready-Check')) {
+                    healthEvents.push({ type: 'health-success', line: event.line });
+                }
+            });
+
+            monitor.on('claude-error', (event: any) => {
+                if (event.line.includes('health') || event.line.includes('check')) {
+                    healthEvents.push({ type: 'health-failure', line: event.line });
+                }
+            });
+
+            monitor.monitorTerminal(mockTerminal, 'agent-1');
+            const handler = (mockEventEmitter as any).handler;
+
+            // Simulate health check sequence
+            handler('Performing health check...');
+            handler('NofX-Agent-Ready-Check');
+            handler('echo: health-check received');
+            handler('Agent health status: OK');
+
+            expect(healthEvents).toHaveLength(2);
+            expect(healthEvents[0].type).toBe('health-success');
+            expect(healthEvents[1].type).toBe('health-success');
         });
     });
 

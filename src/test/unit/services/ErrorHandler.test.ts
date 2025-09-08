@@ -1,5 +1,16 @@
 import { ErrorHandler } from '../../../services/ErrorHandler';
 import { ILoggingService, INotificationService, ErrorSeverity } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 describe('ErrorHandler', () => {
     let errorHandler: ErrorHandler;
@@ -7,26 +18,16 @@ describe('ErrorHandler', () => {
     let mockNotificationService: jest.Mocked<INotificationService>;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.clearAllMocks();
         jest.clearAllTimers();
 
         // Mock LoggingService
-        mockLoggingService = {
-            log: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            debug: jest.fn()
-        } as any;
+        mockLoggingService = createMockLoggingService();
 
         // Mock NotificationService
-        mockNotificationService = {
-            showInformation: jest.fn().mockResolvedValue(undefined),
-            showWarning: jest.fn().mockResolvedValue(undefined),
-            showError: jest.fn().mockResolvedValue(undefined),
-            showInputBox: jest.fn(),
-            showQuickPick: jest.fn()
-        } as any;
+        mockNotificationService = createMockNotificationService();
 
         errorHandler = new ErrorHandler(mockLoggingService, mockNotificationService);
     });

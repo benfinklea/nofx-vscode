@@ -359,7 +359,12 @@ export class TaskDependencyManager implements ITaskDependencyManager {
     /**
      * Gets tasks that have soft dependencies (prefers) on a specific task
      */
-    getSoftDependents(taskId: string): string[] {
+    getSoftDependents(taskId: string, allTasks?: Task[]): string[] {
+        // If allTasks provided, rebuild graph to ensure it's up to date
+        if (allTasks) {
+            this.buildDependencyGraphFromTasks(allTasks);
+        }
+
         const softDependents: string[] = [];
 
         for (const [candidateId, softDeps] of Object.entries(this.softDependencyGraph)) {

@@ -1,5 +1,16 @@
 import { ConfigurationValidator } from '../../../services/ConfigurationValidator';
 import { ILoggingService, INotificationService, ValidationError } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock VS Code
 jest.mock('vscode', () => ({
@@ -20,6 +31,8 @@ describe('ConfigurationValidator', () => {
     let mockFs: any;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         mockLogger = {
             debug: jest.fn(),
             info: jest.fn(),

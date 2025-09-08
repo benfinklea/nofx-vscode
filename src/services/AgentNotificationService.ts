@@ -468,7 +468,7 @@ export class AgentNotificationService {
         this.systemStatusBarItem.tooltip = 'Click to open NofX conductor';
         this.systemStatusBarItem.command = 'nofx.openConductorTerminal';
         this.systemStatusBarItem.show();
-        
+
         // Update to ready state after a moment
         setTimeout(() => {
             this.updateSystemStatus();
@@ -492,38 +492,35 @@ export class AgentNotificationService {
 
         // Build status text
         const parts: string[] = [];
-        
+
         // System health icon
-        const healthIcon = this.systemHealth === 'healthy' ? '$(pulse)' : 
-                          this.systemHealth === 'warning' ? '$(warning)' : '$(error)';
-        
+        const healthIcon =
+            this.systemHealth === 'healthy' ? '$(pulse)' : this.systemHealth === 'warning' ? '$(warning)' : '$(error)';
+
         // Agent count
         if (this.agentCount > 0) {
             parts.push(`$(person) ${this.agentCount}`);
         }
-        
+
         // Task progress
         if (this.taskCount > 0) {
-            const progress = this.completedTaskCount > 0 
-                ? `${this.completedTaskCount}/${this.taskCount}`
-                : `${this.taskCount}`;
+            const progress =
+                this.completedTaskCount > 0 ? `${this.completedTaskCount}/${this.taskCount}` : `${this.taskCount}`;
             parts.push(`$(checklist) ${progress}`);
         }
-        
+
         // Build final text
-        const statusText = parts.length > 0 
-            ? `NofX: ${parts.join(' | ')} ${healthIcon}`
-            : `NofX: Ready ${healthIcon}`;
-        
+        const statusText = parts.length > 0 ? `NofX: ${parts.join(' | ')} ${healthIcon}` : `NofX: Ready ${healthIcon}`;
+
         this.systemStatusBarItem.text = statusText;
-        
+
         // Update tooltip
         const tooltip: string[] = ['NofX Conductor System'];
         tooltip.push(`Agents: ${this.agentCount} active`);
         tooltip.push(`Tasks: ${this.completedTaskCount}/${this.taskCount} complete`);
         tooltip.push(`Health: ${this.systemHealth}`);
         tooltip.push('Click to open conductor terminal');
-        
+
         this.systemStatusBarItem.tooltip = tooltip.join('\n');
     }
 

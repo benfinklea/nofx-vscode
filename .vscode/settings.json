@@ -1,3 +1,4 @@
 {
-    "nofx.claudeSkipPermissions": true
+    "nofx.claudeSkipPermissions": true,
+    "nofx.aiProvider": "claude"
 }

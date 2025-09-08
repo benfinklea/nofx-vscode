@@ -1,10 +1,23 @@
 import { InactivityMonitor, InactivityConfig, InactivityStatus } from '../../../services/InactivityMonitor';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 describe('InactivityMonitor', () => {
     let monitor: InactivityMonitor;
     let consoleLogSpy: jest.SpyInstance;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.useFakeTimers();
         monitor = new InactivityMonitor();
         consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();

@@ -8,6 +8,17 @@ import {
     OrchestratorMessage
 } from '../../../orchestration/MessageProtocol';
 import { MessageType } from '../../../orchestration/MessageProtocol';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 describe('MessageProtocol', () => {
     describe('createMessage', () => {

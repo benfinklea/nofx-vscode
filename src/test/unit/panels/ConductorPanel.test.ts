@@ -3,6 +3,17 @@ import { ConductorPanel } from '../../../panels/ConductorPanel';
 
 // Import actual interfaces
 import { IConductorViewModel, ILoggingService } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 interface IWebviewHost {
     webview: vscode.Webview;
@@ -100,6 +111,8 @@ Object.defineProperty(vscode.Uri, 'joinPath', {
     configurable: true
 });
 
+jest.mock('vscode');
+
 describe('ConductorPanel', () => {
     let conductorPanel: ConductorPanel;
     let mockContext: jest.Mocked<vscode.ExtensionContext>;
@@ -115,6 +128,8 @@ describe('ConductorPanel', () => {
     };
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.clearAllMocks();
 
         // Reset static currentPanel

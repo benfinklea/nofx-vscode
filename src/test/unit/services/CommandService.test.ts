@@ -1,6 +1,17 @@
 import * as vscode from 'vscode';
 import { CommandService } from '../../../services/CommandService';
 import { ILoggingService, IErrorHandler } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 jest.mock('vscode');
 
@@ -16,18 +27,7 @@ describe('CommandService', () => {
 
     beforeEach(() => {
         // Mock logging service
-        mockLoggingService = {
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            isLevelEnabled: jest.fn().mockReturnValue(false),
-            getChannel: jest.fn(),
-            time: jest.fn(),
-            timeEnd: jest.fn(),
-            onDidChangeConfiguration: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        mockLoggingService = createMockLoggingService();
 
         // Mock error handler
         mockErrorHandler = {
@@ -259,7 +259,7 @@ describe('CommandService', () => {
             const errorString = 'String error';
             mockCommands.executeCommand.mockRejectedValue(errorString);
 
-            await expect(commandService.execute(commandId)).rejects.toBe(errorString);
+            await expect(commandService.execute(commandId)).mockRejectedValue.toBe(errorString);
             expect(mockErrorHandler.handleError).toHaveBeenCalledWith(
                 new Error(errorString),
                 `Error executing command ${commandId}`

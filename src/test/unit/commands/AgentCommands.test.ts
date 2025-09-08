@@ -12,6 +12,17 @@ import {
     SERVICE_TOKENS
 } from '../../../services/interfaces';
 import { Agent } from '../../../agents/types';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 interface AgentTemplate {
     id: string;
@@ -86,6 +97,8 @@ jest.mock('../../../agents/AgentTemplateManager', () => ({
     }))
 }));
 
+jest.mock('vscode');
+
 describe('AgentCommands', () => {
     let agentCommands: AgentCommands;
     let mockContainer: jest.Mocked<IContainer>;
@@ -114,6 +127,8 @@ describe('AgentCommands', () => {
     };
 
     beforeEach(() => {
+        mockTerminal = createMockTerminal();
+        mockConfigService = createMockConfigurationService();
         jest.clearAllMocks();
 
         // Setup mock agent manager
@@ -152,35 +167,7 @@ describe('AgentCommands', () => {
         } as jest.Mocked<INotificationService>;
 
         // Setup mock config service
-        mockConfigService = {
-            get: jest.fn(),
-            getAll: jest.fn(),
-            update: jest.fn().mockResolvedValue(undefined),
-            onDidChange: jest.fn().mockReturnValue({ dispose: jest.fn() }),
-            validateAll: jest.fn().mockReturnValue({ isValid: true, errors: [] }),
-            getMaxAgents: jest.fn().mockReturnValue(5),
-            getAiPath: jest.fn().mockReturnValue('claude'),
-            isAutoAssignTasks: jest.fn().mockReturnValue(true),
-            isUseWorktrees: jest.fn().mockReturnValue(true),
-            isShowAgentTerminalOnSpawn: jest.fn().mockReturnValue(false),
-            isClaudeSkipPermissions: jest.fn().mockReturnValue(false),
-            getTemplatesPath: jest.fn().mockReturnValue('.nofx/templates'),
-            isPersistAgents: jest.fn().mockReturnValue(true),
-            getLogLevel: jest.fn().mockReturnValue('info'),
-            getOrchestrationHeartbeatInterval: jest.fn().mockReturnValue(10000),
-            getOrchestrationHeartbeatTimeout: jest.fn().mockReturnValue(5000),
-            getOrchestrationHistoryLimit: jest.fn().mockReturnValue(1000),
-            getOrchestrationPersistencePath: jest.fn().mockReturnValue('.nofx/persistence'),
-            getOrchestrationMaxFileSize: jest.fn().mockReturnValue(10 * 1024 * 1024)
-        } as jest.Mocked<IConfigurationService>;
-
-        // Setup mock context
-        mockContext = {
-            subscriptions: [],
-            extensionUri: vscode.Uri.file('/extension'),
-            globalState: {} as any,
-            workspaceState: {} as any
-        } as any;
+        mockConfigService = createMockConfigurationService();
 
         // Setup mock container
         mockContainer = {

@@ -51,7 +51,7 @@ export class LoggingService implements ILoggingService {
         }
 
         const configLevel = String(raw).toLowerCase() as LogLevel;
-        if (['debug', 'info', 'warn', 'error'].includes(configLevel)) {
+        if (['trace', 'debug', 'agents', 'info', 'warn', 'error', 'none'].includes(configLevel)) {
             this.currentLogLevel = configLevel;
         } else {
             this.currentLogLevel = 'info';
@@ -59,9 +59,20 @@ export class LoggingService implements ILoggingService {
     }
 
     private _isLevelEnabled(level: LogLevel): boolean {
-        const levels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
+        // Special case: 'none' disables all logging
+        if (this.currentLogLevel === 'none') {
+            return false;
+        }
+
+        const levels: LogLevel[] = ['trace', 'debug', 'agents', 'info', 'warn', 'error'];
         const currentIndex = levels.indexOf(this.currentLogLevel);
         const targetIndex = levels.indexOf(level);
+
+        // If the target level is not in the array, treat it as 'info'
+        if (targetIndex === -1) {
+            return levels.indexOf('info') >= currentIndex;
+        }
+
         return targetIndex >= currentIndex;
     }
 
@@ -92,8 +103,8 @@ export class LoggingService implements ILoggingService {
         // Write to main channel
         this.mainChannel.appendLine(formattedMessage);
 
-        // Console fallback for development
-        if (this.currentLogLevel === 'debug') {
+        // Console output for trace and debug levels (shows in Developer Tools)
+        if (this.currentLogLevel === 'trace' || this.currentLogLevel === 'debug') {
             const consoleMethod =
                 level === 'error'
                     ? console.error
@@ -106,8 +117,16 @@ export class LoggingService implements ILoggingService {
         }
     }
 
+    trace(message: string, data?: any): void {
+        this.log('trace', message, data);
+    }
+
     debug(message: string, data?: any): void {
         this.log('debug', message, data);
+    }
+
+    agents(message: string, data?: any): void {
+        this.log('agents', message, data);
     }
 
     info(message: string, data?: any): void {

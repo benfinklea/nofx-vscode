@@ -9,12 +9,29 @@ import { TaskToolBridge, SubAgentType } from '../../services/TaskToolBridge';
 import { TerminalMonitor } from '../../services/TerminalMonitor';
 import { AgentManager } from '../../agents/AgentManager';
 import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
+
+import {
     MessageType,
     OrchestratorMessage,
     SpawnSubAgentPayload,
     SubAgentResultPayload
 } from '../../orchestration/MessageProtocol';
 
+jest.mock('vscode');
+
+jest.setTimeout(10000);
+
+jest.mock('ws');
 describe('Sub-Agent Integration', () => {
     let taskToolBridge: TaskToolBridge;
     let terminalMonitor: TerminalMonitor;
@@ -31,54 +48,7 @@ describe('Sub-Agent Integration', () => {
             debug: jest.fn()
         };
 
-        const mockConfigService = {
-            get: jest.fn((key: string, defaultValue?: any) => {
-                const config: any = {
-                    'nofx.subAgents.enabled': true,
-                    'nofx.subAgents.maxTotal': 10,
-                    'nofx.subAgents.maxPerAgent': 3,
-                    'nofx.subAgents.timeout': 300000,
-                    'nofx.subAgents.autoReview': true,
-                    'nofx.subAgents.parallelResearch': true
-                };
-                return config[key] ?? defaultValue;
-            }),
-            onDidChange: jest.fn(() => ({ dispose: jest.fn() }))
-        };
-
-        // Create services
-        taskToolBridge = new TaskToolBridge(mockLoggingService as any, mockConfigService as any);
-        terminalMonitor = new TerminalMonitor(mockLoggingService as any, taskToolBridge);
-
-        // Create test agent
-        testAgent = {
-            id: 'test-agent-1',
-            name: 'Backend Specialist',
-            status: AgentStatus.IDLE,
-            role: 'backend-specialist',
-            template: {
-                id: 'backend-specialist',
-                name: 'Backend Specialist',
-                systemPrompt: 'You are a backend specialist',
-                capabilities: ['api', 'database', 'testing'],
-                subAgentCapabilities: {
-                    enabled: true,
-                    maxConcurrent: 3,
-                    allowedTypes: ['general-purpose', 'code-lead-reviewer'],
-                    autoReview: true,
-                    parallelResearch: true
-                }
-            } as any,
-            tasksCompleted: 0,
-            createdAt: new Date()
-        };
-
-        // Create mock terminal
-        mockTerminal = {
-            name: 'Backend Specialist',
-            sendText: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        const mockConfigService = createMockConfigurationService();
 
         // Start monitoring
         terminalMonitor.startMonitoring(mockTerminal, testAgent.id);

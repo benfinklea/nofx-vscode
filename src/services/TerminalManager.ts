@@ -108,15 +108,15 @@ export class TerminalManager implements ITerminalManager {
     }
 
     private async initializeAgentTerminalWithRetry(
-        agent: any, 
-        workingDirectory?: string, 
+        agent: any,
+        workingDirectory?: string,
         maxRetries?: number,
         baseDelay?: number
     ): Promise<void> {
         // Get robustness settings from configuration
         const configuredMaxRetries = this.configService.get<number>('robustness.maxRetries', 3);
         const configuredBaseDelay = this.configService.get<number>('robustness.baseRetryDelay', 1000);
-        
+
         const finalMaxRetries = maxRetries ?? configuredMaxRetries;
         const finalBaseDelay = baseDelay ?? configuredBaseDelay;
         console.log('[NofX Debug] TerminalManager.initializeAgentTerminal called for:', {
@@ -133,9 +133,11 @@ export class TerminalManager implements ITerminalManager {
 
         for (let attempt = 1; attempt <= finalMaxRetries; attempt++) {
             try {
-                this.loggingService?.info(`Attempt ${attempt}/${finalMaxRetries}: Initializing terminal for agent '${agent.name}' (${agent.type})`);
+                this.loggingService?.info(
+                    `Attempt ${attempt}/${finalMaxRetries}: Initializing terminal for agent '${agent.name}' (${agent.type})`
+                );
                 await this.performAgentInitialization(agent, workingDirectory, attempt);
-                
+
                 // Verify initialization success
                 const success = await this.verifyAgentInitialization(agent);
                 if (success) {
@@ -143,37 +145,46 @@ export class TerminalManager implements ITerminalManager {
                     return;
                 }
                 throw new Error('Agent initialization verification failed');
-                
             } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
-                this.loggingService?.warn(`Attempt ${attempt}/${finalMaxRetries} failed for agent ${agent.name}: ${errorMsg}`);
-                
+                this.loggingService?.warn(
+                    `Attempt ${attempt}/${finalMaxRetries} failed for agent ${agent.name}: ${errorMsg}`
+                );
+
                 if (attempt === finalMaxRetries) {
-                    this.loggingService?.error(`All ${finalMaxRetries} attempts failed for agent ${agent.name}. Final error: ${errorMsg}`);
+                    this.loggingService?.error(
+                        `All ${finalMaxRetries} attempts failed for agent ${agent.name}. Final error: ${errorMsg}`
+                    );
                     throw new Error(`Agent initialization failed after ${finalMaxRetries} attempts: ${errorMsg}`);
                 }
-                
+
                 // Exponential backoff with jitter
                 const delay = finalBaseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
                 this.loggingService?.info(`Waiting ${Math.round(delay)}ms before retry ${attempt + 1}...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
-                
+
                 // Clean up failed terminal before retry
                 await this.cleanupFailedTerminal(agent);
             }
         }
     }
 
-    private async performAgentInitialization(agent: any, workingDirectory: string | undefined, attempt: number): Promise<void> {
-        this.loggingService?.agents(`TerminalManager: Performing initialization for agent '${agent.name}' (${agent.type}) - attempt ${attempt}`);
-        this.loggingService?.trace('TerminalManager: Agent details:', { 
-            id: agent.id, 
-            type: agent.type, 
+    private async performAgentInitialization(
+        agent: any,
+        workingDirectory: string | undefined,
+        attempt: number
+    ): Promise<void> {
+        this.loggingService?.agents(
+            `TerminalManager: Performing initialization for agent '${agent.name}' (${agent.type}) - attempt ${attempt}`
+        );
+        this.loggingService?.trace('TerminalManager: Agent details:', {
+            id: agent.id,
+            type: agent.type,
             hasTemplate: !!agent.template,
             workingDirectory,
-            attempt 
+            attempt
         });
-        
+
         // Show notification about what we're initializing
         console.error(`[NofX] Initializing terminal for agent: ${agent.name} (${agent.type})`);
         console.error(`[NofX] Agent has template: ${!!agent.template}`);
@@ -181,7 +192,7 @@ export class TerminalManager implements ITerminalManager {
             console.error(`[NofX] Template systemPrompt length: ${agent.template.systemPrompt?.length}`);
             console.error(`[NofX] Template detailedPrompt exists: ${!!agent.template.detailedPrompt}`);
         }
-        
+
         const terminal = this.terminals.get(agent.id);
         if (!terminal) {
             this.loggingService?.error(`No terminal found for agent ${agent.id}`);
@@ -237,8 +248,10 @@ export class TerminalManager implements ITerminalManager {
             // Debug: Log what we're seeing in the template
             console.log('[DEBUG] Agent template systemPrompt:', agent.template.systemPrompt?.substring(0, 100) + '...');
             console.log('[DEBUG] Agent template detailedPrompt exists?', !!agent.template.detailedPrompt);
-            this.loggingService?.agents(`TerminalManager: Template info - systemPrompt: ${agent.template.systemPrompt?.length || 0} chars, detailedPrompt: ${agent.template.detailedPrompt?.length || 0} chars`);
-            
+            this.loggingService?.agents(
+                `TerminalManager: Template info - systemPrompt: ${agent.template.systemPrompt?.length || 0} chars, detailedPrompt: ${agent.template.detailedPrompt?.length || 0} chars`
+            );
+
             // Use ONLY the short systemPrompt to launch Claude (not the detailed one)
             const simplePrompt = agent.template.systemPrompt;
 
@@ -270,25 +283,27 @@ export class TerminalManager implements ITerminalManager {
             if (agent.template.detailedPrompt) {
                 // Use the user-configured delay (default 15 seconds)
                 const initDelay = this.configService.get<number>('nofx.claudeInitializationDelay', 15) * 1000; // Convert to ms
-                this.loggingService?.info(`Waiting ${initDelay/1000}s for Claude to initialize before injecting detailed prompt...`);
+                this.loggingService?.info(
+                    `Waiting ${initDelay / 1000}s for Claude to initialize before injecting detailed prompt...`
+                );
                 await new Promise(resolve => setTimeout(resolve, initDelay));
-                
+
                 this.loggingService?.info(`Injecting detailed prompt for ${agent.name}`);
                 console.log('[NofX Debug] Injecting detailed prompt, length:', agent.template.detailedPrompt.length);
-                
+
                 // Send the detailed prompt without execute flag first (just types it)
                 terminal.sendText(agent.template.detailedPrompt, false);
-                
+
                 // Wait for text to be fully typed (longer for long prompts)
                 await new Promise(resolve => setTimeout(resolve, 1500));
-                
+
                 // Now send just an Enter key press to submit the prompt
                 terminal.sendText('', true);
-                
+
                 // Confirmation message
                 await new Promise(resolve => setTimeout(resolve, 500));
                 terminal.sendText(`echo "✅ Detailed prompt injected for ${agent.name}"`);
-                
+
                 this.loggingService?.agents(`Agent ${agent.name} started with detailed template injected`);
             } else {
                 this.loggingService?.agents(`Agent ${agent.name} started with basic template (no detailed prompt)`);
@@ -299,9 +314,9 @@ export class TerminalManager implements ITerminalManager {
             console.log(`[DEBUG] Agent ${agent.name} - template missing:`, {
                 hasTemplate: !!agent.template,
                 templateId: agent.template?.id,
-                hasSystemPrompt: !!(agent.template?.systemPrompt)
+                hasSystemPrompt: !!agent.template?.systemPrompt
             });
-            
+
             const basicPrompt =
                 'You are a general purpose agent, part of a NofX.dev coding team. Please wait for instructions.';
 
@@ -337,9 +352,9 @@ export class TerminalManager implements ITerminalManager {
         }
 
         this.loggingService?.debug(`Verifying agent ${agent.name} initialization...`);
-        
+
         // Create a promise that resolves when we detect Claude is ready
-        return new Promise<boolean>((resolve) => {
+        return new Promise<boolean>(resolve => {
             const timeout = setTimeout(() => {
                 this.loggingService?.warn(`Verification timeout for agent ${agent.name} after ${timeoutMs}ms`);
                 resolve(false);
@@ -348,7 +363,7 @@ export class TerminalManager implements ITerminalManager {
             // Send a simple test command and monitor for response
             const testMessage = 'echo "NofX-Agent-Ready-Check"';
             terminal.sendText(testMessage);
-            
+
             // Check for Claude-specific ready indicators
             const checkInterval = setInterval(() => {
                 // Look for signs that Claude is responding
@@ -362,20 +377,19 @@ export class TerminalManager implements ITerminalManager {
 
     private async cleanupFailedTerminal(agent: any): Promise<void> {
         this.loggingService?.debug(`Cleaning up failed terminal for agent ${agent.name}`);
-        
+
         const terminal = this.terminals.get(agent.id);
         if (terminal) {
             try {
                 terminal.dispose();
                 this.terminals.delete(agent.id);
-                
+
                 // Wait a moment for cleanup
                 await new Promise(resolve => setTimeout(resolve, 500));
-                
+
                 // Recreate terminal for next attempt
                 const newTerminal = this.createTerminal(agent.id, agent);
                 this.loggingService?.debug(`Created new terminal for retry: ${agent.name}`);
-                
             } catch (error) {
                 this.loggingService?.error(`Error during terminal cleanup for ${agent.name}:`, error);
             }
@@ -385,7 +399,7 @@ export class TerminalManager implements ITerminalManager {
     public async performHealthCheck(agentId: string): Promise<{ healthy: boolean; issues: string[] }> {
         const terminal = this.terminals.get(agentId);
         const issues: string[] = [];
-        
+
         if (!terminal) {
             issues.push('No terminal found');
             return { healthy: false, issues };
@@ -395,10 +409,10 @@ export class TerminalManager implements ITerminalManager {
         try {
             // Send a non-disruptive command to test responsiveness
             terminal.sendText('echo "health-check"');
-            
+
             // Check for various health indicators
             // (This would be enhanced with actual terminal output monitoring)
-            
+
             return { healthy: issues.length === 0, issues };
         } catch (error) {
             issues.push(`Terminal health check failed: ${error}`);

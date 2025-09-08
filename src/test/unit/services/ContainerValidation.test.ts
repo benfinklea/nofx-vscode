@@ -30,13 +30,31 @@ import { OrchestrationServer } from '../../../orchestration/OrchestrationServer'
 import { WorktreeManager } from '../../../worktrees/WorktreeManager';
 import { ConductorViewModel } from '../../../viewModels/ConductorViewModel';
 import { DashboardViewModel } from '../../../viewModels/DashboardViewModel';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
+jest.mock('vscode');
+
+jest.setTimeout(10000);
+
+jest.mock('ws');
 describe('Container Validation', () => {
     let container: Container;
     let mockContext: vscode.ExtensionContext;
     const projectRoot = path.resolve(__dirname, '../../../..');
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Set test mode
         process.env.NOFX_TEST_MODE = 'true';
 
@@ -361,8 +379,10 @@ describe('Container Validation', () => {
                 SERVICE_TOKENS.WorktreeService,
                 c =>
                     new WorktreeService(
-                        c.resolve(SERVICE_TOKENS.LoggingService),
-                        c.resolve(SERVICE_TOKENS.ConfigurationService)
+                        c.resolve(SERVICE_TOKENS.ConfigurationService),
+                        c.resolve(SERVICE_TOKENS.NotificationService),
+                        undefined,
+                        c.resolve(SERVICE_TOKENS.LoggingService)
                     ),
                 true
             );

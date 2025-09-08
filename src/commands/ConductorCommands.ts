@@ -300,10 +300,10 @@ export class ConductorCommands implements ICommandHandler {
 
         // Small delay before opening conductor to ensure all agent terminals are settled
         await new Promise(resolve => setTimeout(resolve, 2000)); // Increased from 500ms to 2000ms
-        
+
         // Open conductor terminal automatically
         await this.openConductorTerminal();
-        
+
         // Don't force terminal focus - let agents settle first
         // Focus manipulation can interfere with agent initialization
         // vscode.commands.executeCommand('workbench.action.terminal.focus');
@@ -378,7 +378,7 @@ export class ConductorCommands implements ICommandHandler {
         // Get optional services for enhanced conductor
         const eventBus = this.container.resolveOptional(SERVICE_TOKENS.EventBus);
         const agentNotificationService = this.container.resolveOptional(SERVICE_TOKENS.AgentNotificationService);
-        
+
         switch (type) {
             case 'supersmart':
                 return new SuperSmartConductor(this.agentManager, this.taskQueue);
@@ -386,8 +386,8 @@ export class ConductorCommands implements ICommandHandler {
                 return new IntelligentConductor(this.agentManager, this.taskQueue);
             default:
                 return new ConductorTerminal(
-                    this.agentManager, 
-                    this.taskQueue, 
+                    this.agentManager,
+                    this.taskQueue,
                     this.taskToolBridge,
                     this.loggingService,
                     eventBus as IEventBus | undefined,

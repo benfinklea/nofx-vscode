@@ -10,6 +10,17 @@ import {
 import { AgentManager } from '../../../agents/AgentManager';
 import { TaskQueue } from '../../../tasks/TaskQueue';
 import { Task, TaskConfig } from '../../../agents/types';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock VS Code API
 jest.mock('vscode');
@@ -39,6 +50,9 @@ describe('TaskCommands', () => {
     };
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockConfigService = createMockConfigurationService();
         jest.clearAllMocks();
 
         // Create mocks
@@ -75,33 +89,7 @@ describe('TaskCommands', () => {
             showError: jest.fn().mockResolvedValue(undefined)
         };
 
-        mockConfigService = {
-            get: jest.fn().mockReturnValue('default'),
-            update: jest.fn().mockResolvedValue(undefined),
-            onChange: jest.fn()
-        };
-
-        // Create mock container with resolve method
-        mockContainer = {
-            resolve: jest.fn((token: symbol) => {
-                switch (token) {
-                    case SERVICE_TOKENS.AgentManager:
-                        return mockAgentManager;
-                    case SERVICE_TOKENS.TaskQueue:
-                        return mockTaskQueue;
-                    case SERVICE_TOKENS.CommandService:
-                        return mockCommandService;
-                    case SERVICE_TOKENS.NotificationService:
-                        return mockNotificationService;
-                    case SERVICE_TOKENS.ConfigurationService:
-                        return mockConfigService;
-                    default:
-                        return undefined;
-                }
-            }),
-            register: jest.fn(),
-            get: jest.fn()
-        } as any;
+        mockConfigService = createMockConfigurationService();
 
         // Mock active text editor
         (vscode.window as any).activeTextEditor = {
