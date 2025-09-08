@@ -14,14 +14,28 @@ interface CommandPattern {
 
 /**
  * Service to convert natural language to conductor JSON commands
+ * Enhanced with robust error handling and fallback mechanisms
  */
 export class NaturalLanguageService {
     private patterns: CommandPattern[] = [];
     private loggingService?: ILoggingService;
+    private failureCount: number = 0;
+    private lastSuccessfulParse: Date = new Date();
+    private commandHistory: Map<string, any> = new Map();
+    private readonly MAX_FAILURES = 5;
+    private readonly CACHE_SIZE = 100;
+    private isHealthy: boolean = true;
 
     constructor(loggingService?: ILoggingService) {
         this.loggingService = loggingService;
-        this.initializePatterns();
+        try {
+            this.initializePatterns();
+            this.loggingService?.info('NaturalLanguageService initialized successfully');
+        } catch (error) {
+            this.loggingService?.error('Failed to initialize NaturalLanguageService patterns', error);
+            // Continue with empty patterns - service will still try to parse JSON
+            this.patterns = [];
+        }
     }
 
     /**
@@ -142,27 +156,58 @@ export class NaturalLanguageService {
     }
 
     /**
-     * Convert natural language to JSON command
+     * Convert natural language to JSON command with robust error handling
      */
     public parseNaturalLanguage(input: string): {
         command: any | null;
         confidence: number;
         interpretation: string;
         suggestions?: string[];
+        isFromCache?: boolean;
+        error?: string;
     } {
+        try {
+            // Validate input
+            if (!input || typeof input !== 'string') {
+                return {
+                    command: null,
+                    confidence: 0,
+                    interpretation: 'Invalid input',
+                    error: 'Input must be a non-empty string'
+                };
+            }
+
+            // Check cache first for exact matches
+            if (this.commandHistory.has(input)) {
+                this.loggingService?.debug('Returning cached command for input:', input);
+                return {
+                    ...this.commandHistory.get(input),
+                    isFromCache: true
+                };
+            }
         const trimmedInput = input.trim();
         
-        // Check if it's already JSON
+        // Check if it's already JSON with robust parsing
         if (trimmedInput.startsWith('{')) {
             try {
                 const json = JSON.parse(trimmedInput);
-                return {
-                    command: json,
+                
+                // Validate JSON structure
+                if (!json.type || typeof json.type !== 'string') {
+                    throw new Error('JSON command must have a type field');
+                }
+                
+                const result = {
+                    command: this.sanitizeCommand(json),
                     confidence: 1.0,
                     interpretation: 'Raw JSON command'
                 };
-            } catch {
-                // Not valid JSON, continue with natural language parsing
+                
+                this.recordSuccess(input, result);
+                return result;
+            } catch (error) {
+                this.loggingService?.warn('Invalid JSON in input, attempting natural language parsing:', error);
+                // Continue with natural language parsing as fallback
             }
         }
 
@@ -184,28 +229,62 @@ export class NaturalLanguageService {
         }
 
         if (bestMatch) {
-            this.loggingService?.debug('Natural language parsed:', {
-                input: trimmedInput,
-                command: bestMatch.command,
-                confidence: bestMatch.confidence
-            });
+            try {
+                const sanitizedCommand = this.sanitizeCommand(bestMatch.command);
+                
+                this.loggingService?.debug('Natural language parsed:', {
+                    input: trimmedInput,
+                    command: sanitizedCommand,
+                    confidence: bestMatch.confidence
+                });
 
-            return {
-                command: bestMatch.command,
-                confidence: bestMatch.confidence,
-                interpretation: `${bestMatch.description}: ${JSON.stringify(bestMatch.command)}`
-            };
+                const result = {
+                    command: sanitizedCommand,
+                    confidence: bestMatch.confidence,
+                    interpretation: `${bestMatch.description}: ${JSON.stringify(sanitizedCommand)}`
+                };
+                
+                this.recordSuccess(input, result);
+                return result;
+            } catch (error) {
+                this.loggingService?.error('Error processing matched command:', error);
+                this.recordFailure();
+                
+                return {
+                    command: null,
+                    confidence: 0,
+                    interpretation: 'Error processing command',
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                    suggestions: this.getSuggestions(trimmedInput)
+                };
+            }
         }
 
         // No match found, provide suggestions
         const suggestions = this.getSuggestions(trimmedInput);
         
+        this.recordFailure();
+        
         return {
             command: null,
             confidence: 0,
             interpretation: 'Could not understand command',
-            suggestions
+            suggestions,
+            error: 'No matching pattern found'
         };
+        } catch (error) {
+            // Catastrophic failure - log and return safe default
+            this.loggingService?.error('Catastrophic failure in parseNaturalLanguage:', error);
+            this.recordFailure();
+            
+            return {
+                command: null,
+                confidence: 0,
+                interpretation: 'Service error',
+                error: 'Natural language service encountered an error',
+                suggestions: ['Try using JSON format: {"type": "spawn", "role": "frontend-specialist"}']
+            };
+        }
     }
 
     /**
@@ -268,7 +347,8 @@ export class NaturalLanguageService {
     /**
      * Normalize team preset name
      */
-    private normalizeTeamPreset(preset: string): string {
+    private normalizeTeamPreset(preset: string | undefined): string {
+        if (!preset) return 'standard-team';
         const normalized = preset.toLowerCase();
         
         const presetMap: Record<string, string> = {
@@ -312,13 +392,104 @@ export class NaturalLanguageService {
     }
 
     /**
+     * Sanitize and validate command structure
+     */
+    private sanitizeCommand(command: any): any {
+        if (!command || typeof command !== 'object') {
+            throw new Error('Command must be an object');
+        }
+        
+        // Ensure required fields
+        if (!command.type) {
+            throw new Error('Command must have a type field');
+        }
+        
+        // Sanitize string fields
+        const sanitized: any = {};
+        for (const [key, value] of Object.entries(command)) {
+            if (typeof value === 'string') {
+                // Remove any potentially dangerous characters
+                sanitized[key] = value.replace(/[<>"'`;\\]/g, '');
+            } else {
+                sanitized[key] = value;
+            }
+        }
+        
+        return sanitized;
+    }
+    
+    /**
+     * Record successful parse for caching and metrics
+     */
+    private recordSuccess(input: string, result: any): void {
+        this.failureCount = 0;
+        this.lastSuccessfulParse = new Date();
+        this.isHealthy = true;
+        
+        // Add to cache with size limit
+        if (this.commandHistory.size >= this.CACHE_SIZE) {
+            const firstKey = this.commandHistory.keys().next().value;
+            if (firstKey !== undefined) {
+                this.commandHistory.delete(firstKey);
+            }
+        }
+        this.commandHistory.set(input, result);
+    }
+    
+    /**
+     * Record parse failure for health monitoring
+     */
+    private recordFailure(): void {
+        this.failureCount++;
+        
+        if (this.failureCount > this.MAX_FAILURES) {
+            this.isHealthy = false;
+            this.loggingService?.error(`NaturalLanguageService unhealthy: ${this.failureCount} consecutive failures`);
+        }
+    }
+    
+    /**
+     * Get service health status
+     */
+    public getHealthStatus(): {
+        isHealthy: boolean;
+        failureCount: number;
+        lastSuccess: Date;
+        cacheSize: number;
+    } {
+        return {
+            isHealthy: this.isHealthy,
+            failureCount: this.failureCount,
+            lastSuccess: this.lastSuccessfulParse,
+            cacheSize: this.commandHistory.size
+        };
+    }
+    
+    /**
+     * Reset service to healthy state
+     */
+    public reset(): void {
+        this.failureCount = 0;
+        this.isHealthy = true;
+        this.commandHistory.clear();
+        this.loggingService?.info('NaturalLanguageService reset to healthy state');
+    }
+    
+    /**
      * Get all available example commands
      */
     public getExamples(): string[] {
-        const examples: string[] = [];
-        for (const pattern of this.patterns) {
-            examples.push(...pattern.examples);
+        try {
+            const examples: string[] = [];
+            for (const pattern of this.patterns) {
+                if (pattern && pattern.examples && Array.isArray(pattern.examples)) {
+                    examples.push(...pattern.examples);
+                }
+            }
+            return examples;
+        } catch (error) {
+            this.loggingService?.error('Error getting examples:', error);
+            return ['add a frontend dev', 'assign task to agent-1', 'what\'s everyone doing?'];
         }
-        return examples;
     }
 }

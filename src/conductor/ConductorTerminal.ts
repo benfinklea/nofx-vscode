@@ -21,6 +21,7 @@ export class ConductorTerminal {
     private commandRouter?: TerminalCommandRouter;
     private notificationService?: AgentNotificationService;
     private inputListener?: vscode.Disposable;
+    private loggingService?: ILoggingService;
 
     constructor(
         agentManager: AgentManager, 
@@ -33,6 +34,7 @@ export class ConductorTerminal {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
         this.taskToolBridge = taskToolBridge;
+        this.loggingService = loggingService;
         this.aiPath = vscode.workspace.getConfiguration('nofx').get<string>('aiPath') || 'claude';
         this.notificationService = notificationService;
         
@@ -100,9 +102,14 @@ Tell me what you want to build, and I'll coordinate the team to make it happen.`
         // Now send Enter to submit it
         this.terminal.sendText('', true); // Send empty string with Enter to submit
         
-        // Start monitoring terminal output for commands
+        // Start monitoring terminal output for commands with error handling
         if (this.commandRouter && this.terminal) {
-            this.commandRouter.startMonitoring(this.terminal);
+            try {
+                this.commandRouter.startMonitoring(this.terminal);
+            } catch (error) {
+                this.loggingService?.error('Failed to start command monitoring:', error);
+                // Continue anyway - conductor can still function without auto-execution
+            }
         }
         
         // Show natural language help
