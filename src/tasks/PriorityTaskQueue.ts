@@ -28,7 +28,11 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
     private taskStateMachine?: ITaskStateMachine;
     private depthHistory: number[] = []; // Ring buffer of recent queue sizes
 
-    constructor(loggingService: ILoggingService, dependencyManager?: ITaskDependencyManager, taskStateMachine?: ITaskStateMachine) {
+    constructor(
+        loggingService: ILoggingService,
+        dependencyManager?: ITaskDependencyManager,
+        taskStateMachine?: ITaskStateMachine
+    ) {
         this.logger = loggingService;
         this.dependencyManager = dependencyManager;
         this.taskStateMachine = taskStateMachine;
@@ -198,7 +202,15 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
      * Returns all tasks as an array (for inspection)
      */
     toArray(): Task[] {
-        return [...this.readyHeap.map(item => item.task), ...this.validatedHeap.map(item => item.task)];
+        const allItems = [...this.readyHeap, ...this.validatedHeap];
+        // Sort by priority order: high > medium > low, then by timestamp (FIFO)
+        allItems.sort((a, b) => {
+            if (a.priority !== b.priority) {
+                return b.priority - a.priority; // Higher priority first (descending)
+            }
+            return a.timestamp - b.timestamp; // FIFO for same priority (older first)
+        });
+        return allItems.map(item => item.task);
     }
 
     /**
@@ -221,6 +233,9 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
             const oldPriority = item.priority;
             item.priority = newPriority;
 
+            // Also update the task's numericPriority field
+            item.task.numericPriority = newPriority;
+
             // Restore heap property
             if (newPriority > oldPriority) {
                 this.bubbleUp(this.readyHeap, readyIndex);
@@ -239,6 +254,9 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
             const oldPriority = item.priority;
             item.priority = newPriority;
 
+            // Also update the task's numericPriority field
+            item.task.numericPriority = newPriority;
+
             // Restore heap property
             if (newPriority > oldPriority) {
                 this.bubbleUp(this.validatedHeap, validatedIndex);
@@ -256,7 +274,14 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
     /**
      * Gets queue statistics
      */
-    getStats(): { size: number, averagePriority: number, oldestTask?: Task, newestTask?: Task, averageWaitMs: number, depthHistory: number[] } {
+    getStats(): {
+        size: number;
+        averagePriority: number;
+        oldestTask?: Task;
+        newestTask?: Task;
+        averageWaitMs: number;
+        depthHistory: number[];
+    } {
         const totalSize = this.readyHeap.length + this.validatedHeap.length;
         if (totalSize === 0) {
             return { size: 0, averagePriority: 0, averageWaitMs: 0, depthHistory: [] };
@@ -340,7 +365,6 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
         const softDepAdjustment = this.calculateSoftDependencyAdjustmentWithTasks(task, allTasks);
         return basePriority + softDepAdjustment;
     }
-
 
     /**
      * Calculates soft dependency adjustment with access to all tasks
@@ -426,13 +450,11 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
             const leftChild = 2 * index + 1;
             const rightChild = 2 * index + 2;
 
-            if (leftChild < heap.length &&
-                this.compare(heap[leftChild], heap[maxIndex]) > 0) {
+            if (leftChild < heap.length && this.compare(heap[leftChild], heap[maxIndex]) > 0) {
                 maxIndex = leftChild;
             }
 
-            if (rightChild < heap.length &&
-                this.compare(heap[rightChild], heap[maxIndex]) > 0) {
+            if (rightChild < heap.length && this.compare(heap[rightChild], heap[maxIndex]) > 0) {
                 maxIndex = rightChild;
             }
 

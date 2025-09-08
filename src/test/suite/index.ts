@@ -11,9 +11,8 @@ export function run(): Promise<void> {
             if (err) return reject(err);
             files.forEach((f: any) => mocha.addFile(path.resolve(testsRoot, f)));
             try {
-                mocha.run((failures: any) => failures ? reject(new Error(`${failures} tests failed`)) : resolve());
-            }
-            catch (err) {
+                mocha.run((failures: any) => (failures ? reject(new Error(`${failures} tests failed`)) : resolve()));
+            } catch (err) {
                 reject(err);
             }
         });

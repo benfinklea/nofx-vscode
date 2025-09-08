@@ -12,23 +12,27 @@ import {
     SERVICE_TOKENS
 } from '../services/interfaces';
 import { PickItem } from '../types/ui';
+import { AIProviderResolver } from '../services/AIProviderResolver';
 
 export class UtilityCommands implements ICommandHandler {
     private readonly commandService: ICommandService;
     private readonly notificationService: INotificationService;
     private readonly configService: IConfigurationService;
     private readonly loggingService?: ILoggingService;
+    private readonly aiResolver: AIProviderResolver;
 
     constructor(container: IContainer) {
         this.commandService = container.resolve<ICommandService>(SERVICE_TOKENS.CommandService);
         this.notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
         this.configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
         this.loggingService = container.resolveOptional<ILoggingService>(SERVICE_TOKENS.LoggingService);
+        this.aiResolver = new AIProviderResolver(this.configService);
     }
 
     register(): void {
         this.commandService.register('nofx.testClaude', this.testClaude.bind(this));
         this.commandService.register('nofx.debug.verifyCommands', this.verifyCommands.bind(this));
+        this.commandService.register('nofx.selectAiProvider', this.selectAiProvider.bind(this));
     }
 
     private async testClaude(): Promise<void> {
@@ -47,26 +51,26 @@ export class UtilityCommands implements ICommandHandler {
             return;
         }
 
-        const claudePath = this.configService.getClaudePath();
+        const aiCommand = this.aiResolver.getAiCommand();
         const terminal = vscode.window.createTerminal('Claude Test');
         terminal.show();
 
         const testValue = testType.value;
         switch (testValue) {
             case 'simple':
-                terminal.sendText(`${claudePath} "What is 2+2?"`);
+                terminal.sendText(`${aiCommand} "What is 2+2?"`);
                 break;
 
             case 'interactive':
-                terminal.sendText(claudePath);
+                terminal.sendText(aiCommand);
                 await this.notificationService.showInformation(
-                    'Claude started in interactive mode. Type your messages and press Enter.'
+                    `${this.aiResolver.getCurrentProviderDescription()} started in interactive mode. Type your messages and press Enter.`
                 );
                 break;
 
             case 'heredoc':
                 const heredocScript = `
-cat << 'EOF' | ${claudePath}
+cat << 'EOF' | ${aiCommand}
 Please write a haiku about coding.
 EOF`;
                 terminal.sendText(heredocScript.trim());
@@ -80,9 +84,9 @@ EOF`;
                     return;
                 }
 
-                const testFile = path.join(workspaceFolder.uri.fsPath, '.claude-test.txt');
+                const testFile = path.join(workspaceFolder.uri.fsPath, '.ai-test.txt');
                 fs.writeFileSync(testFile, 'What programming languages do you know?');
-                terminal.sendText(`${claudePath} < "${testFile}"`);
+                terminal.sendText(`${aiCommand} < "${testFile}"`);
 
                 // Clean up test file after a delay
                 setTimeout(() => {
@@ -96,8 +100,89 @@ EOF`;
         }
 
         await this.notificationService.showInformation(
-            'Claude test started. Check the terminal for output.'
+            `${this.aiResolver.getCurrentProviderDescription()} test started. Check the terminal for output.`
         );
+    }
+
+    private async selectAiProvider(): Promise<void> {
+        const providers = this.aiResolver.getAllProviders();
+        const currentProvider = this.configService.getAiProvider();
+
+        const providerItems: PickItem<string>[] = [
+            { label: '$(zap) Claude Code', description: 'Anthropic Claude Code CLI (Recommended)', value: 'claude' },
+            { label: '$(tools) Aider', description: 'AI pair programming in the terminal', value: 'aider' },
+            {
+                label: '$(github) GitHub Copilot CLI',
+                description: 'GitHub Copilot command line interface',
+                value: 'copilot'
+            },
+            { label: '$(cursor) Cursor AI', description: 'Cursor AI chat interface', value: 'cursor' },
+            { label: '$(code) Codeium', description: 'Codeium AI coding assistant', value: 'codeium' },
+            { label: '$(play) Continue.dev', description: 'Open-source AI code assistant', value: 'continue' },
+            { label: '$(settings-gear) Custom Command', description: 'Use a custom AI CLI command', value: 'custom' }
+        ];
+
+        // Mark current provider
+        const selectedItem = providerItems.find(item => item.value === currentProvider);
+        if (selectedItem) {
+            selectedItem.label = `$(check) ${selectedItem.label.replace('$(check) ', '')}`;
+        }
+
+        const selectedProvider = await this.notificationService.showQuickPick(providerItems, {
+            placeHolder: `Current: ${this.aiResolver.getCurrentProviderDescription()}`,
+            title: 'Select AI Provider for NofX Agents'
+        });
+
+        if (!selectedProvider) {
+            return;
+        }
+
+        // Update the provider
+        try {
+            await this.configService.update('aiProvider', selectedProvider.value);
+
+            // If custom was selected, also prompt for the custom command
+            if (selectedProvider.value === 'custom') {
+                const customCommand = await vscode.window.showInputBox({
+                    prompt: 'Enter your custom AI CLI command',
+                    placeHolder: 'e.g., /usr/local/bin/my-ai-tool, python ai_wrapper.py, etc.',
+                    value: this.configService.getAiPath()
+                });
+
+                if (customCommand) {
+                    await this.configService.update('aiPath', customCommand);
+                    await this.notificationService.showInformation(
+                        `✅ AI Provider set to custom command: ${customCommand}`
+                    );
+                } else {
+                    // Revert provider selection if they cancelled custom input
+                    await this.configService.update('aiProvider', currentProvider);
+                    return;
+                }
+            } else {
+                const config = providers[selectedProvider.value];
+                if (config) {
+                    await this.notificationService.showInformation(
+                        `✅ AI Provider set to ${config.name}. All new agents will use: ${config.command}`
+                    );
+                }
+            }
+
+            // Log the change
+            this.loggingService?.info(`AI provider changed from ${currentProvider} to ${selectedProvider.value}`);
+
+            // Show info about system prompt support
+            if (!this.aiResolver.supportsSystemPrompt()) {
+                await this.notificationService.showInformation(
+                    `⚠️ Note: ${selectedProvider.label.replace(/\$\([^)]+\)\s*/, '')} doesn't support system prompts. ` +
+                        `Agents will start without context and you'll need to manually provide instructions.`
+                );
+            }
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.loggingService?.error(`Failed to update AI provider: ${err.message}`, err);
+            await this.notificationService.showError(`Failed to update AI provider: ${err.message}`);
+        }
     }
 
     /**
@@ -139,7 +224,9 @@ EOF`;
             outputChannel.show();
             outputChannel.appendLine('=== NofX Command Verification ===');
             outputChannel.appendLine(`Total expected commands: ${expectedCommands.length}`);
-            outputChannel.appendLine(`Total registered commands: ${registeredCommands.filter(cmd => cmd.startsWith('nofx.')).length}`);
+            outputChannel.appendLine(
+                `Total registered commands: ${registeredCommands.filter(cmd => cmd.startsWith('nofx.')).length}`
+            );
             outputChannel.appendLine('');
 
             if (missingCommands.length > 0) {
@@ -177,7 +264,6 @@ EOF`;
 
             outputChannel.appendLine('');
             outputChannel.appendLine('=== End of Verification ===');
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService?.error('Error verifying commands', err);

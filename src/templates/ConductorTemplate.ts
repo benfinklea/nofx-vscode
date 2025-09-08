@@ -463,7 +463,9 @@ export class ConductorTemplate {
         if (agents.length === 0) {
             return '<p>No active agents</p>';
         }
-        return agents.map(agent => `
+        return agents
+            .map(
+                agent => `
             <div class="agent-item">
                 <div>
                     <span class="status-indicator status-${agent.status}"></span>
@@ -472,14 +474,19 @@ export class ConductorTemplate {
                 </div>
                 <button class="control-btn" data-command="removeAgent" data-agent-id="${agent.id}">Remove</button>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
     }
 
     private generateTaskList(tasks: any[]): string {
         if (tasks.length === 0) {
             return '<p>No tasks</p>';
         }
-        return tasks.slice(0, 10).map(task => `
+        return tasks
+            .slice(0, 10)
+            .map(
+                task => `
             <div class="task-item">
                 <div>
                     <strong class="priority-${task.priority}">${task.title}</strong>
@@ -487,14 +494,18 @@ export class ConductorTemplate {
                     <br><small>Status: ${task.status}</small>
                 </div>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
     }
 
     private generateEnhancedAgentList(agents: any[]): string {
         if (agents.length === 0) {
             return '<p style="text-align: center; color: var(--vscode-descriptionForeground);">No active agents</p>';
         }
-        return agents.map(agent => `
+        return agents
+            .map(
+                agent => `
             <div class="agent-card">
                 <div class="agent-info">
                     <div class="agent-status status-${agent.status}"></div>
@@ -506,14 +517,19 @@ export class ConductorTemplate {
                 </div>
                 <button class="action-btn secondary" data-command="removeAgent" data-agent-id="${agent.id}">Remove</button>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
     }
 
     private generateEnhancedTaskList(tasks: any[]): string {
         if (tasks.length === 0) {
             return '<p style="text-align: center; color: var(--vscode-descriptionForeground);">No tasks</p>';
         }
-        return tasks.slice(0, 15).map(task => `
+        return tasks
+            .slice(0, 15)
+            .map(
+                task => `
             <div class="task-item">
                 <div class="task-title priority-${task.priority}">${task.title}</div>
                 <div class="task-meta">
@@ -522,6 +538,8 @@ export class ConductorTemplate {
                     Created: ${new Date(task.createdAt).toLocaleString()}
                 </div>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
     }
 }

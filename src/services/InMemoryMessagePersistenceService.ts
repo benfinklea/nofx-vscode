@@ -52,7 +52,6 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
                 type: message.type,
                 totalMessages: this.messages.length
             });
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to save message to in-memory persistence', {
@@ -83,7 +82,6 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
             });
 
             return result;
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to load messages from in-memory persistence', {
@@ -121,16 +119,14 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
 
             // Apply client ID filter
             if (filter.clientId) {
-                filteredMessages = filteredMessages.filter(msg =>
-                    msg.from === filter.clientId || msg.to === filter.clientId
+                filteredMessages = filteredMessages.filter(
+                    msg => msg.from === filter.clientId || msg.to === filter.clientId
                 );
             }
 
             // Apply message type filter
             if (filter.type) {
-                filteredMessages = filteredMessages.filter(msg =>
-                    msg.type === filter.type
-                );
+                filteredMessages = filteredMessages.filter(msg => msg.type === filter.type);
             }
 
             // Apply time range filter
@@ -165,7 +161,6 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
             });
 
             return result;
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to get message history with filter from in-memory persistence', {
@@ -193,7 +188,6 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
             this.eventBus.publish(ORCH_EVENTS.MESSAGE_STORAGE_CLEANUP, {
                 messagesCleared: messageCount
             });
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to clear in-memory message persistence', {
@@ -203,19 +197,19 @@ export class InMemoryMessagePersistenceService implements IMessagePersistenceSer
         }
     }
 
-    async getStats(): Promise<{totalMessages: number, oldestMessage: Date}> {
+    async getStats(): Promise<{ totalMessages: number; oldestMessage: Date }> {
         if (this.isDisposed) {
             return { totalMessages: 0, oldestMessage: new Date() };
         }
 
         try {
             const totalMessages = this.messages.length;
-            const oldestMessage = this.messages.length > 0
-                ? new Date(Math.min(...this.messages.map(m => new Date(m.timestamp).getTime())))
-                : new Date();
+            const oldestMessage =
+                this.messages.length > 0
+                    ? new Date(Math.min(...this.messages.map(m => new Date(m.timestamp).getTime())))
+                    : new Date();
 
             return { totalMessages, oldestMessage };
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService.error('Failed to get in-memory persistence stats', {

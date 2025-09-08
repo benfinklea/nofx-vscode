@@ -1,0 +1,328 @@
+<testsuites id="" name="" tests="76" failures="0" skipped="76" errors="0" time="0.034454999999999986">
+<testsuite name="agents/agent-lifecycle.e2e.test.ts" timestamp="2025-09-08T13:20:15.255Z" hostname="vscode-extension" tests="8" failures="0" skipped="8" time="0" errors="0">
+<testcase name="Agent Lifecycle E2E Tests › should spawn agent with correct template and system prompt" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should handle multiple agent types simultaneously" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should persist agent state across reconnections" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should track agent metrics and performance" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should handle agent capacity and workload balancing" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should validate agent capabilities before task assignment" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should handle agent template updates and reloading" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should gracefully degrade when agent resources are limited" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="agents/task-assignment.e2e.test.ts" timestamp="2025-09-08T13:20:15.255Z" hostname="vscode-extension" tests="8" failures="0" skipped="8" time="0" errors="0">
+<testcase name="Task Assignment and Completion E2E Tests › should assign and complete simple task" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle complex multi-step task" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle task dependencies and ordering" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle task prioritization correctly" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle task cancellation and rollback" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle parallel task execution by single agent" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should retry failed tasks with exponential backoff" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle task result persistence and retrieval" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="agents/worktree-management.e2e.test.ts" timestamp="2025-09-08T13:20:15.255Z" hostname="vscode-extension" tests="7" failures="0" skipped="7" time="0" errors="0">
+<testcase name="Git Worktree Management E2E Tests › should create worktree for spawned agent" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should isolate agent changes in separate worktrees" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should merge agent work back to main branch" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should handle merge conflicts between agent worktrees" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should clean up worktrees when agents terminate" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should track worktree metrics and performance" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should handle worktree operations with large repositories" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="basic.e2e.test.ts" timestamp="2025-09-08T13:20:15.255Z" hostname="vscode-extension" tests="2" failures="0" skipped="2" time="0" errors="0">
+<testcase name="Basic E2E Test › should load test page" classname="basic.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Basic E2E Test › should load dashboard page" classname="basic.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="conductor/conductor-workflow.e2e.test.ts" timestamp="2025-09-08T13:20:15.255Z" hostname="vscode-extension" tests="6" failures="0" skipped="6" time="0" errors="0">
+<testcase name="Conductor-Agent Workflow E2E Tests › should spawn agents through WebSocket messages" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Conductor-Agent Workflow E2E Tests › should handle task assignment and completion workflow" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Conductor-Agent Workflow E2E Tests › should coordinate multiple agents working in parallel" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Conductor-Agent Workflow E2E Tests › should handle agent termination gracefully" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Conductor-Agent Workflow E2E Tests › should recover from agent failures" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Conductor-Agent Workflow E2E Tests › should display real-time message flow in dashboard" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="websocket/message-routing.e2e.test.ts" timestamp="2025-09-08T13:20:15.255Z" hostname="vscode-extension" tests="8" failures="0" skipped="8" time="0" errors="0">
+<testcase name="WebSocket Message Routing E2E Tests › should establish WebSocket connection and receive heartbeat" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should route messages between conductor and agents" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should handle broadcast messages to all connected clients" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should handle connection drops and reconnection" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should validate message format and reject invalid messages" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should handle rate limiting for message floods" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should maintain message order for sequential operations" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should handle large payload messages" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="websocket/message-routing.e2e.test.ts" timestamp="2025-09-08T13:20:15.255Z" hostname="websocket-orchestration" tests="8" failures="0" skipped="8" time="0" errors="0">
+<testcase name="WebSocket Message Routing E2E Tests › should establish WebSocket connection and receive heartbeat" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should route messages between conductor and agents" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should handle broadcast messages to all connected clients" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should handle connection drops and reconnection" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should validate message format and reject invalid messages" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should handle rate limiting for message floods" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should maintain message order for sequential operations" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="WebSocket Message Routing E2E Tests › should handle large payload messages" classname="websocket/message-routing.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="conductor/conductor-workflow.e2e.test.ts" timestamp="2025-09-08T13:20:15.255Z" hostname="conductor-workflow" tests="6" failures="0" skipped="6" time="0" errors="0">
+<testcase name="Conductor-Agent Workflow E2E Tests › should spawn agents through WebSocket messages" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Conductor-Agent Workflow E2E Tests › should handle task assignment and completion workflow" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Conductor-Agent Workflow E2E Tests › should coordinate multiple agents working in parallel" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Conductor-Agent Workflow E2E Tests › should handle agent termination gracefully" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Conductor-Agent Workflow E2E Tests › should recover from agent failures" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Conductor-Agent Workflow E2E Tests › should display real-time message flow in dashboard" classname="conductor/conductor-workflow.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="agents/agent-lifecycle.e2e.test.ts" timestamp="2025-09-08T13:20:15.255Z" hostname="agent-management" tests="8" failures="0" skipped="8" time="0" errors="0">
+<testcase name="Agent Lifecycle E2E Tests › should spawn agent with correct template and system prompt" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should handle multiple agent types simultaneously" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should persist agent state across reconnections" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should track agent metrics and performance" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should handle agent capacity and workload balancing" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should validate agent capabilities before task assignment" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should handle agent template updates and reloading" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Agent Lifecycle E2E Tests › should gracefully degrade when agent resources are limited" classname="agents/agent-lifecycle.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="agents/task-assignment.e2e.test.ts" timestamp="2025-09-08T13:20:15.255Z" hostname="agent-management" tests="8" failures="0" skipped="8" time="0" errors="0">
+<testcase name="Task Assignment and Completion E2E Tests › should assign and complete simple task" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle complex multi-step task" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle task dependencies and ordering" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle task prioritization correctly" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle task cancellation and rollback" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle parallel task execution by single agent" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should retry failed tasks with exponential backoff" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Task Assignment and Completion E2E Tests › should handle task result persistence and retrieval" classname="agents/task-assignment.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="agents/worktree-management.e2e.test.ts" timestamp="2025-09-08T13:20:15.255Z" hostname="agent-management" tests="7" failures="0" skipped="7" time="0" errors="0">
+<testcase name="Git Worktree Management E2E Tests › should create worktree for spawned agent" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should isolate agent changes in separate worktrees" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should merge agent work back to main branch" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should handle merge conflicts between agent worktrees" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should clean up worktrees when agents terminate" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should track worktree metrics and performance" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="Git Worktree Management E2E Tests › should handle worktree operations with large repositories" classname="agents/worktree-management.e2e.test.ts" time="0">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+</testsuites>

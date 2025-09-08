@@ -1,5 +1,23 @@
 import { MetricsService } from '../../../services/MetricsService';
-import { IConfigurationService, ILoggingService, IEventBus, MetricType, METRICS_CONFIG_KEYS } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
+
+import {
+    IConfigurationService,
+    ILoggingService,
+    IEventBus,
+    MetricType,
+    METRICS_CONFIG_KEYS
+} from '../../../services/interfaces';
 
 // Helper function to filter out system metrics in tests
 const getTestMetrics = (service: MetricsService) => {
@@ -13,6 +31,9 @@ describe('MetricsService', () => {
     let mockEventBus: jest.Mocked<IEventBus>;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockConfigService = createMockConfigurationService();
         jest.useFakeTimers();
         // Reset mocks
         jest.clearAllMocks();
@@ -25,7 +46,7 @@ describe('MetricsService', () => {
             onDidChange: jest.fn(),
             validateAll: jest.fn(() => ({ isValid: true, errors: [] })),
             getMaxAgents: jest.fn(),
-            getClaudePath: jest.fn(),
+            getAiPath: jest.fn(),
             isAutoAssignTasks: jest.fn(),
             isUseWorktrees: jest.fn(),
             isShowAgentTerminalOnSpawn: jest.fn(),
@@ -313,10 +334,13 @@ describe('MetricsService', () => {
 
             const service = new MetricsService(mockConfigService, mockLogger, mockEventBus);
 
-            expect(mockLogger.debug).toHaveBeenCalledWith('MetricsService initialized', expect.objectContaining({
-                enabled: true,
-                retentionHours: 24
-            }));
+            expect(mockLogger.debug).toHaveBeenCalledWith(
+                'MetricsService initialized',
+                expect.objectContaining({
+                    enabled: true,
+                    retentionHours: 24
+                })
+            );
 
             service.dispose();
         });
@@ -355,11 +379,14 @@ describe('MetricsService', () => {
         it('should publish metrics recorded events', () => {
             metricsService.incrementCounter('test.counter');
 
-            expect(mockEventBus.publish).toHaveBeenCalledWith('metrics.recorded', expect.objectContaining({
-                name: 'test.counter',
-                type: MetricType.COUNTER,
-                value: 1
-            }));
+            expect(mockEventBus.publish).toHaveBeenCalledWith(
+                'metrics.recorded',
+                expect.objectContaining({
+                    name: 'test.counter',
+                    type: MetricType.COUNTER,
+                    value: 1
+                })
+            );
         });
     });
 

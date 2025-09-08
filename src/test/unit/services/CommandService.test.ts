@@ -1,6 +1,17 @@
 import * as vscode from 'vscode';
 import { CommandService } from '../../../services/CommandService';
 import { ILoggingService, IErrorHandler } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 jest.mock('vscode');
 
@@ -16,18 +27,7 @@ describe('CommandService', () => {
 
     beforeEach(() => {
         // Mock logging service
-        mockLoggingService = {
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            isLevelEnabled: jest.fn().mockReturnValue(false),
-            getChannel: jest.fn(),
-            time: jest.fn(),
-            timeEnd: jest.fn(),
-            onDidChangeConfiguration: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        mockLoggingService = createMockLoggingService();
 
         // Mock error handler
         mockErrorHandler = {
@@ -259,7 +259,7 @@ describe('CommandService', () => {
             const errorString = 'String error';
             mockCommands.executeCommand.mockRejectedValue(errorString);
 
-            await expect(commandService.execute(commandId)).rejects.toBe(errorString);
+            await expect(commandService.execute(commandId)).mockRejectedValue.toBe(errorString);
             expect(mockErrorHandler.handleError).toHaveBeenCalledWith(
                 new Error(errorString),
                 `Error executing command ${commandId}`
@@ -433,7 +433,9 @@ describe('CommandService', () => {
 
             await commandService.verifyCommands();
 
-            expect(mockLoggingService.debug).toHaveBeenCalledWith('Command verification skipped (not in test/dev mode)');
+            expect(mockLoggingService.debug).toHaveBeenCalledWith(
+                'Command verification skipped (not in test/dev mode)'
+            );
             expect(mockCommands.getCommands).not.toHaveBeenCalled();
         });
 
@@ -629,13 +631,7 @@ describe('CommandService', () => {
 
         it('should handle command execution with complex argument types', async () => {
             const commandId = 'test.complex';
-            const complexArgs = [
-                { nested: { object: true } },
-                [1, 2, 3],
-                new Date(),
-                /regex/g,
-                function() {}
-            ];
+            const complexArgs = [{ nested: { object: true } }, [1, 2, 3], new Date(), /regex/g, function () {}];
 
             await commandService.execute(commandId, ...complexArgs);
 
@@ -649,7 +645,10 @@ describe('CommandService', () => {
             mockCommands.executeCommand.mockRejectedValue(vscodeError);
 
             await expect(commandService.execute(commandId)).rejects.toThrow('VS Code API error');
-            expect(mockErrorHandler.handleError).toHaveBeenCalledWith(vscodeError, `Error executing command ${commandId}`);
+            expect(mockErrorHandler.handleError).toHaveBeenCalledWith(
+                vscodeError,
+                `Error executing command ${commandId}`
+            );
         });
     });
 });

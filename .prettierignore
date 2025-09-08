@@ -1,0 +1,13 @@
+out/**
+dist/**
+node_modules/**
+coverage/**
+*.js
+*.d.ts
+webview/**
+media/**
+scripts/**
+*.vsix
+.git/**
+.vscode/**
+*.log

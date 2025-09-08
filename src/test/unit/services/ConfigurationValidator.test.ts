@@ -1,12 +1,21 @@
 import { ConfigurationValidator } from '../../../services/ConfigurationValidator';
 import { ILoggingService, INotificationService, ValidationError } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock VS Code
 jest.mock('vscode', () => ({
     workspace: {
-        workspaceFolders: [
-            { uri: { fsPath: '/test/workspace' } }
-        ]
+        workspaceFolders: [{ uri: { fsPath: '/test/workspace' } }]
     }
 }));
 
@@ -22,6 +31,8 @@ describe('ConfigurationValidator', () => {
     let mockFs: any;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         mockLogger = {
             debug: jest.fn(),
             info: jest.fn(),
@@ -59,7 +70,7 @@ describe('ConfigurationValidator', () => {
         it('should validate valid configuration successfully', () => {
             const validConfig = {
                 maxAgents: 5,
-                claudePath: 'claude',
+                aiPath: 'claude',
                 autoAssignTasks: true,
                 useWorktrees: false,
                 logLevel: 'info',
@@ -92,18 +103,18 @@ describe('ConfigurationValidator', () => {
             });
         });
 
-        it('should reject invalid claudePath values', () => {
+        it('should reject invalid aiPath values', () => {
             const invalidConfigs = [
-                { claudePath: '' }, // Empty
-                { claudePath: '   ' }, // Whitespace only
-                { claudePath: null }, // Null
-                { claudePath: undefined } // Undefined
+                { aiPath: '' }, // Empty
+                { aiPath: '   ' }, // Whitespace only
+                { aiPath: null }, // Null
+                { aiPath: undefined } // Undefined
             ];
 
             invalidConfigs.forEach(config => {
                 const result = validator.validateConfiguration(config);
                 expect(result.isValid).toBe(false);
-                expect(result.errors.some(e => e.field === 'claudePath')).toBe(true);
+                expect(result.errors.some(e => e.field === 'aiPath')).toBe(true);
             });
         });
 
@@ -177,7 +188,7 @@ describe('ConfigurationValidator', () => {
     describe('Key Validation', () => {
         it('should validate individual configuration keys', () => {
             expect(validator.validateConfigurationKey('maxAgents', 5).isValid).toBe(true);
-            expect(validator.validateConfigurationKey('claudePath', 'claude').isValid).toBe(true);
+            expect(validator.validateConfigurationKey('aiPath', 'claude').isValid).toBe(true);
             expect(validator.validateConfigurationKey('logLevel', 'info').isValid).toBe(true);
             expect(validator.validateConfigurationKey('enableMetrics', true).isValid).toBe(true);
             expect(validator.validateConfigurationKey('metricsOutputLevel', 'detailed').isValid).toBe(true);
@@ -186,7 +197,7 @@ describe('ConfigurationValidator', () => {
 
         it('should reject invalid individual keys', () => {
             expect(validator.validateConfigurationKey('maxAgents', 0).isValid).toBe(false);
-            expect(validator.validateConfigurationKey('claudePath', '').isValid).toBe(false);
+            expect(validator.validateConfigurationKey('aiPath', '').isValid).toBe(false);
             expect(validator.validateConfigurationKey('logLevel', 'invalid').isValid).toBe(false);
             expect(validator.validateConfigurationKey('metricsOutputLevel', 'high').isValid).toBe(false);
             expect(validator.validateConfigurationKey('metricsRetentionHours', 0).isValid).toBe(false);

@@ -1,7 +1,23 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
+jest.mock('vscode');
+
+jest.setTimeout(10000);
+
+jest.mock('ws');
 describe('Build Validation', () => {
     const projectRoot = path.resolve(__dirname, '../../../..');
     const outDir = path.join(projectRoot, 'out');
@@ -172,9 +188,7 @@ describe('Build Validation', () => {
             const menus = packageData.contributes?.menus;
             if (menus) {
                 // Check that menu commands reference existing commands
-                const commandIds = new Set(
-                    packageData.contributes.commands.map((c: any) => c.command)
-                );
+                const commandIds = new Set(packageData.contributes.commands.map((c: any) => c.command));
 
                 Object.values(menus).forEach((menuItems: any) => {
                     if (Array.isArray(menuItems)) {
@@ -295,8 +309,7 @@ describe('Build Validation', () => {
 
     describe('Quality Checks', () => {
         it('should not have console.log in production code', () => {
-            const jsFiles = getAllFiles(outDir, '.js')
-                .filter(f => !f.includes('/test/'));
+            const jsFiles = getAllFiles(outDir, '.js').filter(f => !f.includes('/test/'));
 
             let consoleLogCount = 0;
             jsFiles.forEach(file => {

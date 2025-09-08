@@ -173,7 +173,7 @@ Access settings: `Code > Preferences > Settings > Extensions > NofX`
     "Documentation Writer",
     "General Purpose"
   ],
-  "nofx.claudePath": "claude",
+  "nofx.aiPath": "claude",
   "nofx.autoAssignTasks": true
 }
 ```

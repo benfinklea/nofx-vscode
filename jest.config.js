@@ -50,7 +50,7 @@ module.exports = {
       displayName: 'Unit Tests',
       testMatch: ['<rootDir>/src/test/unit/**/*.test.ts'],
       testEnvironment: 'node',
-      setupFilesAfterEnv: ['<rootDir>/src/test/setup.unit.ts'],
+      setupFilesAfterEnv: ['<rootDir>/src/test/setup.global.ts', '<rootDir>/src/test/setup.unit.ts'],
       preset: 'ts-jest',
       transform: {
         '^.+\\.ts$': ['ts-jest', {
@@ -123,6 +123,66 @@ module.exports = {
         '^vscode$': '<rootDir>/src/test/__mocks__/vscode.ts'
       }
     },
+    {
+      displayName: 'Functional Tests',
+      testMatch: ['<rootDir>/src/test/functional/**/*.test.ts'],
+      testEnvironment: 'node',
+      preset: 'ts-jest',
+      transform: {
+        '^.+\\.ts$': ['ts-jest', {
+          tsconfig: 'tsconfig.json'
+        }]
+      },
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/src/$1',
+        '^vscode$': '<rootDir>/src/test/__mocks__/vscode.ts'
+      }
+    },
+    {
+      displayName: 'Security Tests',
+      testMatch: ['<rootDir>/src/test/security/**/*.security.test.ts'],
+      testEnvironment: 'node',
+      preset: 'ts-jest',
+      transform: {
+        '^.+\\.ts$': ['ts-jest', {
+          tsconfig: 'tsconfig.json'
+        }]
+      },
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/src/$1',
+        '^vscode$': '<rootDir>/src/test/__mocks__/vscode.ts'
+      }
+    },
+    {
+      displayName: 'Performance Tests',
+      testMatch: ['<rootDir>/src/test/performance/**/*.perf.test.ts'],
+      testEnvironment: 'node',
+      preset: 'ts-jest',
+      transform: {
+        '^.+\\.ts$': ['ts-jest', {
+          tsconfig: 'tsconfig.json'
+        }]
+      },
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/src/$1',
+        '^vscode$': '<rootDir>/src/test/__mocks__/vscode.ts'
+      }
+    },
+    {
+      displayName: 'Contract Tests',
+      testMatch: ['<rootDir>/src/test/contracts/**/*.contract.test.ts'],
+      testEnvironment: 'node',
+      preset: 'ts-jest',
+      transform: {
+        '^.+\\.ts$': ['ts-jest', {
+          tsconfig: 'tsconfig.json'
+        }]
+      },
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/src/$1',
+        '^vscode$': '<rootDir>/src/test/__mocks__/vscode.ts'
+      }
+    }
   ],
   // Custom matchers for build validation
   globals: {

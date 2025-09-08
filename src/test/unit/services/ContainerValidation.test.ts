@@ -30,13 +30,31 @@ import { OrchestrationServer } from '../../../orchestration/OrchestrationServer'
 import { WorktreeManager } from '../../../worktrees/WorktreeManager';
 import { ConductorViewModel } from '../../../viewModels/ConductorViewModel';
 import { DashboardViewModel } from '../../../viewModels/DashboardViewModel';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
+jest.mock('vscode');
+
+jest.setTimeout(10000);
+
+jest.mock('ws');
 describe('Container Validation', () => {
     let container: Container;
     let mockContext: vscode.ExtensionContext;
     const projectRoot = path.resolve(__dirname, '../../../..');
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Set test mode
         process.env.NOFX_TEST_MODE = 'true';
 
@@ -98,10 +116,14 @@ describe('Container Validation', () => {
             const testToken = Symbol('singleton');
             let instanceCount = 0;
 
-            container.register(testToken, () => {
-                instanceCount++;
-                return { id: instanceCount };
-            }, true);
+            container.register(
+                testToken,
+                () => {
+                    instanceCount++;
+                    return { id: instanceCount };
+                },
+                true
+            );
 
             const first = container.resolve(testToken);
             const second = container.resolve(testToken);
@@ -114,10 +136,14 @@ describe('Container Validation', () => {
             const testToken = Symbol('transient');
             let instanceCount = 0;
 
-            container.register(testToken, () => {
-                instanceCount++;
-                return { id: instanceCount };
-            }, false);
+            container.register(
+                testToken,
+                () => {
+                    instanceCount++;
+                    return { id: instanceCount };
+                },
+                false
+            );
 
             const first = container.resolve(testToken);
             const second = container.resolve(testToken);
@@ -134,10 +160,12 @@ describe('Container Validation', () => {
 
             // Register core services
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
-            container.register(SERVICE_TOKENS.LoggingService, (c) =>
-                new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)), true);
-            container.register(SERVICE_TOKENS.ConfigurationService, () =>
-                new ConfigurationService(), true);
+            container.register(
+                SERVICE_TOKENS.LoggingService,
+                c => new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)),
+                true
+            );
+            container.register(SERVICE_TOKENS.ConfigurationService, () => new ConfigurationService(), true);
 
             // Verify resolution
             expect(container.resolve(SERVICE_TOKENS.EventBus)).toBeInstanceOf(EventBus);
@@ -148,15 +176,19 @@ describe('Container Validation', () => {
         it('should register utility services', () => {
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
-            container.register(SERVICE_TOKENS.LoggingService, (c) =>
-                new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)), true);
+            container.register(
+                SERVICE_TOKENS.LoggingService,
+                c => new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)),
+                true
+            );
 
-            container.register(SERVICE_TOKENS.ConfigurationValidator, (c) =>
-                new ConfigurationValidator(c.resolve(SERVICE_TOKENS.LoggingService)), true);
-            container.register(SERVICE_TOKENS.ErrorHandler, () =>
-                new ErrorHandler(), true);
-            container.register(SERVICE_TOKENS.NotificationService, () =>
-                new NotificationService(), true);
+            container.register(
+                SERVICE_TOKENS.ConfigurationValidator,
+                c => new ConfigurationValidator(c.resolve(SERVICE_TOKENS.LoggingService)),
+                true
+            );
+            container.register(SERVICE_TOKENS.ErrorHandler, () => new ErrorHandler(), true);
+            container.register(SERVICE_TOKENS.NotificationService, () => new NotificationService(), true);
 
             expect(container.resolve(SERVICE_TOKENS.ConfigurationValidator)).toBeInstanceOf(ConfigurationValidator);
             expect(container.resolve(SERVICE_TOKENS.ErrorHandler)).toBeInstanceOf(ErrorHandler);
@@ -166,13 +198,18 @@ describe('Container Validation', () => {
         it('should register message services', () => {
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
-            container.register(SERVICE_TOKENS.LoggingService, (c) =>
-                new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)), true);
+            container.register(
+                SERVICE_TOKENS.LoggingService,
+                c => new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)),
+                true
+            );
 
-            container.register(SERVICE_TOKENS.MessageRouter, (c) =>
-                new MessageRouter(c.resolve(SERVICE_TOKENS.EventBus)), true);
-            container.register(SERVICE_TOKENS.MessageValidator, () =>
-                new MessageValidator(), true);
+            container.register(
+                SERVICE_TOKENS.MessageRouter,
+                c => new MessageRouter(c.resolve(SERVICE_TOKENS.EventBus)),
+                true
+            );
+            container.register(SERVICE_TOKENS.MessageValidator, () => new MessageValidator(), true);
 
             expect(container.resolve(SERVICE_TOKENS.MessageRouter)).toBeInstanceOf(MessageRouter);
             expect(container.resolve(SERVICE_TOKENS.MessageValidator)).toBeInstanceOf(MessageValidator);
@@ -182,10 +219,12 @@ describe('Container Validation', () => {
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
 
-            container.register(SERVICE_TOKENS.UIStateManager, (c) =>
-                new UIStateManager(c.resolve(SERVICE_TOKENS.EventBus)), true);
-            container.register(SERVICE_TOKENS.TreeStateManager, () =>
-                new TreeStateManager(), true);
+            container.register(
+                SERVICE_TOKENS.UIStateManager,
+                c => new UIStateManager(c.resolve(SERVICE_TOKENS.EventBus)),
+                true
+            );
+            container.register(SERVICE_TOKENS.TreeStateManager, () => new TreeStateManager(), true);
 
             expect(container.resolve(SERVICE_TOKENS.UIStateManager)).toBeInstanceOf(UIStateManager);
             expect(container.resolve(SERVICE_TOKENS.TreeStateManager)).toBeInstanceOf(TreeStateManager);
@@ -197,18 +236,20 @@ describe('Container Validation', () => {
             // Setup basic services needed by most tests
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
-            container.register(SERVICE_TOKENS.LoggingService, (c) =>
-                new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)), true);
-            container.register(SERVICE_TOKENS.ConfigurationService, () =>
-                new ConfigurationService(), true);
+            container.register(
+                SERVICE_TOKENS.LoggingService,
+                c => new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)),
+                true
+            );
+            container.register(SERVICE_TOKENS.ConfigurationService, () => new ConfigurationService(), true);
         });
 
         it('should resolve services with dependencies', () => {
-            container.register(SERVICE_TOKENS.MetricsService, (c) =>
-                new MetricsService(
-                    c.resolve(SERVICE_TOKENS.EventBus),
-                    c.resolve(SERVICE_TOKENS.LoggingService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.MetricsService,
+                c => new MetricsService(c.resolve(SERVICE_TOKENS.EventBus), c.resolve(SERVICE_TOKENS.LoggingService)),
+                true
+            );
 
             const metrics = container.resolve(SERVICE_TOKENS.MetricsService);
             expect(metrics).toBeInstanceOf(MetricsService);
@@ -229,11 +270,11 @@ describe('Container Validation', () => {
             const token1 = Symbol('circular1');
             const token2 = Symbol('circular2');
 
-            container.register(token1, (c) => ({
+            container.register(token1, c => ({
                 dep: c.resolve(token2)
             }));
 
-            container.register(token2, (c) => ({
+            container.register(token2, c => ({
                 dep: c.resolve(token1)
             }));
 
@@ -246,33 +287,50 @@ describe('Container Validation', () => {
             // Register all required services following extension.ts pattern
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
-            container.register(SERVICE_TOKENS.LoggingService, (c) =>
-                new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)), true);
-            container.register(SERVICE_TOKENS.ConfigurationService, () =>
-                new ConfigurationService(), true);
-            container.register(SERVICE_TOKENS.ConfigurationValidator, (c) =>
-                new ConfigurationValidator(c.resolve(SERVICE_TOKENS.LoggingService)), true);
+            container.register(
+                SERVICE_TOKENS.LoggingService,
+                c => new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)),
+                true
+            );
+            container.register(SERVICE_TOKENS.ConfigurationService, () => new ConfigurationService(), true);
+            container.register(
+                SERVICE_TOKENS.ConfigurationValidator,
+                c => new ConfigurationValidator(c.resolve(SERVICE_TOKENS.LoggingService)),
+                true
+            );
         });
 
         it('should register agent-related services', () => {
-            container.register(SERVICE_TOKENS.AgentManager, (c) =>
-                new AgentManager(
-                    c.resolve(SERVICE_TOKENS.EventBus),
-                    c.resolve(SERVICE_TOKENS.LoggingService),
-                    c.resolve(SERVICE_TOKENS.ConfigurationService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.AgentManager,
+                c =>
+                    new AgentManager(
+                        c.resolve(SERVICE_TOKENS.EventBus),
+                        c.resolve(SERVICE_TOKENS.LoggingService),
+                        c.resolve(SERVICE_TOKENS.ConfigurationService)
+                    ),
+                true
+            );
 
-            container.register(SERVICE_TOKENS.AgentTemplateManager, (c) =>
-                new AgentTemplateManager(
-                    c.resolve(SERVICE_TOKENS.ExtensionContext),
-                    c.resolve(SERVICE_TOKENS.LoggingService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.AgentTemplateManager,
+                c =>
+                    new AgentTemplateManager(
+                        c.resolve(SERVICE_TOKENS.ExtensionContext),
+                        c.resolve(SERVICE_TOKENS.LoggingService)
+                    ),
+                true
+            );
 
-            container.register(SERVICE_TOKENS.AgentPersistence, (c) =>
-                new AgentPersistence(
-                    c.resolve(SERVICE_TOKENS.ExtensionContext),
-                    c.resolve(SERVICE_TOKENS.LoggingService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.AgentPersistence,
+                c =>
+                    new AgentPersistence(
+                        c.resolve(SERVICE_TOKENS.ExtensionContext),
+                        c.resolve(SERVICE_TOKENS.LoggingService)
+                    ),
+                true
+            );
 
             expect(container.resolve(SERVICE_TOKENS.AgentManager)).toBeInstanceOf(AgentManager);
             expect(container.resolve(SERVICE_TOKENS.AgentTemplateManager)).toBeInstanceOf(AgentTemplateManager);
@@ -280,26 +338,28 @@ describe('Container Validation', () => {
         });
 
         it('should register task-related services', () => {
-            container.register(SERVICE_TOKENS.TaskQueue, (c) =>
-                new TaskQueue(
-                    c.resolve(SERVICE_TOKENS.EventBus),
-                    c.resolve(SERVICE_TOKENS.LoggingService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.TaskQueue,
+                c => new TaskQueue(c.resolve(SERVICE_TOKENS.EventBus), c.resolve(SERVICE_TOKENS.LoggingService)),
+                true
+            );
 
-            container.register(SERVICE_TOKENS.TaskStateMachine, () =>
-                new TaskStateMachine(), true);
+            container.register(SERVICE_TOKENS.TaskStateMachine, () => new TaskStateMachine(), true);
 
-            container.register(SERVICE_TOKENS.TaskDependencyManager, (c) =>
-                new TaskDependencyManager(c.resolve(SERVICE_TOKENS.LoggingService)), true);
+            container.register(
+                SERVICE_TOKENS.TaskDependencyManager,
+                c => new TaskDependencyManager(c.resolve(SERVICE_TOKENS.LoggingService)),
+                true
+            );
 
-            container.register(SERVICE_TOKENS.CapabilityMatcher, () =>
-                new CapabilityMatcher(), true);
+            container.register(SERVICE_TOKENS.CapabilityMatcher, () => new CapabilityMatcher(), true);
 
-            container.register(SERVICE_TOKENS.PriorityTaskQueue, (c) =>
-                new PriorityTaskQueue(
-                    c.resolve(SERVICE_TOKENS.EventBus),
-                    c.resolve(SERVICE_TOKENS.LoggingService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.PriorityTaskQueue,
+                c =>
+                    new PriorityTaskQueue(c.resolve(SERVICE_TOKENS.EventBus), c.resolve(SERVICE_TOKENS.LoggingService)),
+                true
+            );
 
             expect(container.resolve(SERVICE_TOKENS.TaskQueue)).toBeInstanceOf(TaskQueue);
             expect(container.resolve(SERVICE_TOKENS.TaskStateMachine)).toBeInstanceOf(TaskStateMachine);
@@ -309,20 +369,29 @@ describe('Container Validation', () => {
         });
 
         it('should register infrastructure services', () => {
-            container.register(SERVICE_TOKENS.TerminalManager, (c) =>
-                new TerminalManager(
-                    c.resolve(SERVICE_TOKENS.EventBus),
-                    c.resolve(SERVICE_TOKENS.LoggingService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.TerminalManager,
+                c => new TerminalManager(c.resolve(SERVICE_TOKENS.EventBus), c.resolve(SERVICE_TOKENS.LoggingService)),
+                true
+            );
 
-            container.register(SERVICE_TOKENS.WorktreeService, (c) =>
-                new WorktreeService(
-                    c.resolve(SERVICE_TOKENS.LoggingService),
-                    c.resolve(SERVICE_TOKENS.ConfigurationService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.WorktreeService,
+                c =>
+                    new WorktreeService(
+                        c.resolve(SERVICE_TOKENS.ConfigurationService),
+                        c.resolve(SERVICE_TOKENS.NotificationService),
+                        undefined,
+                        c.resolve(SERVICE_TOKENS.LoggingService)
+                    ),
+                true
+            );
 
-            container.register(SERVICE_TOKENS.ConnectionPoolService, (c) =>
-                new ConnectionPoolService(c.resolve(SERVICE_TOKENS.LoggingService)), true);
+            container.register(
+                SERVICE_TOKENS.ConnectionPoolService,
+                c => new ConnectionPoolService(c.resolve(SERVICE_TOKENS.LoggingService)),
+                true
+            );
 
             expect(container.resolve(SERVICE_TOKENS.TerminalManager)).toBeInstanceOf(TerminalManager);
             expect(container.resolve(SERVICE_TOKENS.WorktreeService)).toBeInstanceOf(WorktreeService);
@@ -335,17 +404,21 @@ describe('Container Validation', () => {
             expect(isTestMode).toBe(true);
 
             // OrchestrationServer should not start in test mode
-            container.register(SERVICE_TOKENS.OrchestrationServer, (c) => {
-                const server = new OrchestrationServer(
-                    c.resolve(SERVICE_TOKENS.EventBus),
-                    c.resolve(SERVICE_TOKENS.LoggingService)
-                );
-                // In test mode, don't start the server
-                if (!isTestMode) {
-                    server.start();
-                }
-                return server;
-            }, true);
+            container.register(
+                SERVICE_TOKENS.OrchestrationServer,
+                c => {
+                    const server = new OrchestrationServer(
+                        c.resolve(SERVICE_TOKENS.EventBus),
+                        c.resolve(SERVICE_TOKENS.LoggingService)
+                    );
+                    // In test mode, don't start the server
+                    if (!isTestMode) {
+                        server.start();
+                    }
+                    return server;
+                },
+                true
+            );
 
             const server = container.resolve(SERVICE_TOKENS.OrchestrationServer);
             expect(server).toBeInstanceOf(OrchestrationServer);
@@ -357,10 +430,14 @@ describe('Container Validation', () => {
             let initialized = false;
             const testToken = Symbol('lifecycle');
 
-            container.register(testToken, () => {
-                initialized = true;
-                return { initialized: true };
-            }, true);
+            container.register(
+                testToken,
+                () => {
+                    initialized = true;
+                    return { initialized: true };
+                },
+                true
+            );
 
             expect(initialized).toBe(false);
             container.resolve(testToken);
@@ -371,9 +448,13 @@ describe('Container Validation', () => {
             const disposeMethod = jest.fn();
             const testToken = Symbol('disposable');
 
-            container.register(testToken, () => ({
-                dispose: disposeMethod
-            }), true);
+            container.register(
+                testToken,
+                () => ({
+                    dispose: disposeMethod
+                }),
+                true
+            );
 
             container.resolve(testToken);
             container.dispose();
@@ -384,11 +465,15 @@ describe('Container Validation', () => {
         it('should handle disposal errors gracefully', () => {
             const testToken = Symbol('errorDispose');
 
-            container.register(testToken, () => ({
-                dispose: () => {
-                    throw new Error('Disposal error');
-                }
-            }), true);
+            container.register(
+                testToken,
+                () => ({
+                    dispose: () => {
+                        throw new Error('Disposal error');
+                    }
+                }),
+                true
+            );
 
             container.resolve(testToken);
 
@@ -402,51 +487,65 @@ describe('Container Validation', () => {
             // Setup base services
             container.register(SERVICE_TOKENS.ExtensionContext, () => mockContext);
             container.register(SERVICE_TOKENS.EventBus, () => new EventBus(), true);
-            container.register(SERVICE_TOKENS.LoggingService, (c) =>
-                new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)), true);
-            container.register(SERVICE_TOKENS.ConfigurationService, () =>
-                new ConfigurationService(), true);
+            container.register(
+                SERVICE_TOKENS.LoggingService,
+                c => new LoggingService(c.resolve(SERVICE_TOKENS.ExtensionContext)),
+                true
+            );
+            container.register(SERVICE_TOKENS.ConfigurationService, () => new ConfigurationService(), true);
         });
 
         it('should validate CommandService dependencies', () => {
-            container.register(SERVICE_TOKENS.AgentManager, (c) =>
-                new AgentManager(
-                    c.resolve(SERVICE_TOKENS.EventBus),
-                    c.resolve(SERVICE_TOKENS.LoggingService),
-                    c.resolve(SERVICE_TOKENS.ConfigurationService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.AgentManager,
+                c =>
+                    new AgentManager(
+                        c.resolve(SERVICE_TOKENS.EventBus),
+                        c.resolve(SERVICE_TOKENS.LoggingService),
+                        c.resolve(SERVICE_TOKENS.ConfigurationService)
+                    ),
+                true
+            );
 
-            container.register(SERVICE_TOKENS.CommandService, (c) =>
-                new CommandService(
-                    c.resolve(SERVICE_TOKENS.ExtensionContext),
-                    c
-                ), true);
+            container.register(
+                SERVICE_TOKENS.CommandService,
+                c => new CommandService(c.resolve(SERVICE_TOKENS.ExtensionContext), c),
+                true
+            );
 
             const commandService = container.resolve(SERVICE_TOKENS.CommandService);
             expect(commandService).toBeInstanceOf(CommandService);
         });
 
         it('should validate view model dependencies', () => {
-            container.register(SERVICE_TOKENS.AgentManager, (c) =>
-                new AgentManager(
-                    c.resolve(SERVICE_TOKENS.EventBus),
-                    c.resolve(SERVICE_TOKENS.LoggingService),
-                    c.resolve(SERVICE_TOKENS.ConfigurationService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.AgentManager,
+                c =>
+                    new AgentManager(
+                        c.resolve(SERVICE_TOKENS.EventBus),
+                        c.resolve(SERVICE_TOKENS.LoggingService),
+                        c.resolve(SERVICE_TOKENS.ConfigurationService)
+                    ),
+                true
+            );
 
-            container.register(SERVICE_TOKENS.TaskQueue, (c) =>
-                new TaskQueue(
-                    c.resolve(SERVICE_TOKENS.EventBus),
-                    c.resolve(SERVICE_TOKENS.LoggingService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.TaskQueue,
+                c => new TaskQueue(c.resolve(SERVICE_TOKENS.EventBus), c.resolve(SERVICE_TOKENS.LoggingService)),
+                true
+            );
 
-            container.register(SERVICE_TOKENS.ConductorViewModel, (c) =>
-                new ConductorViewModel(
-                    c.resolve(SERVICE_TOKENS.AgentManager),
-                    c.resolve(SERVICE_TOKENS.TaskQueue),
-                    c.resolve(SERVICE_TOKENS.EventBus),
-                    c.resolve(SERVICE_TOKENS.LoggingService)
-                ), true);
+            container.register(
+                SERVICE_TOKENS.ConductorViewModel,
+                c =>
+                    new ConductorViewModel(
+                        c.resolve(SERVICE_TOKENS.AgentManager),
+                        c.resolve(SERVICE_TOKENS.TaskQueue),
+                        c.resolve(SERVICE_TOKENS.EventBus),
+                        c.resolve(SERVICE_TOKENS.LoggingService)
+                    ),
+                true
+            );
 
             const viewModel = container.resolve(SERVICE_TOKENS.ConductorViewModel);
             expect(viewModel).toBeInstanceOf(ConductorViewModel);
@@ -490,9 +589,13 @@ describe('Container Validation', () => {
         it('should resolve singletons quickly after first resolution', () => {
             const perfToken = Symbol('performance');
 
-            container.register(perfToken, () => ({
-                data: new Array(1000).fill('test')
-            }), true);
+            container.register(
+                perfToken,
+                () => ({
+                    data: new Array(1000).fill('test')
+                }),
+                true
+            );
 
             // First resolution
             container.resolve(perfToken);
@@ -520,10 +623,14 @@ describe('Container Validation', () => {
             // Register chain of dependencies
             for (let i = 1; i < tokens.length; i++) {
                 const prevToken = tokens[i - 1];
-                container.register(tokens[i], (c) => ({
-                    level: i,
-                    dependency: c.resolve(prevToken)
-                }), true);
+                container.register(
+                    tokens[i],
+                    c => ({
+                        level: i,
+                        dependency: c.resolve(prevToken)
+                    }),
+                    true
+                );
             }
 
             // Resolve the last one (which depends on all others)

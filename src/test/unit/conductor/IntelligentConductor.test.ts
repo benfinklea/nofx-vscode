@@ -4,6 +4,17 @@ import { AgentManager } from '../../../agents/AgentManager';
 import { TaskQueue } from '../../../tasks/TaskQueue';
 import { Agent, AgentStatus } from '../../../types/Agent';
 import { Task, TaskStatus, TaskPriority } from '../../../types/Task';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock all dependencies
 jest.mock('../../../agents/AgentManager');
@@ -44,6 +55,8 @@ Object.defineProperty(vscode.workspace, 'getConfiguration', {
     }),
     configurable: true
 });
+
+jest.mock('vscode');
 
 describe('IntelligentConductor', () => {
     let intelligentConductor: IntelligentConductor;
@@ -120,6 +133,9 @@ describe('IntelligentConductor', () => {
     ];
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockTerminal = createMockTerminal();
         jest.clearAllMocks();
         jest.clearAllTimers();
         jest.useFakeTimers();
@@ -130,14 +146,14 @@ describe('IntelligentConductor', () => {
         // Setup default mocks
         mockAgentManager.getActiveAgents = jest.fn().mockReturnValue(mockAgents);
         mockAgentManager.getIdleAgents = jest.fn().mockReturnValue([mockAgents[0]]);
-        mockAgentManager.onAgentUpdate = jest.fn().mockImplementation((callback) => {
+        mockAgentManager.onAgentUpdate = jest.fn().mockImplementation(callback => {
             // Store callback for later triggering
             (mockAgentManager as any).updateCallback = callback;
         });
 
         mockTaskQueue.getQueuedTasks = jest.fn().mockReturnValue([mockTasks[0]]);
         mockTaskQueue.getTasks = jest.fn().mockReturnValue(mockTasks);
-        mockTaskQueue.addTask = jest.fn().mockImplementation((taskData) => ({
+        mockTaskQueue.addTask = jest.fn().mockImplementation(taskData => ({
             id: 'new-task-id',
             ...taskData,
             status: 'queued'
@@ -196,8 +212,9 @@ describe('IntelligentConductor', () => {
         it('should include current agent status in system prompt', async () => {
             await intelligentConductor.start();
 
-            const claudeCommand = mockTerminal.sendText.mock.calls
-                .find(([cmd]) => cmd.includes('claude --append-system-prompt'))?.[0];
+            const claudeCommand = mockTerminal.sendText.mock.calls.find(([cmd]) =>
+                cmd.includes('claude --append-system-prompt')
+            )?.[0];
 
             expect(claudeCommand).toContain('Active Agents: 2');
             expect(claudeCommand).toContain('Idle Agents: 1');
@@ -210,12 +227,8 @@ describe('IntelligentConductor', () => {
             // Fast-forward past the 3 second delay
             jest.advanceTimersByTime(4000);
 
-            expect(mockTerminal.sendText).toHaveBeenCalledWith(
-                'Hello! I am the NofX Intelligent Conductor. I can:'
-            );
-            expect(mockTerminal.sendText).toHaveBeenCalledWith(
-                '- See all active agents and their status'
-            );
+            expect(mockTerminal.sendText).toHaveBeenCalledWith('Hello! I am the NofX Intelligent Conductor. I can:');
+            expect(mockTerminal.sendText).toHaveBeenCalledWith('- See all active agents and their status');
             expect(mockTerminal.sendText).toHaveBeenCalledWith(
                 'Tell me what you want to build, and I will orchestrate everything!'
             );
@@ -259,9 +272,7 @@ describe('IntelligentConductor', () => {
 
             await intelligentConductor.processConductorCommand(command);
 
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('Assigning')
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Assigning'));
         });
 
         it('should handle CREATE_TASK command with missing parts gracefully', async () => {
@@ -376,9 +387,7 @@ describe('IntelligentConductor', () => {
         });
 
         it('should not trigger conflict detection with single working agent', () => {
-            const workingAgents = [
-                { ...mockAgents[0], status: 'working' }
-            ];
+            const workingAgents = [{ ...mockAgents[0], status: 'working' }];
 
             mockAgentManager.getActiveAgents = jest.fn().mockReturnValue(workingAgents);
 
@@ -397,9 +406,7 @@ describe('IntelligentConductor', () => {
 
             (intelligentConductor as any).checkForConflicts();
 
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                'Checking for file conflicts...'
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('Checking for file conflicts...');
         });
     });
 
@@ -413,9 +420,7 @@ describe('IntelligentConductor', () => {
             (intelligentConductor as any).optimizeTaskAssignment();
 
             expect(mockTaskQueue.getQueuedTasks).toHaveBeenCalled();
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                '📊 Optimizing assignment for 1 queued tasks'
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('📊 Optimizing assignment for 1 queued tasks');
         });
 
         it('should not attempt optimization when no queued tasks', () => {
@@ -438,9 +443,7 @@ describe('IntelligentConductor', () => {
 
             (intelligentConductor as any).optimizeTaskAssignment();
 
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('Assigning')
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Assigning'));
         });
     });
 

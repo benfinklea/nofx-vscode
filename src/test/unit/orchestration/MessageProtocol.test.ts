@@ -8,16 +8,25 @@ import {
     OrchestratorMessage
 } from '../../../orchestration/MessageProtocol';
 import { MessageType } from '../../../orchestration/MessageProtocol';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 describe('MessageProtocol', () => {
     describe('createMessage', () => {
         it('should create a message with all required fields', () => {
-            const message = createMessage(
-                'conductor',
-                'agent-1',
-                MessageType.ASSIGN_TASK,
-                { taskId: 'task-1', description: 'Test task' }
-            );
+            const message = createMessage('conductor', 'agent-1', MessageType.ASSIGN_TASK, {
+                taskId: 'task-1',
+                description: 'Test task'
+            });
 
             expect(message.id).toBeDefined();
             expect(message.from).toBe('conductor');
@@ -42,32 +51,17 @@ describe('MessageProtocol', () => {
         });
 
         it('should generate new correlation ID when not specified', () => {
-            const message = createMessage(
-                'agent-1',
-                'conductor',
-                MessageType.TASK_COMPLETE,
-                { taskId: 'task-1' }
-            );
+            const message = createMessage('agent-1', 'conductor', MessageType.TASK_COMPLETE, { taskId: 'task-1' });
 
             expect(message.correlationId).toBeDefined();
             expect(message.correlationId).toMatch(/^msg_/);
         });
 
         it('should set requiresAck based on message type', () => {
-            const taskMessage = createMessage(
-                'conductor',
-                'agent-1',
-                MessageType.ASSIGN_TASK,
-                {}
-            );
+            const taskMessage = createMessage('conductor', 'agent-1', MessageType.ASSIGN_TASK, {});
             expect(taskMessage.requiresAck).toBe(true);
 
-            const statusMessage = createMessage(
-                'agent-1',
-                'conductor',
-                MessageType.AGENT_STATUS,
-                {}
-            );
+            const statusMessage = createMessage('agent-1', 'conductor', MessageType.AGENT_STATUS, {});
             expect(statusMessage.requiresAck).toBe(false);
         });
     });

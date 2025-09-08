@@ -2,6 +2,17 @@ import * as vscode from 'vscode';
 import { AgentTreeProvider } from '../../../views/AgentTreeProvider';
 import { ITreeStateManager, IUIStateManager } from '../../../services/interfaces';
 import { normalizeAgentStatus, normalizeTaskStatus } from '../../../types/ui';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock VS Code API
 jest.mock('vscode');
@@ -14,6 +25,8 @@ describe('AgentTreeProvider', () => {
     let mockDisposables: vscode.Disposable[];
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.clearAllMocks();
         mockDisposables = [];
         mockRefreshFire = jest.fn();
@@ -23,7 +36,7 @@ describe('AgentTreeProvider', () => {
             getSectionItems: jest.fn(),
             isSectionExpanded: jest.fn(),
             setTeamName: jest.fn(),
-            subscribe: jest.fn().mockImplementation((callback) => {
+            subscribe: jest.fn().mockImplementation(callback => {
                 const disposable = { dispose: jest.fn() };
                 mockDisposables.push(disposable);
                 return disposable;
@@ -32,7 +45,7 @@ describe('AgentTreeProvider', () => {
 
         // Mock UIStateManager
         mockUIStateManager = {
-            subscribe: jest.fn().mockImplementation((callback) => {
+            subscribe: jest.fn().mockImplementation(callback => {
                 const disposable = { dispose: jest.fn() };
                 mockDisposables.push(disposable);
                 return disposable;
@@ -85,9 +98,7 @@ describe('AgentTreeProvider', () => {
         it('should return tree items from section data when no element provided', async () => {
             const mockData = {
                 teamName: 'Development Team',
-                agents: [
-                    { id: 'agent-1', name: 'Frontend Dev', type: 'frontend', status: 'idle' }
-                ],
+                agents: [{ id: 'agent-1', name: 'Frontend Dev', type: 'frontend', status: 'idle' }],
                 tasks: [
                     { id: 'task-1', title: 'Build UI', status: 'in-progress', priority: 'high' },
                     { id: 'task-2', title: 'Setup API', status: 'queued', priority: 'medium' }
@@ -248,7 +259,13 @@ describe('AgentTreeProvider', () => {
             const mockData = {
                 agents: [],
                 tasks: [
-                    { id: 'task-1', title: 'Test Task', status: 'in-progress', priority: 'high', description: 'Task description' }
+                    {
+                        id: 'task-1',
+                        title: 'Test Task',
+                        status: 'in-progress',
+                        priority: 'high',
+                        description: 'Task description'
+                    }
                 ],
                 hasData: true
             };

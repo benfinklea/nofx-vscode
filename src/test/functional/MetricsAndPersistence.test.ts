@@ -17,11 +17,24 @@ import { TaskDependencyManager } from '../../tasks/TaskDependencyManager';
 import { PriorityTaskQueue } from '../../tasks/PriorityTaskQueue';
 import { setupExtension, teardownExtension, setupMockWorkspace, clearMockWorkspace } from './setup';
 import { __getContainerForTests } from '../../extension';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
 
 /**
  * Comprehensive tests for metrics collection and data persistence
  * Note: These tests require real filesystem access. Set MOCK_FS=false or use memfs.
  */
+jest.mock('vscode');
+
 describe('Metrics and Persistence', () => {
     let container: IContainer;
     let context: vscode.ExtensionContext;
@@ -44,6 +57,8 @@ describe('Metrics and Persistence', () => {
     });
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Get the same container instance as the activated extension
         const activated = __getContainerForTests();
         if (!activated) throw new Error('Activated container not available');
@@ -82,7 +97,19 @@ describe('Metrics and Persistence', () => {
             renameAgent: jest.fn(),
             updateAgentType: jest.fn()
         };
-        taskQueue = new TaskQueue(mockAgentManager, loggingService, eventBus, undefined, mockNotificationService, configService, taskStateMachine, priorityQueue, undefined, dependencyManager, metricsService);
+        taskQueue = new TaskQueue(
+            mockAgentManager,
+            loggingService,
+            eventBus,
+            undefined,
+            mockNotificationService,
+            configService,
+            taskStateMachine,
+            priorityQueue,
+            undefined,
+            dependencyManager,
+            metricsService
+        );
 
         // Register services using SERVICE_TOKENS
         container.registerInstance(SERVICE_TOKENS.ConfigurationService, configService);
@@ -116,7 +143,7 @@ describe('Metrics and Persistence', () => {
 
             // Simulate agent spawn
             const resolvedEventBus = container.resolve(SERVICE_TOKENS.EventBus);
-            resolvedEventBus.publish(DOMAIN_EVENTS.AGENT_SPAWNED, {
+            resolvedEventBus.publish(DOMAIN_EVENTS.AGENT_LIFECYCLE_SPAWNED, {
                 agentId: 'agent-1',
                 timestamp: Date.now()
             });
@@ -185,9 +212,9 @@ describe('Metrics and Persistence', () => {
             resolvedMetricsService.incrementCounter('export.test', 10);
 
             const saveSpy = jest.spyOn(vscode.workspace, 'saveAll').mockResolvedValue(true);
-            const showSaveSpy = jest.spyOn(vscode.window, 'showSaveDialog').mockResolvedValue(
-                vscode.Uri.file(path.join(tempDir, 'metrics.json'))
-            );
+            const showSaveSpy = jest
+                .spyOn(vscode.window, 'showSaveDialog')
+                .mockResolvedValue(vscode.Uri.file(path.join(tempDir, 'metrics.json')));
 
             await vscode.commands.executeCommand('nofx.exportMetrics');
 
@@ -271,39 +298,37 @@ describe('Metrics and Persistence', () => {
         test('should handle agent restoration command', async () => {
             // Save some agents first
             const resolvedAgentPersistence = container.resolve(SERVICE_TOKENS.AgentPersistence);
-            await resolvedAgentPersistence.saveAgents([{
-                id: 'restore-1',
-                name: 'Restore Test',
-                type: 'fullstack-developer'
-            } as any]);
+            await resolvedAgentPersistence.saveAgents([
+                {
+                    id: 'restore-1',
+                    name: 'Restore Test',
+                    type: 'fullstack-developer'
+                } as any
+            ]);
 
             const infoSpy = jest.spyOn(vscode.window, 'showInformationMessage');
 
             await vscode.commands.executeCommand('nofx.restoreAgents');
 
-            expect(infoSpy).toHaveBeenCalledWith(
-                expect.stringContaining('restored')
-            );
+            expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('restored'));
         });
 
         test('should handle persistence clear command', async () => {
             // Save some data
             const resolvedAgentPersistence = container.resolve(SERVICE_TOKENS.AgentPersistence);
-            await resolvedAgentPersistence.saveAgents([{
-                id: 'clear-test',
-                name: 'Clear Test',
-                type: 'testing-specialist'
-            } as any]);
+            await resolvedAgentPersistence.saveAgents([
+                {
+                    id: 'clear-test',
+                    name: 'Clear Test',
+                    type: 'testing-specialist'
+                } as any
+            ]);
 
-            const warningSpy = jest.spyOn(vscode.window, 'showWarningMessage')
-                .mockResolvedValue('Yes' as any);
+            const warningSpy = jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue('Yes' as any);
 
             await vscode.commands.executeCommand('nofx.clearPersistence');
 
-            expect(warningSpy).toHaveBeenCalledWith(
-                expect.stringContaining('clear'),
-                'Yes', 'No'
-            );
+            expect(warningSpy).toHaveBeenCalledWith(expect.stringContaining('clear'), 'Yes', 'No');
 
             const allAgents = await resolvedAgentPersistence.loadAgents();
             expect(allAgents).toHaveLength(0);
@@ -384,18 +409,20 @@ describe('Metrics and Persistence', () => {
         test('should export session data', async () => {
             // Setup session data
             const resolvedAgentPersistence = container.resolve(SERVICE_TOKENS.AgentPersistence);
-            await resolvedAgentPersistence.saveAgents([{
-                id: 'export-agent',
-                name: 'Export Test',
-                type: 'backend-specialist'
-            } as any]);
+            await resolvedAgentPersistence.saveAgents([
+                {
+                    id: 'export-agent',
+                    name: 'Export Test',
+                    type: 'backend-specialist'
+                } as any
+            ]);
 
             const resolvedMetricsService = container.resolve(SERVICE_TOKENS.MetricsService);
             resolvedMetricsService.incrementCounter('export.sessions', 1);
 
-            const showSaveSpy = jest.spyOn(vscode.window, 'showSaveDialog').mockResolvedValue(
-                vscode.Uri.file(path.join(tempDir, 'session.json'))
-            );
+            const showSaveSpy = jest
+                .spyOn(vscode.window, 'showSaveDialog')
+                .mockResolvedValue(vscode.Uri.file(path.join(tempDir, 'session.json')));
 
             await vscode.commands.executeCommand('nofx.exportSessions');
 
@@ -407,9 +434,7 @@ describe('Metrics and Persistence', () => {
 
             await vscode.commands.executeCommand('nofx.archiveSessions');
 
-            expect(infoSpy).toHaveBeenCalledWith(
-                expect.stringContaining('archived')
-            );
+            expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('archived'));
         });
     });
 

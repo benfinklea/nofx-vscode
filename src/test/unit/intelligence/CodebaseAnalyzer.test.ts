@@ -63,6 +63,8 @@ Object.defineProperty(vscode.workspace, 'createFileSystemWatcher', {
     configurable: true
 });
 
+jest.mock('vscode');
+
 describe('CodebaseAnalyzer', () => {
     let codebaseAnalyzer: CodebaseAnalyzer;
     let fsReadFileMock: jest.SpyInstance;
@@ -212,9 +214,7 @@ export { SomeService } from './some-service';
             const result = await codebaseAnalyzer.analyzeWorkspace();
 
             expect(result).toHaveProperty('components');
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('Error analyzing')
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Error analyzing'));
         });
 
         it('should handle workspace analysis failure', async () => {
@@ -361,7 +361,9 @@ export { SomeService } from './some-service';
             await codebaseAnalyzer.analyzeText('/test/file.ts', mockTypeScriptCode, { cacheResults: true });
 
             // Second analysis should use cache
-            const result = await codebaseAnalyzer.analyzeText('/test/file.ts', mockTypeScriptCode, { cacheResults: true });
+            const result = await codebaseAnalyzer.analyzeText('/test/file.ts', mockTypeScriptCode, {
+                cacheResults: true
+            });
 
             expect(result.isTextAnalysis).toBe(true);
         });
@@ -390,9 +392,7 @@ export { SomeService } from './some-service';
             const result = await codebaseAnalyzer.updateFile('/test/file.ts');
 
             expect(result.path).toBe('/test/file.ts');
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('Updating analysis for')
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Updating analysis for'));
         });
 
         it('should handle incremental updates', async () => {
@@ -403,9 +403,7 @@ export { SomeService } from './some-service';
             const result = await codebaseAnalyzer.updateFile('/test/file.ts', { incrementalUpdate: true });
 
             expect(result).toBeDefined();
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('Updated analysis for')
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Updated analysis for'));
         });
 
         it('should update dependency graphs', async () => {
@@ -428,17 +426,13 @@ export { SomeService } from './some-service';
             codebaseAnalyzer.removeFile('/test/file.ts');
 
             expect(codebaseAnalyzer.getComponent('/test/file.ts')).toBeUndefined();
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('Removing')
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Removing'));
         });
 
         it('should handle removing non-existent file', () => {
             codebaseAnalyzer.removeFile('/test/nonexistent.ts');
 
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('not found')
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('not found'));
         });
 
         it('should update dependent files', async () => {
@@ -448,9 +442,7 @@ export { SomeService } from './some-service';
 
             codebaseAnalyzer.removeFile('/test/dependency.ts');
 
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('Warning')
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Warning'));
         });
     });
 
@@ -572,6 +564,8 @@ import config from './config.json';
             const codeWithAliases = `
 import { Component } from '@app/components';
 import { Helper } from '@shared/utils';
+import { createMockConfigurationService, createMockLoggingService, createMockEventBus, createMockNotificationService, createMockContainer, createMockExtensionContext, createMockOutputChannel, createMockTerminal, setupVSCodeMocks } from './../../helpers/mockFactories';
+
 `;
             fsReadFileMock.mockResolvedValue(codeWithAliases);
 
@@ -790,9 +784,7 @@ export function megaComplexFunction(data: any): any {
             const changeHandler = mockWatcher.onDidChange.mock.calls[0][0];
             await changeHandler(mockUri);
 
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('File changed')
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('File changed'));
         });
 
         it('should handle file creation events', async () => {
@@ -801,9 +793,7 @@ export function megaComplexFunction(data: any): any {
             const createHandler = mockWatcher.onDidCreate.mock.calls[0][0];
             await createHandler(mockUri);
 
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('File created')
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('File created'));
         });
 
         it('should handle file deletion events', () => {
@@ -812,9 +802,7 @@ export function megaComplexFunction(data: any): any {
             const deleteHandler = mockWatcher.onDidDelete.mock.calls[0][0];
             deleteHandler(mockUri);
 
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('File deleted')
-            );
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('File deleted'));
         });
     });
 
@@ -923,9 +911,12 @@ export function megaComplexFunction(data: any): any {
 
         it('should handle very large files', async () => {
             const largeCode = 'const x = 1;\n'.repeat(10000);
-            fsReadFileMock.mkImplementation(() => new Promise(resolve => {
-                setTimeout(() => resolve(largeCode), 10);
-            }));
+            fsReadFileMock.mkImplementation(
+                () =>
+                    new Promise(resolve => {
+                        setTimeout(() => resolve(largeCode), 10);
+                    })
+            );
 
             const result = await codebaseAnalyzer.analyzeFile('/test/large.ts');
 

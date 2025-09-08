@@ -17,7 +17,13 @@ import {
     IMessagePersistenceService,
     IMetricsService
 } from '../services/interfaces';
-import { ORCH_EVENTS, MessageReceivedPayload, ServerStartedPayload, ServerStoppedPayload, LogicalIdReassignedPayload } from '../services/EventConstants';
+import {
+    ORCH_EVENTS,
+    MessageReceivedPayload,
+    ServerStartedPayload,
+    ServerStoppedPayload,
+    LogicalIdReassignedPayload
+} from '../services/EventConstants';
 
 export class OrchestrationServer {
     private wss: WebSocketServer | undefined;
@@ -175,7 +181,7 @@ export class OrchestrationServer {
                 resolve();
             });
 
-            this.wss.on('error', (error) => {
+            this.wss.on('error', error => {
                 reject(error);
             });
 
@@ -230,7 +236,7 @@ export class OrchestrationServer {
         });
 
         // Set up connection error handling
-        ws.on('error', (error) => {
+        ws.on('error', error => {
             this.metricsService?.incrementCounter('connection_errors', {
                 clientType: isAgent ? 'agent' : 'client',
                 errorType: error.name || 'unknown'
@@ -361,16 +367,12 @@ export class OrchestrationServer {
                 clientId: clientId.substring(0, 8),
                 messageType: message.type || 'unknown'
             });
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler?.handleError(err, `Error handling message from ${clientId}`);
 
             // Send error response
-            const errorResponse = this.messageValidator?.createErrorResponse(
-                'Internal server error',
-                clientId
-            );
+            const errorResponse = this.messageValidator?.createErrorResponse('Internal server error', clientId);
 
             if (errorResponse) {
                 this.connectionPool?.sendToClient(clientId, errorResponse);
@@ -391,7 +393,52 @@ export class OrchestrationServer {
      */
     clearDashboardCallback(): void {
         // Delegate to message router
-        this.messageRouter?.setDashboardCallback(undefined);
+        this.messageRouter?.clearDashboardCallback();
+    }
+
+    /**
+     * Check if the orchestration server is running
+     */
+    isServerRunning(): boolean {
+        return this.isRunning;
+    }
+
+    /**
+     * Generate test messages for dashboard verification
+     */
+    generateTestMessages(): void {
+        if (!this.isRunning) {
+            this.loggingService?.warn('Cannot generate test messages: server not running');
+            return;
+        }
+
+        const testMessages: OrchestratorMessage[] = [
+            createMessage('system', 'dashboard', MessageType.SYSTEM_STATUS, {
+                type: 'test',
+                message: 'Test message for dashboard verification',
+                timestamp: new Date().toISOString()
+            }),
+            createMessage('conductor', 'all-agents', MessageType.ASSIGN_TASK, {
+                taskId: 'test-task-001',
+                title: 'Test Task',
+                description: 'This is a test task for dashboard verification',
+                priority: 'medium'
+            }),
+            createMessage('agent-001', 'conductor', MessageType.TASK_COMPLETE, {
+                taskId: 'test-task-001',
+                status: 'completed',
+                result: 'Task completed successfully'
+            })
+        ];
+
+        this.loggingService?.info('Generating test messages for dashboard verification');
+
+        testMessages.forEach((message, index) => {
+            setTimeout(() => {
+                this.messageRouter?.route(message);
+                this.loggingService?.debug('Generated test message', { messageId: message.id, type: message.type });
+            }, index * 1000); // Space out messages by 1 second
+        });
     }
 
     /**
@@ -428,7 +475,7 @@ export class OrchestrationServer {
      * Get message history (for backward compatibility)
      */
     async getMessageHistory(): Promise<OrchestratorMessage[]> {
-        return await this.messagePersistence?.load(0, 100) || [];
+        return (await this.messagePersistence?.load(0, 100)) || [];
     }
 
     /**

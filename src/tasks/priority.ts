@@ -7,10 +7,14 @@
  */
 export function priorityToNumeric(priority: string): number {
     switch (priority) {
-        case 'high': return 100;
-        case 'medium': return 50;
-        case 'low': return 10;
-        default: return 25;
+        case 'high':
+            return 100;
+        case 'medium':
+            return 50;
+        case 'low':
+            return 10;
+        default:
+            return 25;
     }
 }
 

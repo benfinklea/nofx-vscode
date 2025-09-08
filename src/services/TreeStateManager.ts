@@ -17,11 +17,7 @@ export class TreeStateManager implements ITreeStateManager {
     private stateChangeCallbacks: (() => void)[] = [];
     private eventBusHandlers: Map<string, Function> = new Map();
 
-    constructor(
-        uiStateManager: IUIStateManager,
-        eventBus: IEventBus,
-        loggingService: ILoggingService
-    ) {
+    constructor(uiStateManager: IUIStateManager, eventBus: IEventBus, loggingService: ILoggingService) {
         this.uiStateManager = uiStateManager;
         this.eventBus = eventBus;
         this.loggingService = loggingService;

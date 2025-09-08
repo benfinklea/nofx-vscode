@@ -23,14 +23,14 @@ export interface MonitoringEvent {
 }
 
 export type AgentActivityStatus =
-    | 'active'      // 🟢 Currently working (output detected)
-    | 'waiting'     // 🟡 Awaiting user input/permission
-    | 'thinking'    // 🔵 No output but recently active
-    | 'inactive'    // 🟠 No activity for 30+ seconds
-    | 'stuck'       // 🔴 Needs immediate attention (2+ minutes)
-    | 'permission'  // ⚠️ Claude asking for permission
-    | 'completed'   // ✅ Task completed
-    | 'error';      // ❌ Error detected
+    | 'active' // 🟢 Currently working (output detected)
+    | 'waiting' // 🟡 Awaiting user input/permission
+    | 'thinking' // 🔵 No output but recently active
+    | 'inactive' // 🟠 No activity for 30+ seconds
+    | 'stuck' // 🔴 Needs immediate attention (2+ minutes)
+    | 'permission' // ⚠️ Claude asking for permission
+    | 'completed' // ✅ Task completed
+    | 'error'; // ❌ Error detected
 
 export class ActivityMonitor extends EventEmitter {
     private terminalMonitor: TerminalOutputMonitor;
@@ -49,7 +49,7 @@ export class ActivityMonitor extends EventEmitter {
     }
 
     /**
-     * Start monitoring an agent
+     * Start monitoring an agent (initially idle)
      */
     public startMonitoring(agent: Agent, terminal: vscode.Terminal): void {
         const agentId = agent.id;
@@ -63,19 +63,61 @@ export class ActivityMonitor extends EventEmitter {
         // Start terminal output monitoring
         this.terminalMonitor.monitorTerminal(terminal, agentId);
 
-        // Start inactivity monitoring
+        // Start inactivity monitoring (agent starts idle)
         this.inactivityMonitor.startMonitoring(agentId);
 
-        // Set initial status
-        this.updateAgentStatus(agentId, 'active');
+        // Set initial status to waiting (idle until task assigned)
+        this.updateAgentStatus(agentId, 'waiting');
 
-        console.log(`[ActivityMonitor] Started monitoring agent ${agent.name} (${agentId})`);
+        console.log(`[ActivityMonitor] Started monitoring agent ${agent.name} (${agentId}) - idle until task assigned`);
 
         // Emit monitoring started event
         this.emitMonitoringEvent({
             type: 'status-change',
             agentId,
-            data: { status: 'active', message: 'Monitoring started' },
+            data: { status: 'waiting', message: 'Agent ready, awaiting task assignment' },
+            timestamp: new Date()
+        });
+    }
+
+    /**
+     * Start task monitoring for an agent (called when task is assigned)
+     */
+    public startTaskMonitoring(agentId: string): void {
+        // Start task-specific monitoring
+        this.inactivityMonitor.startTaskMonitoring(agentId);
+
+        // Update status to active
+        this.updateAgentStatus(agentId, 'active');
+
+        console.log(`[ActivityMonitor] Started task monitoring for agent ${agentId}`);
+
+        // Emit task started event
+        this.emitMonitoringEvent({
+            type: 'status-change',
+            agentId,
+            data: { status: 'active', message: 'Task monitoring started' },
+            timestamp: new Date()
+        });
+    }
+
+    /**
+     * Stop task monitoring for an agent (called when task is completed/failed)
+     */
+    public stopTaskMonitoring(agentId: string): void {
+        // Stop task-specific monitoring
+        this.inactivityMonitor.stopTaskMonitoring(agentId);
+
+        // Update status back to waiting
+        this.updateAgentStatus(agentId, 'waiting');
+
+        console.log(`[ActivityMonitor] Stopped task monitoring for agent ${agentId} - now idle`);
+
+        // Emit task completed event
+        this.emitMonitoringEvent({
+            type: 'status-change',
+            agentId,
+            data: { status: 'waiting', message: 'Task monitoring stopped, agent idle' },
             timestamp: new Date()
         });
     }
@@ -287,11 +329,11 @@ export class ActivityMonitor extends EventEmitter {
 
         // Map inactivity status to activity status
         const statusMap: { [key: string]: AgentActivityStatus } = {
-            'active': 'active',
-            'thinking': 'thinking',
-            'inactive': 'inactive',
-            'stuck': 'stuck',
-            'waiting': 'waiting'
+            active: 'active',
+            thinking: 'thinking',
+            inactive: 'inactive',
+            stuck: 'stuck',
+            waiting: 'waiting'
         };
 
         const mappedStatus = statusMap[newStatus] || 'active';

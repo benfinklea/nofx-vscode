@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NofX Architecture Diagram</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            padding: 40px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+        
+        .header .subtitle {
+            font-size: 1.2rem;
+            color: #718096;
+            font-weight: 300;
+        }
+        
+        .architecture {
+            position: relative;
+        }
+        
+        .layer {
+            margin: 30px 0;
+            position: relative;
+        }
+        
+        .layer-title {
+            text-align: center;
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        /* User Layer */
+        .user-layer {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+        }
+        
+        .user-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+        
+        /* Conductor Layer */
+        .conductor-layer {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+        
+        .conductor-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .conductor-box {
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            color: white;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+        
+        .conductor-box .icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .conductor-box .title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .conductor-box .desc {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        /* Orchestration Layer */
+        .orchestration-layer {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+        
+        .websocket-box {
+            background: rgba(255,255,255,0.7);
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .websocket-box .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+        
+        .message-types {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .message-type {
+            background: rgba(255,255,255,0.5);
+            padding: 15px 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #2d3748;
+        }
+        
+        /* Multi-layer section */
+        .multi-layer {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        /* Agent Layer */
+        .agent-layer {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            padding: 25px;
+            border-radius: 15px;
+        }
+        
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 15px;
+        }
+        
+        .agent-box {
+            background: rgba(255,255,255,0.7);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            color: #2d3748;
+        }
+        
+        .agent-box .icon {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+        }
+        
+        .agent-box .name {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        /* Dashboard Layer */
+        .dashboard-layer {
+            background: linear-gradient(135deg, #d299c2 0%, #fef9d7 100%);
+            padding: 25px;
+            border-radius: 15px;
+        }
+        
+        .dashboard-features {
+            margin-top: 15px;
+        }
+        
+        .feature-box {
+            background: rgba(255,255,255,0.6);
+            padding: 12px;
+            border-radius: 8px;
+            margin: 8px 0;
+            text-align: center;
+            color: #2d3748;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        
+        .feature-icon {
+            margin-right: 8px;
+        }
+        
+        /* Worktree Layer */
+        .worktree-layer {
+            background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
+            padding: 25px;
+            border-radius: 15px;
+        }
+        
+        .worktree-branches {
+            margin-top: 15px;
+        }
+        
+        .branch-box {
+            background: rgba(255,255,255,0.6);
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin: 8px 0;
+            color: #2d3748;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        
+        /* Supporting Layer */
+        .supporting-layer {
+            background: linear-gradient(135d, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            border-radius: 15px;
+            color: white;
+            margin-top: 20px;
+        }
+        
+        .supporting-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .support-box {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        
+        .support-box .icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        /* Flow Arrows */
+        .flow-arrow {
+            text-align: center;
+            font-size: 2rem;
+            color: #718096;
+            margin: 10px 0;
+        }
+        
+        /* Message Flow */
+        .message-flow {
+            background: #f7fafc;
+            border: 2px dashed #cbd5e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        
+        .flow-path {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin: 10px 0;
+        }
+        
+        .flow-step {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            margin: 5px;
+            font-weight: 500;
+        }
+        
+        /* Tooltip styles */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .tooltip-icon {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: help;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        
+        .tooltip-text {
+            visibility: hidden;
+            width: 300px;
+            background-color: #2d3748;
+            color: white;
+            text-align: left;
+            border-radius: 8px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -150px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #2d3748 transparent transparent transparent;
+        }
+        
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        /* Tooltip positioning adjustments for different layers */
+        .conductor-box .tooltip-text,
+        .agent-box .tooltip-text,
+        .feature-box .tooltip-text,
+        .branch-box .tooltip-text,
+        .support-box .tooltip-text {
+            width: 250px;
+            margin-left: -125px;
+        }
+        
+        .message-type .tooltip-text {
+            width: 220px;
+            margin-left: -110px;
+        }
+        
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            
+            .container {
+                box-shadow: none;
+                padding: 20px;
+            }
+            
+            .tooltip-icon {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎸 NofX Architecture</h1>
+            <p class="subtitle">AI Agent Orchestration System</p>
+        </div>
+        
+        <div class="architecture">
+            <!-- User Layer -->
+            <div class="layer">
+                <div class="user-layer">
+                    <div class="user-icon">👨‍💻</div>
+                    <h2>USER / VS CODE 
+                        <span class="tooltip">
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-text">This is you! The developer using VS Code or Cursor. You interact with the NofX extension through commands like "Start Conductor" or by clicking on teams in the sidebar. The extension provides the interface to manage your AI agent team.</span>
+                        </span>
+                    </h2>
+                    <p>Extension Interface & Commands</p>
+                </div>
+            </div>
+            
+            <div class="flow-arrow">⬇️</div>
+            
+            <!-- Conductor Layer -->
+            <div class="layer">
+                <div class="conductor-layer">
+                    <div class="layer-title" style="color: white;">Conductor Layer</div>
+                    <div class="conductor-grid">
+                        <div class="conductor-box">
+                            <div class="icon">🎵</div>
+                            <div class="title">ConductorTerminal
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">The main conductor that manages your AI team. Uses Claude CLI directly in a VS Code terminal. You type commands like {"type": "spawn", "role": "frontend-specialist"} and it orchestrates the agents. The 🎵 icon makes it easy to find in your terminal tabs.</span>
+                                </span>
+                            </div>
+                            <div class="desc">Primary Claude CLI</div>
+                        </div>
+                        <div class="conductor-box">
+                            <div class="icon">👔</div>
+                            <div class="title">SuperSmartConductor
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">A VP-level conductor with strategic decision-making capabilities. Makes high-level architectural decisions and coordinates complex multi-team projects. Think of it as your technical lead that understands business context.</span>
+                                </span>
+                            </div>
+                            <div class="desc">VP-Level Strategic</div>
+                        </div>
+                        <div class="conductor-box">
+                            <div class="icon">🧠</div>
+                            <div class="title">IntelligentConductor
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">An enhanced conductor with smart capabilities like automatic task prioritization, dependency resolution, and intelligent agent selection. It can analyze your codebase and make informed decisions about which agents to use.</span>
+                                </span>
+                            </div>
+                            <div class="desc">Enhanced Capabilities</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flow-arrow">⬇️</div>
+            
+            <!-- Orchestration Layer -->
+            <div class="layer">
+                <div class="orchestration-layer">
+                    <div class="layer-title">Orchestration Layer</div>
+                    <div class="websocket-box">
+                        <div class="icon">🔌</div>
+                        <h3>WebSocket Server
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">The communication backbone of NofX. This WebSocket server runs on port 7777 and handles all real-time messaging between the conductor and agents. It's like a telephone switchboard that routes messages instantly and keeps everyone connected.</span>
+                            </span>
+                        </h3>
+                        <p><strong>Port 7777</strong> - Real-time Communication Hub</p>
+                    </div>
+                    <div class="message-types">
+                        <div class="message-type">🚀 SPAWN_AGENT
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Creates a new AI agent with a specific role (frontend, backend, etc.). The conductor sends this message to start a new Claude instance in its own terminal with specialized instructions.</span>
+                            </span>
+                        </div>
+                        <div class="message-type">📋 ASSIGN_TASK
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Gives a specific task to an agent. For example, "Create a React login component" or "Write unit tests for the API". The agent receives this in its terminal and starts working.</span>
+                            </span>
+                        </div>
+                        <div class="message-type">❓ QUERY_STATUS
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Checks what an agent is currently doing. The conductor can ask "What's the status of agent-1?" and get back information about current tasks, progress, or if the agent is idle.</span>
+                            </span>
+                        </div>
+                        <div class="message-type">📊 TASK_PROGRESS
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Updates from agents about their current work. Agents send these messages to report "I'm 50% done with the login form" or "Task completed successfully". Keeps everyone informed.</span>
+                            </span>
+                        </div>
+                        <div class="message-type">🛑 TERMINATE_AGENT
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Shuts down an agent when it's no longer needed. This closes the agent's terminal and cleans up resources. Useful when the project phase is complete or you need to restructure your team.</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flow-arrow">⬇️</div>
+            
+            <!-- Multi-layer section -->
+            <div class="multi-layer">
+                <!-- Agent Layer -->
+                <div class="agent-layer">
+                    <div class="layer-title">Agent Layer</div>
+                    <div class="agent-grid">
+                        <div class="agent-box">
+                            <div class="icon">🎨</div>
+                            <div class="name">Frontend
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">Specializes in React, Vue, CSS, and UI/UX. Creates components, handles styling, implements user interfaces, and ensures great user experience. Each agent runs in its own terminal.</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="agent-box">
+                            <div class="icon">⚙️</div>
+                            <div class="name">Backend
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">Handles Node.js, Python, APIs, and server-side logic. Creates endpoints, manages databases, implements business logic, and ensures scalable architecture.</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="agent-box">
+                            <div class="icon">🧪</div>
+                            <div class="name">Testing
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">Writes unit tests, integration tests, and E2E tests. Ensures code quality, catches bugs early, and maintains test coverage. Uses Jest, Playwright, and other testing frameworks.</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="agent-box">
+                            <div class="icon">🚀</div>
+                            <div class="name">DevOps
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">Manages CI/CD, Docker, Kubernetes, and deployment pipelines. Sets up automation, monitors performance, and ensures reliable deployments to production.</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="agent-box">
+                            <div class="icon">🔒</div>
+                            <div class="name">Security
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">Performs security audits, identifies vulnerabilities, and implements security best practices. Reviews code for security issues and ensures data protection.</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="agent-box">
+                            <div class="icon">🗄️</div>
+                            <div class="name">Database
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">Designs database schemas, optimizes queries, and manages data architecture. Works with SQL, NoSQL, and ensures efficient data storage and retrieval.</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Dashboard Layer -->
+                <div class="dashboard-layer">
+                    <div class="layer-title">Dashboard Layer</div>
+                    <div class="dashboard-features">
+                        <div class="feature-box">
+                            <span class="feature-icon">📈</span>Message Flow
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Shows a live stream of all messages between conductor and agents. You can see tasks being assigned, progress updates, and completion notifications in real-time.</span>
+                            </span>
+                        </div>
+                        <div class="feature-box">
+                            <span class="feature-icon">🔴</span>Agent Status Grid
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Visual grid showing all active agents, their current status (idle, working, completed), and what tasks they're working on. Like a mission control center for your AI team.</span>
+                            </span>
+                        </div>
+                        <div class="feature-box">
+                            <span class="feature-icon">📊</span>Real-time Metrics
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Live statistics like messages per minute, success rate of tasks, number of active agents, and performance metrics. Helps you understand how your team is performing.</span>
+                            </span>
+                        </div>
+                        <div class="feature-box">
+                            <span class="feature-icon">🎯</span>Live Monitoring
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Real-time oversight of all orchestration activity. Open this dashboard to watch your AI agents work together and see the magic happen in real-time.</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Worktree Layer -->
+                <div class="worktree-layer">
+                    <div class="layer-title">Worktree Layer</div>
+                    <div class="worktree-branches">
+                        <div class="branch-box">
+                            🌿 main (your workspace)
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Your main development workspace where you work normally. All agent changes eventually get merged back here. This is your "home base" in VS Code/Cursor.</span>
+                            </span>
+                        </div>
+                        <div class="branch-box">
+                            🌱 agent-abc123
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">An isolated workspace for one agent. Each agent gets their own git worktree (separate folder) so they can work on files without interfering with other agents or your main workspace.</span>
+                            </span>
+                        </div>
+                        <div class="branch-box">
+                            🌱 agent-def456
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Another agent's isolated workspace. Multiple agents can modify the same files simultaneously without merge conflicts because they're in separate worktrees.</span>
+                            </span>
+                        </div>
+                        <div class="branch-box">
+                            🌱 agent-ghi789
+                            <span class="tooltip">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Yet another agent workspace. When agents finish their work, you can easily merge their changes back to main using the "Merge Agent Work" command.</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Supporting Layer -->
+            <div class="layer">
+                <div class="supporting-layer">
+                    <div class="layer-title">Supporting Systems</div>
+                    <div class="supporting-grid">
+                        <div class="support-box">
+                            <div class="icon">📝</div>
+                            <div class="title">Task Queue
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">Manages task priorities, dependencies, and queuing. Ensures high-priority tasks get done first and handles complex task dependencies between agents. Smart scheduling for optimal productivity.</span>
+                                </span>
+                            </div>
+                            <div class="desc">Priority Management</div>
+                        </div>
+                        <div class="support-box">
+                            <div class="icon">📋</div>
+                            <div class="title">Templates
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">JSON files that define each agent type with their capabilities, system prompts, and preferences. Located in .nofx/templates/ - you can customize these or create your own specialized agents.</span>
+                                </span>
+                            </div>
+                            <div class="desc">Agent Definitions</div>
+                        </div>
+                        <div class="support-box">
+                            <div class="icon">💾</div>
+                            <div class="title">Persistence
+                                <span class="tooltip">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">Saves agent states, sessions, and configuration in the .nofx/ folder. Your AI teams are automatically restored when you restart VS Code. No work is lost!</span>
+                                </span>
+                            </div>
+                            <div class="desc">State Storage (.nofx/)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Message Flow -->
+            <div class="message-flow">
+                <h3>📨 Message Flow Pattern</h3>
+                <div class="flow-path">
+                    <span class="flow-step">👨‍💻 User</span>
+                    <span>→</span>
+                    <span class="flow-step">🎵 Conductor</span>
+                    <span>→</span>
+                    <span class="flow-step">🔌 WebSocket</span>
+                    <span>→</span>
+                    <span class="flow-step">🤖 Agents</span>
+                </div>
+                <div class="flow-path">
+                    <span class="flow-step">📊 Dashboard</span>
+                    <span>← Real-time Monitoring ←</span>
+                    <span class="flow-step">🌿 Worktrees</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

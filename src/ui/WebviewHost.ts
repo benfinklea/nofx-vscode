@@ -50,18 +50,16 @@ export class WebviewHost implements IWebviewHost {
     }
 
     onDidReceiveMessage(handler: (message: any) => void): vscode.Disposable {
-        const disposable = this.panel.webview.onDidReceiveMessage(
-            (message) => {
-                try {
-                    this.loggingService?.debug('WebviewHost: Received message', {
-                        command: message.command
-                    });
-                    handler(message);
-                } catch (error) {
-                    this.loggingService?.error('WebviewHost: Error handling message', error);
-                }
+        const disposable = this.panel.webview.onDidReceiveMessage(message => {
+            try {
+                this.loggingService?.debug('WebviewHost: Received message', {
+                    command: message.command
+                });
+                handler(message);
+            } catch (error) {
+                this.loggingService?.error('WebviewHost: Error handling message', error);
             }
-        );
+        });
 
         this.subscriptions.push(disposable);
         return disposable;
@@ -119,7 +117,9 @@ export class WebviewHost implements IWebviewHost {
     }
 
     private generateNonce(): string {
-        return randomBytes(16).toString('base64').replace(/[^a-zA-Z0-9]/g, '');
+        return randomBytes(16)
+            .toString('base64')
+            .replace(/[^a-zA-Z0-9]/g, '');
     }
 
     dispose(): void {

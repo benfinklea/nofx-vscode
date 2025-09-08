@@ -4,7 +4,11 @@ import { IEventBus, ILoggingService } from './interfaces';
 export class EventBus implements IEventBus {
     private readonly eventEmitters: Map<string, vscode.EventEmitter<any>> = new Map();
     private readonly handlerDisposables: Map<string, Map<Function, vscode.Disposable>> = new Map();
-    private readonly patternSubscriptions: Array<{ pattern: string, handler: (event: string, data?: any) => void, disposables: vscode.Disposable[] }> = [];
+    private readonly patternSubscriptions: Array<{
+        pattern: string;
+        handler: (event: string, data?: any) => void;
+        disposables: vscode.Disposable[];
+    }> = [];
     private readonly listenerCounts: Map<string, number> = new Map();
     private readonly disposables: vscode.Disposable[] = [];
     private debugLogging = false;
@@ -48,7 +52,7 @@ export class EventBus implements IEventBus {
             // Subscribe any registered patterns that match this new event
             for (const patternSub of this.patternSubscriptions) {
                 if (this.matchesPattern(event, patternSub.pattern)) {
-                    const disposable = this.subscribe(event, (data) => patternSub.handler(event, data));
+                    const disposable = this.subscribe(event, data => patternSub.handler(event, data));
                     patternSub.disposables.push(disposable);
                 }
             }
@@ -133,7 +137,7 @@ export class EventBus implements IEventBus {
         const emitter = this.getOrCreateEmitter(event);
         let disposed = false;
 
-        const disposable = emitter.event((data) => {
+        const disposable = emitter.event(data => {
             if (!disposed) {
                 disposed = true;
                 handler(data);
@@ -145,13 +149,13 @@ export class EventBus implements IEventBus {
         return disposable;
     }
 
-    filter(event: string, predicate: (data?: any) => boolean): { event: vscode.Event<any>, dispose: () => void } {
+    filter(event: string, predicate: (data?: any) => boolean): { event: vscode.Event<any>; dispose: () => void } {
         this.logEvent(event, 'subscribe', { filter: true });
 
         const emitter = this.getOrCreateEmitter(event);
         const filteredEmitter = new vscode.EventEmitter<any>();
 
-        const disposable = emitter.event((data) => {
+        const disposable = emitter.event(data => {
             if (predicate(data)) {
                 filteredEmitter.fire(data);
             }
@@ -185,7 +189,7 @@ export class EventBus implements IEventBus {
         // Subscribe to all existing events that match the pattern
         for (const event of this.eventEmitters.keys()) {
             if (this.matchesPattern(event, pattern)) {
-                const disposable = this.subscribe(event, (data) => handler(event, data));
+                const disposable = this.subscribe(event, data => handler(event, data));
                 disposables.push(disposable);
             }
         }

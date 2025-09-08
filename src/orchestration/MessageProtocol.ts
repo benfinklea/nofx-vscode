@@ -21,62 +21,109 @@ export enum MessageType {
     AGENT_STATUS = 'agent_status',
     AGENT_QUERY = 'agent_query',
 
+    // Sub-agent messages (NEW)
+    SPAWN_SUB_AGENT = 'spawn_sub_agent',
+    SUB_AGENT_STARTED = 'sub_agent_started',
+    SUB_AGENT_PROGRESS = 'sub_agent_progress',
+    SUB_AGENT_RESULT = 'sub_agent_result',
+    SUB_AGENT_ERROR = 'sub_agent_error',
+    CANCEL_SUB_AGENT = 'cancel_sub_agent',
+    SUB_AGENT_CANCELLED = 'sub_agent_cancelled',
+    SUB_AGENT_STATUS = 'sub_agent_status',
+    SUB_AGENT_STATUS_RESPONSE = 'sub_agent_status_response',
+
     // System messages
     CONNECTION_ESTABLISHED = 'connection_established',
     CONNECTION_LOST = 'connection_lost',
     HEARTBEAT = 'heartbeat',
     SYSTEM_ERROR = 'system_error',
+    SYSTEM_STATUS = 'system_status',
     SYSTEM_ACK = 'system_ack',
-    BROADCAST = 'broadcast'
+    BROADCAST = 'broadcast',
+
+    // Additional test/protocol messages
+    CONDUCTOR_REGISTER = 'conductor_register',
+    AGENT_REGISTER = 'agent_register',
+    AGENT_RECONNECT = 'agent_reconnect',
+    RECONNECT_ACK = 'reconnect_ack',
+    RATE_LIMIT_WARNING = 'rate_limit_warning',
+    CREATE_TASK = 'create_task',
+    TASK_CREATED = 'task_created',
+    TASK_REJECTED = 'task_rejected',
+    TASK_CANCELLED = 'task_cancelled',
+    TASK_RETRY = 'task_retry',
+    DATA_TRANSFER = 'data_transfer',
+    DATA_RECEIVED = 'data_received',
+    AUTO_ASSIGN_TASK = 'auto_assign_task',
+    QUEUE_TASK = 'queue_task',
+    PROCESS_QUEUE = 'process_queue',
+    CANCEL_TASK = 'cancel_task',
+    GET_TASK_RESULT = 'get_task_result',
+    TASK_RESULT = 'task_result',
+    GET_AGENT_METRICS = 'get_agent_metrics',
+    AGENT_METRICS = 'agent_metrics',
+    UPDATE_AGENT_TEMPLATE = 'update_agent_template',
+    AGENT_TEMPLATE_UPDATED = 'agent_template_updated',
+
+    // Worktree messages
+    ENABLE_WORKTREES = 'enable_worktrees',
+    WORKTREE_CREATED = 'worktree_created',
+    WORKTREE_REMOVED = 'worktree_removed',
+    WORKTREE_MERGED = 'worktree_merged',
+    MERGE_AGENT_WORK = 'merge_agent_work',
+    MERGE_CONFLICT = 'merge_conflict',
+    GET_WORKTREE_METRICS = 'get_worktree_metrics',
+    WORKTREE_METRICS = 'worktree_metrics'
 }
 
 export interface OrchestratorMessage {
-    id: string;                    // Unique message ID (UUID)
-    timestamp: string;             // ISO 8601 timestamp
-    from: string;                  // conductor | agent-{id} | system
-    to: string;                    // conductor | agent-{id} | broadcast | dashboard
-    type: MessageType;             // Message type enum
-    payload: any;                  // Message-specific payload
-    correlationId?: string;        // For request-response correlation
-    requiresAck?: boolean;         // Whether acknowledgment is required
+    id: string; // Unique message ID (UUID)
+    timestamp: string; // ISO 8601 timestamp
+    from: string; // conductor | agent-{id} | system
+    to: string; // conductor | agent-{id} | broadcast | dashboard
+    type: MessageType; // Message type enum
+    payload: any; // Message-specific payload
+    correlationId?: string; // For request-response correlation
+    requiresAck?: boolean; // Whether acknowledgment is required
 }
 
 // Specific payload interfaces
 
 export interface SpawnAgentPayload {
-    role: string;                  // frontend-specialist, backend-specialist, etc.
-    name: string;                  // Display name
-    template?: string;             // Template ID to use
-    autoStart?: boolean;           // Start immediately after spawn
+    role: string; // frontend-specialist, backend-specialist, etc.
+    name: string; // Display name
+    template?: string; // Template ID to use
+    autoStart?: boolean; // Start immediately after spawn
 }
 
 export interface AssignTaskPayload {
-    agentId: string;              // Target agent ID
-    taskId: string;               // Unique task ID
-    title: string;                // Task title
-    description: string;          // Detailed task description
+    agentId: string; // Target agent ID
+    taskId: string; // Unique task ID
+    title: string; // Task title
+    description: string; // Detailed task description
     priority: 'low' | 'medium' | 'high' | 'critical';
-    dependencies?: string[];      // Task IDs this depends on
-    deadline?: string;            // ISO 8601 deadline
-    context?: any;                // Additional context data
+    dependencies?: string[]; // Task IDs this depends on
+    deadline?: string; // ISO 8601 deadline
+    context?: any; // Additional context data
 }
 
 export interface TaskProgressPayload {
-    taskId: string;               // Task being worked on
-    progress: number;             // 0-100 percentage
+    taskId: string; // Task being worked on
+    progress: number; // 0-100 percentage
     status: 'starting' | 'in_progress' | 'reviewing' | 'testing' | 'finalizing';
-    message?: string;             // Progress message
-    eta?: string;                 // Estimated completion time
+    message?: string; // Progress message
+    eta?: string; // Estimated completion time
 }
 
 export interface TaskCompletePayload {
-    taskId: string;               // Completed task ID
-    success: boolean;             // Whether task succeeded
-    output?: string;              // Task output/result
-    filesCreated?: string[];      // Files created
-    filesModified?: string[];     // Files modified
-    metrics?: {                   // Performance metrics
-        duration: number;         // Time taken in ms
+    taskId: string; // Completed task ID
+    success: boolean; // Whether task succeeded
+    output?: string; // Task output/result
+    filesCreated?: string[]; // Files created
+    filesModified?: string[]; // Files modified
+    metrics?: {
+        // Performance metrics
+        duration: number; // Time taken in ms
         linesAdded?: number;
         linesRemoved?: number;
         testsRun?: number;
@@ -87,31 +134,75 @@ export interface TaskCompletePayload {
 export interface AgentStatusPayload {
     agentId: string;
     status: 'idle' | 'working' | 'paused' | 'error' | 'offline';
-    currentTask?: string;         // Current task ID if working
-    completedTasks: number;       // Total completed
-    failedTasks: number;          // Total failed
-    uptime: number;               // Uptime in ms
-    capabilities?: string[];      // Agent capabilities
+    currentTask?: string; // Current task ID if working
+    completedTasks: number; // Total completed
+    failedTasks: number; // Total failed
+    uptime: number; // Uptime in ms
+    capabilities?: string[]; // Agent capabilities
 }
 
 export interface AgentQueryPayload {
-    question: string;             // Question from agent
-    context?: any;                // Relevant context
-    needsResponse: boolean;       // Whether response is needed
-    options?: string[];           // Multiple choice options
+    question: string; // Question from agent
+    context?: any; // Relevant context
+    needsResponse: boolean; // Whether response is needed
+    options?: string[]; // Multiple choice options
+}
+
+// Sub-agent payload interfaces (NEW)
+
+export interface SpawnSubAgentPayload {
+    parentAgentId: string; // Agent requesting sub-agent
+    subAgentType: 'general-purpose' | 'code-lead-reviewer' | 'statusline-setup' | 'output-style-setup';
+    taskDescription: string; // What the sub-agent should do
+    prompt: string; // Detailed prompt for sub-agent
+    priority?: number; // Task priority (1-10)
+    timeout?: number; // Timeout in milliseconds
+    context?: Record<string, any>; // Additional context
+}
+
+export interface SubAgentStartedPayload {
+    parentAgentId: string; // Parent agent ID
+    subAgentId: string; // Sub-agent task ID
+    subAgentType: string; // Type of sub-agent
+    startedAt: string; // ISO timestamp
+}
+
+export interface SubAgentProgressPayload {
+    parentAgentId: string; // Parent agent ID
+    subAgentId: string; // Sub-agent task ID
+    progress: number; // 0-100 percentage
+    message: string; // Progress message
+    timestamp: string; // ISO timestamp
+}
+
+export interface SubAgentResultPayload {
+    parentAgentId: string; // Parent agent ID
+    subAgentId: string; // Sub-agent task ID
+    status: 'success' | 'error' | 'timeout' | 'cancelled';
+    result?: string; // Result if successful
+    error?: string; // Error message if failed
+    executionTime: number; // Time taken in ms
+    completedAt: string; // ISO timestamp
+    metadata?: Record<string, any>; // Additional metadata
+}
+
+export interface CancelSubAgentPayload {
+    parentAgentId: string; // Parent agent ID
+    subAgentId: string; // Sub-agent task ID to cancel
+    reason?: string; // Cancellation reason
 }
 
 // Connection management
 
 export interface ClientConnection {
-    id: string;                   // Connection ID (conductor or agent-{id})
+    id: string; // Connection ID (conductor or agent-{id})
     type: 'conductor' | 'agent' | 'dashboard';
-    name: string;                 // Display name
-    connectedAt: string;          // Connection timestamp
-    lastHeartbeat: string;        // Last heartbeat received
-    messageCount: number;         // Messages sent/received
-    role?: string;                // For agents: their specialization
-    status?: string;              // Current status
+    name: string; // Display name
+    connectedAt: string; // Connection timestamp
+    lastHeartbeat: string; // Last heartbeat received
+    messageCount: number; // Messages sent/received
+    role?: string; // For agents: their specialization
+    status?: string; // Current status
 }
 
 // Helper functions

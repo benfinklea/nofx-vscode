@@ -70,7 +70,10 @@ export class ConfigurationService implements IConfigurationService {
                 if (this.validator) {
                     const validation = this.validateConfigurationKey(key, value);
                     if (!validation.isValid) {
-                        this.eventBus?.publish(CONFIG_EVENTS.CONFIG_VALIDATION_FAILED, { key, errors: validation.errors });
+                        this.eventBus?.publish(CONFIG_EVENTS.CONFIG_VALIDATION_FAILED, {
+                            key,
+                            errors: validation.errors
+                        });
                         // Don't cache invalid values, return default
                         return defaultValue as T;
                     }
@@ -106,7 +109,11 @@ export class ConfigurationService implements IConfigurationService {
         return result;
     }
 
-    async update(key: string, value: any, target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Workspace): Promise<void> {
+    async update(
+        key: string,
+        value: any,
+        target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Workspace
+    ): Promise<void> {
         // Validate the new value before applying
         if (this.validator) {
             const validation = this.validateConfigurationKey(key, value);
@@ -151,8 +158,12 @@ export class ConfigurationService implements IConfigurationService {
         return this.get<number>(CONFIG_KEYS.MAX_AGENTS, 3);
     }
 
-    getClaudePath(): string {
-        return this.get<string>(CONFIG_KEYS.CLAUDE_PATH, 'claude');
+    getAiProvider(): string {
+        return this.get<string>(CONFIG_KEYS.AI_PROVIDER, 'claude');
+    }
+
+    getAiPath(): string {
+        return this.get<string>(CONFIG_KEYS.AI_PATH, 'claude');
     }
 
     isAutoAssignTasks(): boolean {
@@ -163,12 +174,20 @@ export class ConfigurationService implements IConfigurationService {
         return this.get<boolean>(CONFIG_KEYS.USE_WORKTREES, true);
     }
 
+    isAutoManageWorktrees(): boolean {
+        return this.get<boolean>(CONFIG_KEYS.AUTO_MANAGE_WORKTREES, true);
+    }
+
     isShowAgentTerminalOnSpawn(): boolean {
         return this.get<boolean>(CONFIG_KEYS.SHOW_AGENT_TERMINAL_ON_SPAWN, false);
     }
 
     isClaudeSkipPermissions(): boolean {
         return this.get<boolean>(CONFIG_KEYS.CLAUDE_SKIP_PERMISSIONS, false);
+    }
+
+    getClaudeInitializationDelay(): number {
+        return this.get<number>(CONFIG_KEYS.CLAUDE_INITIALIZATION_DELAY, 15);
     }
 
     getTemplatesPath(): string {
@@ -270,10 +289,24 @@ export class ConfigurationService implements IConfigurationService {
             return this.validationCache.get(cacheKey)!;
         }
 
-        const validation = this.validator.validateConfigurationKey(key, value);
-        this.validationCache.set(cacheKey, validation);
-
-        return validation;
+        try {
+            const validation = this.validator.validateConfigurationKey(key, value);
+            this.validationCache.set(cacheKey, validation);
+            return validation;
+        } catch (error) {
+            // Handle validator errors gracefully
+            const errorMessage = error instanceof Error ? error.message : 'Unknown validation error';
+            return {
+                isValid: false,
+                errors: [
+                    {
+                        field: key,
+                        message: errorMessage,
+                        severity: 'error'
+                    }
+                ]
+            };
+        }
     }
 
     // Configuration migration and backup methods

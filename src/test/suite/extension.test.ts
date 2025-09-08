@@ -1,5 +1,16 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
 
 suite('Extension Test Suite', () => {
     test('Extension should be present', () => {

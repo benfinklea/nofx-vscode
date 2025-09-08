@@ -1,9 +1,27 @@
 import * as vscode from 'vscode';
 import { ConductorCommands } from '../../../commands/ConductorCommands';
-import { IContainer, INotificationService, ICommandService, IConfigurationService, ILoggingService, SERVICE_TOKENS } from '../../../services/interfaces';
+import {
+    IContainer,
+    INotificationService,
+    ICommandService,
+    IConfigurationService,
+    ILoggingService,
+    SERVICE_TOKENS
+} from '../../../services/interfaces';
 import { AgentManager } from '../../../agents/AgentManager';
 import { TaskQueue } from '../../../tasks/TaskQueue';
 import { AgentTreeProvider } from '../../../views/AgentTreeProvider';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock VS Code API
 jest.mock('vscode', () => ({
@@ -65,6 +83,9 @@ describe('ConductorCommands', () => {
     let mockAgentProvider: jest.Mocked<AgentTreeProvider>;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
+        mockConfigService = createMockConfigurationService();
         jest.clearAllMocks();
 
         // Create mocks
@@ -92,44 +113,11 @@ describe('ConductorCommands', () => {
             dispose: jest.fn()
         } as any;
 
-        mockNotificationService = {
-            showQuickPick: jest.fn(),
-            showInputBox: jest.fn(),
-            showInformation: jest.fn().mockResolvedValue(undefined),
-            showWarning: jest.fn().mockResolvedValue(undefined),
-            showError: jest.fn().mockResolvedValue(undefined),
-            withProgress: jest.fn(),
-            confirm: jest.fn().mockResolvedValue(true),
-            confirmDestructive: jest.fn().mockResolvedValue(true)
-        } as any;
+        mockNotificationService = createMockNotificationService();
 
-        mockConfigService = {
-            get: jest.fn().mockReturnValue('claude'),
-            update: jest.fn().mockResolvedValue(undefined),
-            has: jest.fn().mockReturnValue(true),
-            inspect: jest.fn().mockReturnValue({} as any),
-            onDidChange: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        mockConfigService = createMockConfigurationService();
 
-        mockLoggingService = {
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            isLevelEnabled: jest.fn().mockReturnValue(true),
-            getChannel: jest.fn().mockReturnValue({
-                appendLine: jest.fn(),
-                append: jest.fn(),
-                clear: jest.fn(),
-                dispose: jest.fn(),
-                hide: jest.fn(),
-                show: jest.fn()
-            } as any),
-            time: jest.fn(),
-            timeEnd: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        mockLoggingService = createMockLoggingService();
 
         mockContext = {
             subscriptions: [],
@@ -189,7 +177,10 @@ describe('ConductorCommands', () => {
             expect(mockCommandService.register).toHaveBeenCalledWith('nofx.startConductor', expect.any(Function));
             expect(mockCommandService.register).toHaveBeenCalledWith('nofx.quickStartChat', expect.any(Function));
             expect(mockCommandService.register).toHaveBeenCalledWith('nofx.openConductorChat', expect.any(Function));
-            expect(mockCommandService.register).toHaveBeenCalledWith('nofx.openConductorTerminal', expect.any(Function));
+            expect(mockCommandService.register).toHaveBeenCalledWith(
+                'nofx.openConductorTerminal',
+                expect.any(Function)
+            );
             expect(mockCommandService.register).toHaveBeenCalledWith('nofx.openSimpleConductor', expect.any(Function));
             expect(mockCommandService.register).toHaveBeenCalledWith('nofx.openConductorPanel', expect.any(Function));
         });
@@ -212,9 +203,7 @@ describe('ConductorCommands', () => {
             await (conductorCommands as any).startConductor();
 
             expect(mockNotificationService.showQuickPick).toHaveBeenCalledWith(
-                expect.arrayContaining([
-                    expect.objectContaining({ label: '$(rocket) Full-Stack Development Team' })
-                ]),
+                expect.arrayContaining([expect.objectContaining({ label: '$(rocket) Full-Stack Development Team' })]),
                 expect.objectContaining({ placeHolder: 'Select a team configuration' })
             );
 

@@ -17,22 +17,26 @@ export class ConfigurationValidator implements IConfigurationValidator {
     // Base schema without refinements
     private buildBaseSchema() {
         return z.object({
-            maxAgents: z.number()
+            maxAgents: z
+                .number()
                 .int('Max agents must be an integer')
                 .min(1, 'Max agents must be at least 1')
                 .max(10, 'Max agents cannot exceed 10'),
 
-            claudePath: z.string()
-                .min(1, 'Claude path cannot be empty')
-                .refine((path) => path.trim().length > 0, 'Claude path cannot be just whitespace'),
+            aiPath: z
+                .string()
+                .min(1, 'AI path cannot be empty')
+                .refine(path => path.trim().length > 0, 'AI path cannot be just whitespace'),
 
             autoAssignTasks: z.boolean(),
 
             useWorktrees: z.boolean(),
 
-            logLevel: z.enum(['debug', 'info', 'warn', 'error'], {
-                errorMap: () => ({ message: 'Log level must be one of: debug, info, warn, error' })
-            }).optional(),
+            logLevel: z
+                .enum(['debug', 'info', 'warn', 'error'], {
+                    errorMap: () => ({ message: 'Log level must be one of: debug, info, warn, error' })
+                })
+                .optional(),
 
             autoStart: z.boolean(),
 
@@ -48,26 +52,29 @@ export class ConfigurationValidator implements IConfigurationValidator {
 
             testMode: z.boolean(),
 
-            metricsRetentionHours: z.number()
+            metricsRetentionHours: z
+                .number()
                 .int('Metrics retention hours must be an integer')
                 .min(1, 'Metrics retention must be at least 1 hour')
                 .max(168, 'Metrics retention cannot exceed 168 hours (1 week)')
                 .optional(),
 
             // Orchestration settings
-            orchestration: z.object({
-                heartbeatInterval: z.number().int().min(1000).max(60000),
-                heartbeatTimeout: z.number().int().min(5000).max(300000),
-                historyLimit: z.number().int().min(100).max(10000),
-                persistencePath: z.string().min(1),
-                maxFileSize: z.number().int().min(1024).max(104857600) // 1KB to 100MB
-            }).optional()
+            orchestration: z
+                .object({
+                    heartbeatInterval: z.number().int().min(1000).max(60000),
+                    heartbeatTimeout: z.number().int().min(5000).max(300000),
+                    historyLimit: z.number().int().min(100).max(10000),
+                    persistencePath: z.string().min(1),
+                    maxFileSize: z.number().int().min(1024).max(104857600) // 1KB to 100MB
+                })
+                .optional()
         });
     }
 
     // Comprehensive validation schema for all configuration keys
     private buildValidationSchema() {
-        return this.buildBaseSchema().refine((data) => {
+        return this.buildBaseSchema().refine(data => {
             // Cross-field validation: if useWorktrees is true, workspace should be a Git repository
             // This is handled at runtime since we can't check Git status in schema validation
             return true;
@@ -197,11 +204,12 @@ export class ConfigurationValidator implements IConfigurationValidator {
     private formatErrorMessage(field: string, message: string): string {
         // Provide user-friendly error messages with suggestions
         const suggestions: Record<string, string> = {
-            'maxAgents': 'Try a value between 1 and 10. Consider your system resources.',
-            'claudePath': 'Ensure the path points to a valid Claude CLI executable.',
-            'logLevel': 'Choose from: debug (most verbose), info (default), warn, error (least verbose).',
-            'claudeCommandStyle': 'Choose from: simple (echo | claude), interactive (claude then prompt), heredoc (claude << EOF), file (via temp file).',
-            'metricsOutputLevel': 'Choose from: none (disabled), basic (essential metrics), detailed (all metrics).'
+            maxAgents: 'Try a value between 1 and 10. Consider your system resources.',
+            aiPath: 'Ensure the path points to a valid AI CLI executable.',
+            logLevel: 'Choose from: debug (most verbose), info (default), warn, error (least verbose).',
+            claudeCommandStyle:
+                'Choose from: simple (echo | claude), interactive (claude then prompt), heredoc (claude << EOF), file (via temp file).',
+            metricsOutputLevel: 'Choose from: none (disabled), basic (essential metrics), detailed (all metrics).'
         };
 
         const suggestion = suggestions[field];
@@ -280,7 +288,10 @@ export class ConfigurationValidator implements IConfigurationValidator {
     }
 
     // Validate configuration migration between versions
-    validateConfigurationMigration(oldConfig: Record<string, any>, newConfig: Record<string, any>): { isValid: boolean; errors: ValidationError[] } {
+    validateConfigurationMigration(
+        oldConfig: Record<string, any>,
+        newConfig: Record<string, any>
+    ): { isValid: boolean; errors: ValidationError[] } {
         const errors: ValidationError[] = [];
 
         // Check for removed configuration keys

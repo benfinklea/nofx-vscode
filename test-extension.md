@@ -179,7 +179,7 @@ src/test/
 ### Configuration and Settings
 
 - [ ] **Test NofX configuration options** in VS Code settings
-  - [ ] claudePath
+  - [ ] aiPath
   - [ ] testMode
   - [ ] useWorktrees
   - [ ] enableMetrics

@@ -57,6 +57,273 @@ export interface AgentPerformance {
     qualityScore: number;
     /** Last time the agent was active */
     lastActive: Date;
+    /** Current workload and availability metrics */
+    availability: AgentAvailabilityMetrics;
+    /** Speed and throughput metrics */
+    speed: AgentSpeedMetrics;
+    /** Reliability and error tracking */
+    reliability: AgentReliabilityMetrics;
+    /** Current and historical workload data */
+    workload: AgentWorkloadMetrics;
+    /** Stuck detection configuration and status */
+    stuckDetection: StuckAgentDetection;
+    /** Performance trend analysis */
+    trends: PerformanceTrend;
+    /** Heuristic scoring breakdown */
+    heuristicScore: HeuristicScore;
+}
+
+/**
+ * Detailed availability tracking for an agent
+ */
+export interface AgentAvailabilityMetrics {
+    /** Current number of active tasks */
+    currentLoad: number;
+    /** Maximum concurrent tasks the agent can handle */
+    maxCapacity: number;
+    /** Whether the agent is currently available for new tasks */
+    isAvailable: boolean;
+    /** Time since last response to task assignment (in milliseconds) */
+    lastResponseTime: number;
+    /** Average response time to task assignments (in milliseconds) */
+    averageResponseTime: number;
+    /** Agent uptime percentage (0-100) */
+    uptime: number;
+    /** Last time agent was marked as online */
+    lastOnlineTime: Date;
+    /** Whether agent is currently online */
+    isOnline: boolean;
+}
+
+/**
+ * Comprehensive speed and throughput metrics for an agent
+ */
+export interface AgentSpeedMetrics {
+    /** Average time to start a task (in milliseconds) */
+    averageTaskStartTime: number;
+    /** Average time to complete a task (in milliseconds) */
+    averageTaskCompletionTime: number;
+    /** Tasks completed per hour */
+    tasksPerHour: number;
+    /** Average time between task assignments and start (in milliseconds) */
+    averageAssignmentToStartTime: number;
+    /** Fastest task completion time (in milliseconds) */
+    fastestTaskTime: number;
+    /** Slowest task completion time (in milliseconds) */
+    slowestTaskTime: number;
+    /** Median task completion time (in milliseconds) */
+    medianTaskTime: number;
+    /** Standard deviation of task completion times */
+    taskTimeStandardDeviation: number;
+}
+
+/**
+ * Reliability and error tracking for an agent
+ */
+export interface AgentReliabilityMetrics {
+    /** Number of consecutive failures */
+    consecutiveFailures: number;
+    /** Agent uptime percentage (0-100) */
+    uptime: number;
+    /** Error rate percentage (0-100) */
+    errorRate: number;
+    /** Number of times agent has been stuck */
+    stuckCount: number;
+    /** Last error message */
+    lastError?: string;
+    /** Error types and their frequencies */
+    errorTypes: Record<string, number>;
+    /** Recovery time after failures (in milliseconds) */
+    averageRecoveryTime: number;
+    /** Success rate percentage (0-100) */
+    successRate: number;
+}
+
+/**
+ * Current and historical workload data for an agent
+ */
+export interface AgentWorkloadMetrics {
+    /** Current number of active tasks */
+    currentTasks: number;
+    /** Number of tasks in queue for this agent */
+    queuedTasks: number;
+    /** Maximum concurrent tasks this agent can handle */
+    maxConcurrentTasks: number;
+    /** Workload utilization percentage (0-100) */
+    utilizationPercentage: number;
+    /** Peak workload reached in current session */
+    peakWorkload: number;
+    /** Average workload over time */
+    averageWorkload: number;
+    /** Workload trend (increasing, decreasing, stable) */
+    workloadTrend: 'increasing' | 'decreasing' | 'stable';
+}
+
+/**
+ * Stuck detection configuration and status for an agent
+ */
+export interface StuckAgentDetection {
+    /** Last time agent showed activity */
+    lastActivityTime: Date;
+    /** Threshold for considering agent stuck (in milliseconds) */
+    stuckThreshold: number;
+    /** Whether agent is currently considered stuck */
+    isStuck: boolean;
+    /** Reason for being stuck */
+    stuckReason?: 'timeout' | 'unresponsive' | 'error_pattern' | 'workload' | 'unknown';
+    /** Number of times agent has been detected as stuck */
+    stuckDetectionCount: number;
+    /** Last time agent was unstuck */
+    lastUnstuckTime?: Date;
+    /** Time agent has been stuck (in milliseconds) */
+    stuckDuration: number;
+    /** Whether stuck detection is enabled for this agent */
+    detectionEnabled: boolean;
+}
+
+/**
+ * Performance trend analysis data structure
+ */
+export interface PerformanceTrend {
+    /** Overall performance trend */
+    performanceTrend: 'improving' | 'declining' | 'stable';
+    /** Speed trend analysis */
+    speedTrend: 'faster' | 'slower' | 'stable';
+    /** Reliability trend analysis */
+    reliabilityTrend: 'more_reliable' | 'less_reliable' | 'stable';
+    /** Trend confidence score (0-100) */
+    confidence: number;
+    /** Number of data points used for trend analysis */
+    dataPoints: number;
+    /** Trend analysis timestamp */
+    analysisTimestamp: Date;
+}
+
+/**
+ * Multi-criteria scoring breakdown for agent performance
+ */
+export interface HeuristicScore {
+    /** Overall heuristic score (0-100) */
+    overallScore: number;
+    /** Success rate component score (0-100) */
+    successRateScore: number;
+    /** Speed component score (0-100) */
+    speedScore: number;
+    /** Availability component score (0-100) */
+    availabilityScore: number;
+    /** Reliability component score (0-100) */
+    reliabilityScore: number;
+    /** Workload efficiency score (0-100) */
+    workloadScore: number;
+    /** Scoring weights used */
+    weights: ScoringWeights;
+    /** Score calculation timestamp */
+    calculatedAt: Date;
+}
+
+/**
+ * Configurable weights for different scoring criteria
+ */
+export interface ScoringWeights {
+    /** Weight for success rate (0-1) */
+    successRate: number;
+    /** Weight for speed (0-1) */
+    speed: number;
+    /** Weight for availability (0-1) */
+    availability: number;
+    /** Weight for reliability (0-1) */
+    reliability: number;
+    /** Weight for workload efficiency (0-1) */
+    workload: number;
+}
+
+/**
+ * Configurable thresholds for various performance metrics
+ */
+export interface PerformanceThresholds {
+    /** Threshold for considering agent stuck (in milliseconds) */
+    stuckThreshold: number;
+    /** Threshold for low performance alert (0-100) */
+    lowPerformanceThreshold: number;
+    /** Threshold for high error rate alert (0-100) */
+    highErrorRateThreshold: number;
+    /** Threshold for high workload alert (0-100) */
+    highWorkloadThreshold: number;
+    /** Threshold for slow response time alert (in milliseconds) */
+    slowResponseThreshold: number;
+    /** Minimum tasks required for reliable performance calculation */
+    minTasksForReliability: number;
+}
+
+/**
+ * Point-in-time performance data snapshot
+ */
+export interface PerformanceSnapshot {
+    /** Agent ID */
+    agentId: string;
+    /** Snapshot timestamp */
+    timestamp: Date;
+    /** Performance metrics at this point in time */
+    performance: AgentPerformance;
+    /** Heuristic score at this point in time */
+    heuristicScore: HeuristicScore;
+    /** Whether agent was stuck at this time */
+    wasStuck: boolean;
+    /** Current workload at this time */
+    currentWorkload: number;
+}
+
+/**
+ * Historical performance data with timestamps
+ */
+export interface PerformanceHistory {
+    /** Agent ID */
+    agentId: string;
+    /** Historical performance snapshots */
+    snapshots: PerformanceSnapshot[];
+    /** Time range of historical data */
+    timeRange: {
+        start: Date;
+        end: Date;
+    };
+    /** Number of snapshots */
+    snapshotCount: number;
+    /** Average performance over time */
+    averagePerformance: AgentPerformance;
+    /** Performance trend analysis */
+    trendAnalysis: PerformanceTrend;
+}
+
+/**
+ * Storage configuration and metadata for performance metrics
+ */
+export interface MetricsStorage {
+    /** Storage location identifier */
+    storageId: string;
+    /** Storage type */
+    storageType: 'workspace' | 'global' | 'temp';
+    /** Storage configuration */
+    config: {
+        /** Maximum number of snapshots to keep */
+        maxSnapshots: number;
+        /** Snapshot interval in milliseconds */
+        snapshotInterval: number;
+        /** Retention period in days */
+        retentionDays: number;
+        /** Whether to compress old data */
+        compressOldData: boolean;
+    };
+    /** Storage metadata */
+    metadata: {
+        /** Creation timestamp */
+        createdAt: Date;
+        /** Last update timestamp */
+        lastUpdated: Date;
+        /** Total storage size in bytes */
+        totalSize: number;
+        /** Number of agents tracked */
+        agentCount: number;
+    };
 }
 
 /**
@@ -66,7 +333,7 @@ export interface ProjectArchitecture {
     /** Entry points of the application */
     entryPoints: string[];
     /** Architectural layers and their components */
-    layers: Map<string, string[]>;
+    layers: Record<string, string[]>;
     /** Detected design patterns */
     patterns: string[];
     /** Technologies used in the project */
@@ -212,7 +479,7 @@ export interface AnalysisOptions {
  */
 export interface AnalysisResults {
     /** Map of file paths to their analyzed components */
-    components: Map<string, CodeComponent>;
+    components: Record<string, CodeComponent>;
     /** Overall quality metrics */
     metrics: QualityMetrics;
     /** Dependency graph */
@@ -254,7 +521,7 @@ export interface FileAnalysis {
  */
 export interface WorkspaceAnalysis {
     /** Map of file paths to their analyzed components */
-    components: Map<string, CodeComponent>;
+    components: Record<string, CodeComponent>;
     /** Dependency graph */
     dependencies: DependencyGraph;
     /** Quality metrics */
@@ -349,4 +616,224 @@ export interface AnalyzerPerformance {
     memoryUsage: number;
     /** Number of files processed per second */
     filesPerSecond: number;
+}
+
+/**
+ * Load balancing strategy options
+ */
+export enum LoadBalancingStrategy {
+    /** Balanced distribution across all agents */
+    BALANCED = 'balanced',
+    /** Optimize for performance and speed */
+    PERFORMANCE_OPTIMIZED = 'performance-optimized',
+    /** Optimize for capacity utilization */
+    CAPACITY_OPTIMIZED = 'capacity-optimized'
+}
+
+/**
+ * Agent capacity scoring breakdown
+ */
+export interface AgentCapacityScore {
+    /** Overall capacity score (0-100) */
+    overallScore: number;
+    /** Capacity utilization score (0-100) */
+    capacityScore: number;
+    /** Performance score (0-100) */
+    performanceScore: number;
+    /** Availability score (0-100) */
+    availabilityScore: number;
+    /** Specialization match score (0-100) */
+    specializationScore: number;
+    /** Scoring weights used */
+    weights: CapacityScoringWeights;
+    /** Score calculation timestamp */
+    calculatedAt: Date;
+}
+
+/**
+ * Configurable weights for capacity scoring
+ */
+export interface CapacityScoringWeights {
+    /** Weight for capacity utilization (0-1) */
+    capacity: number;
+    /** Weight for performance (0-1) */
+    performance: number;
+    /** Weight for availability (0-1) */
+    availability: number;
+    /** Weight for specialization match (0-1) */
+    specialization: number;
+}
+
+/**
+ * Load balancing configuration
+ */
+export interface LoadBalancingConfig {
+    /** Load balancing strategy to use */
+    strategy: LoadBalancingStrategy;
+    /** Threshold for considering agent overloaded (0-100) */
+    overloadThreshold: number;
+    /** Timeout for stuck agent detection (in milliseconds) */
+    stuckDetectionTimeout: number;
+    /** Monitoring interval (in milliseconds) */
+    monitoringInterval: number;
+    /** Whether load balancing is enabled */
+    enabled: boolean;
+    /** Minimum tasks required before load balancing kicks in */
+    minTasksForLoadBalancing: number;
+    /** Maximum reassignments per monitoring cycle */
+    maxReassignmentsPerCycle: number;
+}
+
+/**
+ * Load balancing metrics for tracking effectiveness
+ */
+export interface LoadBalancingMetrics {
+    /** Total number of load balancing operations */
+    totalOperations: number;
+    /** Number of task reassignments */
+    taskReassignments: number;
+    /** Number of stuck agents detected */
+    stuckAgentsDetected: number;
+    /** Number of overloaded agents detected */
+    overloadedAgentsDetected: number;
+    /** Average load balancing effectiveness (0-100) */
+    averageEffectiveness: number;
+    /** Load balancing operation success rate (0-100) */
+    successRate: number;
+    /** Last load balancing operation timestamp */
+    lastOperationTime: Date;
+    /** Load balancing metrics timestamp */
+    timestamp: Date;
+}
+
+/**
+ * Task reassignment reason
+ */
+export enum TaskReassignmentReason {
+    /** Agent is overloaded */
+    OVERLOADED = 'overloaded',
+    /** Agent is stuck */
+    STUCK = 'stuck',
+    /** Performance optimization */
+    PERFORMANCE_OPTIMIZATION = 'performance-optimization',
+    /** Capacity optimization */
+    CAPACITY_OPTIMIZATION = 'capacity-optimization'
+}
+
+/**
+ * Load balancing event for publishing
+ */
+export interface LoadBalancingEvent {
+    /** Event type */
+    type: 'task_reassigned' | 'agent_overloaded' | 'agent_stuck' | 'load_balanced' | 'optimization_completed';
+    /** Agent ID involved */
+    agentId: string;
+    /** Task ID involved (if applicable) */
+    taskId?: string;
+    /** Reassignment reason (if applicable) */
+    reason?: TaskReassignmentReason;
+    /** Event timestamp */
+    timestamp: Date;
+    /** Additional event data */
+    data?: Record<string, any>;
+}
+
+/**
+ * Detailed workload breakdown for an agent
+ */
+export interface AgentWorkload {
+    /** Agent ID */
+    agentId: string;
+    /** Current number of active tasks */
+    currentTasks: number;
+    /** Maximum concurrent tasks */
+    maxConcurrentTasks: number;
+    /** Workload utilization percentage (0-100) */
+    utilizationPercentage: number;
+    /** Tasks completed in last hour */
+    tasksCompletedLastHour: number;
+    /** Average task completion time (in milliseconds) */
+    averageTaskTime: number;
+    /** Whether agent is available for new tasks */
+    isAvailable: boolean;
+    /** Workload timestamp */
+    timestamp: Date;
+}
+
+/**
+ * Task distribution plan for load balancing
+ */
+export interface TaskDistributionPlan {
+    /** Plan ID */
+    planId: string;
+    /** Tasks to be reassigned */
+    reassignments: TaskReassignment[];
+    /** Expected load distribution after plan execution */
+    expectedDistribution: Map<string, AgentWorkload>;
+    /** Plan effectiveness score (0-100) */
+    effectivenessScore: number;
+    /** Plan creation timestamp */
+    createdAt: Date;
+    /** Whether plan has been executed */
+    executed: boolean;
+    /** Plan execution timestamp */
+    executedAt?: Date;
+}
+
+/**
+ * Individual task reassignment within a distribution plan
+ */
+export interface TaskReassignment {
+    /** Task ID */
+    taskId: string;
+    /** Current agent ID */
+    currentAgentId: string;
+    /** Target agent ID */
+    targetAgentId: string;
+    /** Reassignment reason */
+    reason: TaskReassignmentReason;
+    /** Expected improvement score (0-100) */
+    expectedImprovement: number;
+    /** Reassignment priority (1-10) */
+    priority: number;
+}
+
+/**
+ * Load balancing operation result
+ */
+export interface LoadBalancingResult {
+    /** Operation success status */
+    success: boolean;
+    /** Number of tasks reassigned */
+    tasksReassigned: number;
+    /** Number of agents affected */
+    agentsAffected: number;
+    /** Load balancing effectiveness score (0-100) */
+    effectiveness: number;
+    /** Operation duration (in milliseconds) */
+    duration: number;
+    /** Any errors encountered */
+    errors: string[];
+    /** Operation timestamp */
+    timestamp: Date;
+    /** Detailed results for each reassignment */
+    reassignmentResults: ReassignmentResult[];
+}
+
+/**
+ * Individual reassignment result
+ */
+export interface ReassignmentResult {
+    /** Task ID */
+    taskId: string;
+    /** Source agent ID */
+    sourceAgentId: string;
+    /** Target agent ID */
+    targetAgentId: string;
+    /** Reassignment success status */
+    success: boolean;
+    /** Error message if failed */
+    error?: string;
+    /** Reassignment timestamp */
+    timestamp: Date;
 }

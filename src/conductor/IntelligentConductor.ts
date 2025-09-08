@@ -3,6 +3,8 @@ import { AgentManager } from '../agents/AgentManager';
 import { TaskQueue } from '../tasks/TaskQueue';
 import { Agent } from '../agents/types';
 import { OUTPUT_CHANNELS } from '../constants/outputChannels';
+import { Container } from '../services/Container';
+import { SERVICE_TOKENS, IConfigurationService } from '../services/interfaces';
 
 /**
  * The REAL Conductor - Actually manages agents and tasks
@@ -13,13 +15,13 @@ export class IntelligentConductor {
     private taskQueue: TaskQueue;
     private terminal: vscode.Terminal | undefined;
     private outputChannel: vscode.OutputChannel;
-    private claudePath: string;
+    private aiPath: string;
     private isProcessingCommand: boolean = false;
 
     constructor(agentManager: AgentManager, taskQueue: TaskQueue) {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
-        this.claudePath = vscode.workspace.getConfiguration('nofx').get<string>('claudePath') || 'claude';
+        this.aiPath = vscode.workspace.getConfiguration('nofx').get<string>('aiPath') || 'claude';
         this.outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNELS.CONDUCTOR_BRAIN);
 
         // Monitor agent updates
@@ -46,10 +48,10 @@ export class IntelligentConductor {
         this.terminal.show();
 
         // Initialize the conductor with enhanced capabilities
-        this.initializeConductor();
+        await this.initializeConductor();
     }
 
-    private initializeConductor() {
+    private async initializeConductor() {
         if (!this.terminal) return;
 
         this.terminal.sendText('clear');
@@ -61,23 +63,37 @@ export class IntelligentConductor {
 
         // Start Claude with the enhanced conductor prompt using --append-system-prompt
         const systemPrompt = this.getEnhancedSystemPrompt().replace(/'/g, "'\\''"); // Escape single quotes for shell
-        this.terminal.sendText(`${this.claudePath} --append-system-prompt '${systemPrompt}'`);
+        this.terminal.sendText(`${this.aiPath} --append-system-prompt '${systemPrompt}'`);
 
-        // Send the initial greeting
-        setTimeout(() => {
-            if (this.terminal) {
-                this.terminal.sendText('Hello! I am the NofX Intelligent Conductor. I can:');
-                this.terminal.sendText('- See all active agents and their status');
-                this.terminal.sendText('- Create and assign tasks automatically');
-                this.terminal.sendText('- Monitor for conflicts between agents');
-                this.terminal.sendText('- Coordinate complex multi-agent workflows');
-                this.terminal.sendText('');
-                this.terminal.sendText('Tell me what you want to build, and I will orchestrate everything!');
+        // Wait for AI to initialize using configurable delay
+        const container = Container.getInstance();
+        const configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
+        const initDelay = configService.getClaudeInitializationDelay() * 1000; // Convert to milliseconds
+        this.outputChannel.appendLine(`⏳ Waiting ${initDelay / 1000} seconds for AI to initialize...`);
+        await new Promise(resolve => setTimeout(resolve, initDelay));
 
-                // Start monitoring for commands
-                this.startCommandMonitoring();
-            }
-        }, 3000);
+        // Send the initial greeting after AI is ready
+        if (this.terminal) {
+            const greeting = `Hello! I am the NofX Intelligent Conductor. I can:
+- See all active agents and their status
+- Create and assign tasks automatically
+- Monitor for conflicts between agents
+- Coordinate complex multi-agent workflows
+
+Tell me what you want to build, and I will orchestrate everything!`;
+
+            // Send the greeting text first
+            this.terminal.sendText(greeting, false); // false = no newline yet
+
+            // Small delay to ensure the text is in the terminal
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Now send Enter to submit it
+            this.terminal.sendText('', true); // Send empty string with Enter to submit
+
+            // Start monitoring for commands
+            this.startCommandMonitoring();
+        }
     }
 
     private getEnhancedSystemPrompt(): string {
@@ -134,7 +150,10 @@ You are a senior engineering manager with deep technical knowledge. Be proactive
         this.outputChannel.appendLine(`Processing command: ${command}`);
 
         if (command.startsWith('CREATE_TASK')) {
-            const parts = command.replace('CREATE_TASK', '').split('|').map(s => s.trim());
+            const parts = command
+                .replace('CREATE_TASK', '')
+                .split('|')
+                .map(s => s.trim());
             const [title, description, agentType] = parts;
 
             // Actually create the task
@@ -166,9 +185,7 @@ You are a senior engineering manager with deep technical knowledge. Be proactive
         // If no exact match, find one with matching capabilities
         if (!agent && idleAgents.length > 0) {
             agent = idleAgents.find(a =>
-                a.template?.capabilities?.some((c: string) =>
-                    c.toLowerCase().includes(type.toLowerCase())
-                )
+                a.template?.capabilities?.some((c: string) => c.toLowerCase().includes(type.toLowerCase()))
             );
         }
 
@@ -267,8 +284,7 @@ You are a senior engineering manager with deep technical knowledge. Be proactive
             }
 
             // Check specialization match
-            if (agent.template?.specialization &&
-                taskText.includes(agent.template.specialization.toLowerCase())) {
+            if (agent.template?.specialization && taskText.includes(agent.template.specialization.toLowerCase())) {
                 score += 8;
             }
 

@@ -13,7 +13,7 @@ export class AgentTemplateBrowser {
         const items = templates.map(template => ({
             label: `${template.icon} ${template.name}`,
             description: template.description,
-            detail: `Tags: ${template.tags.join(', ')} | Languages: ${template.capabilities.languages.join(', ')}`,
+            detail: `Tags: ${template.tags?.join(', ') || 'None'} | Languages: ${template.capabilities.languages.join(', ')}`,
             template
         }));
 
@@ -129,10 +129,7 @@ export class AgentTemplateBrowser {
             template
         });
 
-        vscode.window.showInformationMessage(
-            `✅ Spawned ${template.icon} ${name}`,
-            'View Agent'
-        ).then(selection => {
+        vscode.window.showInformationMessage(`✅ Spawned ${template.icon} ${name}`, 'View Agent').then(selection => {
             if (selection === 'View Agent') {
                 vscode.commands.executeCommand('nofx.agents.focus');
             }
@@ -150,10 +147,7 @@ export class AgentTemplateBrowser {
 
         const success = await this.templateManager.duplicateTemplate(template.id, newName);
         if (success) {
-            vscode.window.showInformationMessage(
-                `✅ Template duplicated as "${newName}"`,
-                'Edit'
-            ).then(selection => {
+            vscode.window.showInformationMessage(`✅ Template duplicated as "${newName}"`, 'Edit').then(selection => {
                 if (selection === 'Edit') {
                     const newId = newName.toLowerCase().replace(/\s+/g, '-');
                     this.templateManager.editTemplate(`custom-${newId}`);
@@ -169,44 +163,52 @@ export class AgentTemplateBrowser {
 ${template.description}
 
 ## Tags
-${template.tags.map(t => `\`${t}\``).join(', ')}
+${template.tags?.map((t: string) => `\`${t}\``).join(', ') || 'None'}
 
 ## Capabilities
 
 ### Languages
-${template.capabilities.languages.map(l => `- ${l}`).join('\n')}
+${template.capabilities.languages.map((l: string) => `- ${l}`).join('\n')}
 
 ### Frameworks
-${template.capabilities.frameworks.map(f => `- ${f}`).join('\n')}
+${template.capabilities.frameworks.map((f: string) => `- ${f}`).join('\n')}
 
 ### Tools
-${template.capabilities.tools.map(t => `- ${t}`).join('\n')}
+${template.capabilities.tools.map((t: string) => `- ${t}`).join('\n')}
 
 ### Testing
-${template.capabilities.testing.map(t => `- ${t}`).join('\n')}
+${template.capabilities.testing.map((t: string) => `- ${t}`).join('\n')}
 
 ### Specialties
-${template.capabilities.specialties.map(s => `- ${s}`).join('\n')}
+${template.capabilities.specialties.map((s: string) => `- ${s}`).join('\n')}
 
 ## Task Preferences
 
-**Preferred:** ${template.taskPreferences.preferred.join(', ')}
-**Avoid:** ${template.taskPreferences.avoid.join(', ')}
-**Priority:** ${template.taskPreferences.priority}
+**Preferred:** ${template.taskPreferences?.preferred.join(', ') || 'None'}
+**Avoid:** ${template.taskPreferences?.avoid.join(', ') || 'None'}
+**Priority:** ${template.taskPreferences?.priority || 'Normal'}
 
 ## System Prompt
 \`\`\`
 ${template.systemPrompt}
 \`\`\`
 
-${template.filePatterns ? `## File Patterns
+${
+    template.filePatterns
+        ? `## File Patterns
 **Watch:** ${template.filePatterns.watch.join(', ')}
-**Ignore:** ${template.filePatterns.ignore.join(', ')}` : ''}
+**Ignore:** ${template.filePatterns.ignore.join(', ')}`
+        : ''
+}
 
-${template.commands ? `## Commands
+${
+    template.commands
+        ? `## Commands
 \`\`\`json
 ${JSON.stringify(template.commands, null, 2)}
-\`\`\`` : ''}
+\`\`\``
+        : ''
+}
 
 ---
 *Template ID: ${template.id}*

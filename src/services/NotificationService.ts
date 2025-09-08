@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { INotificationService } from './interfaces';
 
 export class NotificationService implements INotificationService {
-
     async showInformation(message: string, ...items: string[]): Promise<string | undefined> {
         return await vscode.window.showInformationMessage(message, ...items);
     }
@@ -15,9 +14,18 @@ export class NotificationService implements INotificationService {
         return await vscode.window.showErrorMessage(message, ...items);
     }
 
-    async showQuickPick<T extends vscode.QuickPickItem>(items: T[], options?: vscode.QuickPickOptions): Promise<T | undefined>;
-    async showQuickPick<T extends vscode.QuickPickItem>(items: T[], options?: vscode.QuickPickOptions & { canPickMany: true }): Promise<T[] | undefined>;
-    async showQuickPick<T extends vscode.QuickPickItem>(items: T[], options?: vscode.QuickPickOptions): Promise<T | T[] | undefined> {
+    async showQuickPick<T extends vscode.QuickPickItem>(
+        items: T[],
+        options?: vscode.QuickPickOptions
+    ): Promise<T | undefined>;
+    async showQuickPick<T extends vscode.QuickPickItem>(
+        items: T[],
+        options?: vscode.QuickPickOptions & { canPickMany: true }
+    ): Promise<T[] | undefined>;
+    async showQuickPick<T extends vscode.QuickPickItem>(
+        items: T[],
+        options?: vscode.QuickPickOptions
+    ): Promise<T | T[] | undefined> {
         return await vscode.window.showQuickPick(items, options);
     }
 
@@ -25,7 +33,10 @@ export class NotificationService implements INotificationService {
         return await vscode.window.showInputBox(options);
     }
 
-    async withProgress<T>(options: vscode.ProgressOptions, task: (progress: vscode.Progress<{ message?: string; increment?: number }>) => Promise<T>): Promise<T> {
+    async withProgress<T>(
+        options: vscode.ProgressOptions,
+        task: (progress: vscode.Progress<{ message?: string; increment?: number }>) => Promise<T>
+    ): Promise<T> {
         return await vscode.window.withProgress(options, task);
     }
 

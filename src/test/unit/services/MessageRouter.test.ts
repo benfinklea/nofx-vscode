@@ -8,6 +8,17 @@ import { LoggingService } from '../../../services/LoggingService';
 import { MetricsService } from '../../../services/MetricsService';
 import { MessageType, Message, MessagePriority } from '../../../types/Message';
 import { EventBus } from '../../../services/EventBus';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock all dependencies
 jest.mock('../../../services/MessageValidator');
@@ -42,6 +53,8 @@ describe('MessageRouter', () => {
     };
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.clearAllMocks();
         jest.useFakeTimers();
 
@@ -170,14 +183,19 @@ describe('MessageRouter', () => {
 
             expect(result.success).toBe(false);
             expect(result.error).toContain('Invalid message: Missing required field: payload');
-            expect(mockMetricsService.recordEvent).toHaveBeenCalledWith('message_validation_failed', expect.any(Object));
+            expect(mockMetricsService.recordEvent).toHaveBeenCalledWith(
+                'message_validation_failed',
+                expect.any(Object)
+            );
         });
 
         it('should validate message structure for each type', async () => {
             const taskMessage = {
                 ...mockMessage,
                 type: MessageType.ASSIGN_TASK,
-                payload: { /* missing required fields */ }
+                payload: {
+                    /* missing required fields */
+                }
             };
 
             mockMessageValidator.validateMessage = jest.fn().mockReturnValue({
@@ -241,10 +259,7 @@ describe('MessageRouter', () => {
 
             // Should still route the message even if persistence fails
             expect(result.success).toBe(true);
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                'Message persistence failed',
-                expect.any(Object)
-            );
+            expect(mockLoggingService.warn).toHaveBeenCalledWith('Message persistence failed', expect.any(Object));
         });
 
         it('should include persistence metadata in routing result', async () => {
@@ -294,7 +309,8 @@ describe('MessageRouter', () => {
 
     describe('error handling and retry logic', () => {
         it('should retry failed message routing', async () => {
-            mockAgentManager.handleSpawnAgent = jest.fn()
+            mockAgentManager.handleSpawnAgent = jest
+                .fn()
                 .mockRejectedValueOnce(new Error('Temporary failure'))
                 .mockResolvedValueOnce({ agentId: 'agent-1' });
 
@@ -311,8 +327,7 @@ describe('MessageRouter', () => {
         });
 
         it('should implement exponential backoff for retries', async () => {
-            mockAgentManager.handleSpawnAgent = jest.fn()
-                .mockRejectedValue(new Error('Persistent failure'));
+            mockAgentManager.handleSpawnAgent = jest.fn().mockRejectedValue(new Error('Persistent failure'));
 
             const promise = messageRouter.routeMessage(mockMessage);
 
@@ -376,7 +391,7 @@ describe('MessageRouter', () => {
             ];
 
             const processedOrder: string[] = [];
-            mockAgentManager.handleSpawnAgent = jest.fn().mockImplementation((payload) => {
+            mockAgentManager.handleSpawnAgent = jest.fn().mockImplementation(payload => {
                 processedOrder.push(payload.name);
                 return { agentId: `agent-${processedOrder.length}` };
             });
@@ -402,10 +417,7 @@ describe('MessageRouter', () => {
         it('should track routing performance', async () => {
             await messageRouter.routeMessage(mockMessage);
 
-            expect(mockMetricsService.recordLatency).toHaveBeenCalledWith(
-                'message_routing',
-                expect.any(Number)
-            );
+            expect(mockMetricsService.recordLatency).toHaveBeenCalledWith('message_routing', expect.any(Number));
         });
 
         it('should monitor connection health', async () => {
@@ -418,10 +430,7 @@ describe('MessageRouter', () => {
             await messageRouter.getHealthMetrics();
 
             expect(mockConnectionPool.getHealthStats).toHaveBeenCalled();
-            expect(mockMetricsService.recordGauge).toHaveBeenCalledWith(
-                'connection_pool_health',
-                expect.any(Object)
-            );
+            expect(mockMetricsService.recordGauge).toHaveBeenCalledWith('connection_pool_health', expect.any(Object));
         });
     });
 });

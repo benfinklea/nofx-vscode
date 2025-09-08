@@ -14,9 +14,25 @@ import {
     ManagedConnection,
     MessageFilter
 } from '../../services/interfaces';
-import { OrchestratorMessage, MessageType, createMessage, generateMessageId } from '../../orchestration/MessageProtocol';
+import {
+    OrchestratorMessage,
+    MessageType,
+    createMessage,
+    generateMessageId
+} from '../../orchestration/MessageProtocol';
 import { ORCH_EVENTS } from '../../services/EventConstants';
 import { createTestContainer, createMockAgent, waitForEvent, measureTime } from '../setup';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
 
 // Mock WebSocket for integration testing
 class MockWebSocketClient {
@@ -55,6 +71,20 @@ class MockWebSocketClient {
     }
 }
 
+jest.setTimeout(10000);
+
+jest.mock('ws', () => ({
+    WebSocketServer: jest.fn().mockImplementation(() => ({
+        on: jest.fn((event: string, callback: any) => {
+            if (event === 'listening') {
+                // Immediately call listening callback to simulate successful start
+                setTimeout(() => callback(), 0);
+            }
+        }),
+        close: jest.fn()
+    })),
+    WebSocket: jest.fn()
+}));
 describe('Orchestration Workflow Integration Tests', () => {
     let orchestrationServer: OrchestrationServer;
     let mockLoggingService: jest.Mocked<ILoggingService>;
@@ -68,12 +98,16 @@ describe('Orchestration Workflow Integration Tests', () => {
     let mockWebSocketClient: MockWebSocketClient;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Reset all mocks
         jest.clearAllMocks();
 
         // Create comprehensive mock services
         mockLoggingService = {
+            trace: jest.fn(),
             debug: jest.fn(),
+            agents: jest.fn(),
             info: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
@@ -97,9 +131,12 @@ describe('Orchestration Workflow Integration Tests', () => {
 
         mockErrorHandler = {
             handleError: jest.fn(),
-            handleAsync: jest.fn(),
-            wrapSync: jest.fn(),
-            withRetry: jest.fn(),
+            handleAsync: jest.fn(async (operation: () => Promise<any>, context?: string) => {
+                // Actually execute the operation for tests to work
+                return await operation();
+            }),
+            wrapSync: jest.fn((operation: () => any) => operation()),
+            withRetry: jest.fn(async (operation: () => Promise<any>) => await operation()),
             dispose: jest.fn()
         };
 
@@ -121,10 +158,10 @@ describe('Orchestration Workflow Integration Tests', () => {
                     messageCount: 0
                 });
             }),
-            removeConnection: jest.fn((clientId) => {
+            removeConnection: jest.fn(clientId => {
                 connections.delete(clientId);
             }),
-            getConnection: jest.fn((clientId) => connections.get(clientId)),
+            getConnection: jest.fn(clientId => connections.get(clientId)),
             getAllConnections: jest.fn(() => connections),
             broadcast: jest.fn((message, excludeIds = []) => {
                 connections.forEach((connection, clientId) => {
@@ -148,14 +185,16 @@ describe('Orchestration Workflow Integration Tests', () => {
             registerLogicalId: jest.fn(),
             resolveLogicalId: jest.fn(),
             unregisterLogicalId: jest.fn(),
-            getConnectionSummaries: jest.fn(() => Array.from(connections.values()).map(conn => ({
-                clientId: conn.metadata.clientId,
-                isAgent: conn.metadata.isAgent,
-                connectedAt: conn.metadata.connectedAt.toISOString(),
-                lastHeartbeat: conn.metadata.lastHeartbeat.toISOString(),
-                messageCount: conn.metadata.messageCount,
-                userAgent: conn.metadata.userAgent
-            }))),
+            getConnectionSummaries: jest.fn(() =>
+                Array.from(connections.values()).map(conn => ({
+                    clientId: conn.metadata.clientId,
+                    isAgent: conn.metadata.isAgent,
+                    connectedAt: conn.metadata.connectedAt.toISOString(),
+                    lastHeartbeat: conn.metadata.lastHeartbeat.toISOString(),
+                    messageCount: conn.metadata.messageCount,
+                    userAgent: conn.metadata.userAgent
+                }))
+            ),
             startHeartbeat: jest.fn(),
             stopHeartbeat: jest.fn(),
             dispose: jest.fn()
@@ -187,15 +226,21 @@ describe('Orchestration Workflow Integration Tests', () => {
                     return true;
                 });
 
-                const limitedMessages = filter?.limit ?
-                    filteredMessages.slice(filter.offset || 0, (filter.offset || 0) + filter.limit) :
-                    filteredMessages.slice(filter?.offset || 0);
+                const limitedMessages = filter?.limit
+                    ? filteredMessages.slice(filter.offset || 0, (filter.offset || 0) + filter.limit)
+                    : filteredMessages.slice(filter?.offset || 0);
 
                 limitedMessages.forEach(msg => {
                     mockConnectionPool.sendToClient(target, msg);
                 });
             }),
             setDashboardCallback: jest.fn(),
+            clearDashboardCallback: jest.fn(),
+            getDeliveryStats: jest.fn(() => ({
+                totalSent: 0,
+                totalDelivered: 0,
+                failureRate: 0
+            })),
             dispose: jest.fn()
         };
 
@@ -235,14 +280,16 @@ describe('Orchestration Workflow Integration Tests', () => {
                     result: payload
                 };
             }),
-            createErrorResponse: jest.fn((error: string, clientId: string): OrchestratorMessage => ({
-                id: generateMessageId(),
-                type: MessageType.SYSTEM_ERROR,
-                from: 'server',
-                to: clientId,
-                payload: { error },
-                timestamp: new Date().toISOString()
-            })),
+            createErrorResponse: jest.fn(
+                (error: string, clientId: string): OrchestratorMessage => ({
+                    id: generateMessageId(),
+                    type: MessageType.SYSTEM_ERROR,
+                    from: 'server',
+                    to: clientId,
+                    payload: { error },
+                    timestamp: new Date().toISOString()
+                })
+            ),
             dispose: jest.fn()
         };
 

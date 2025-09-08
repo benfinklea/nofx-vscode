@@ -4,6 +4,17 @@ import { promises as fsPromises } from 'fs';
 import { AgentPersistence } from '../../../persistence/AgentPersistence';
 import { Agent } from '../../../agents/types';
 import { ILoggingService } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 jest.mock('fs');
 jest.mock('fs', () => ({
@@ -25,19 +36,10 @@ describe('AgentPersistence', () => {
     const mockFsPromises = fsPromises as jest.Mocked<typeof fsPromises>;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Mock logging service
-        mockLoggingService = {
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            isLevelEnabled: jest.fn().mockReturnValue(false),
-            getChannel: jest.fn(),
-            time: jest.fn(),
-            timeEnd: jest.fn(),
-            onDidChangeConfiguration: jest.fn(),
-            dispose: jest.fn()
-        } as any;
+        mockLoggingService = createMockLoggingService();
 
         workspaceRoot = '/test/workspace';
 
@@ -84,14 +86,10 @@ describe('AgentPersistence', () => {
 
             new AgentPersistence(workspaceRoot, mockLoggingService);
 
-            expect(mockFs.mkdirSync).toHaveBeenCalledWith(
-                path.join(workspaceRoot, '.nofx'),
-                { recursive: true }
-            );
-            expect(mockFs.mkdirSync).toHaveBeenCalledWith(
-                path.join(workspaceRoot, '.nofx', 'sessions'),
-                { recursive: true }
-            );
+            expect(mockFs.mkdirSync).toHaveBeenCalledWith(path.join(workspaceRoot, '.nofx'), { recursive: true });
+            expect(mockFs.mkdirSync).toHaveBeenCalledWith(path.join(workspaceRoot, '.nofx', 'sessions'), {
+                recursive: true
+            });
         });
 
         it('should not create directories if they already exist', () => {
@@ -160,17 +158,19 @@ describe('AgentPersistence', () => {
         });
 
         it('should save correct agent data structure', async () => {
-            const agents: Agent[] = [{
-                id: 'test-agent',
-                name: 'Test Agent',
-                type: 'fullstack',
-                status: 'idle',
-                terminal: {} as any,
-                currentTask: null,
-                startTime: new Date('2023-01-01T10:00:00.000Z'),
-                tasksCompleted: 0,
-                template: { name: 'test-template' }
-            }];
+            const agents: Agent[] = [
+                {
+                    id: 'test-agent',
+                    name: 'Test Agent',
+                    type: 'fullstack',
+                    status: 'idle',
+                    terminal: {} as any,
+                    currentTask: null,
+                    startTime: new Date('2023-01-01T10:00:00.000Z'),
+                    tasksCompleted: 0,
+                    template: { name: 'test-template' }
+                }
+            ];
 
             await agentPersistence.saveAgentState(agents);
 
@@ -179,17 +179,19 @@ describe('AgentPersistence', () => {
             expect(savedData).toMatchObject({
                 version: '1.0',
                 timestamp: expect.any(String),
-                agents: [{
-                    id: 'test-agent',
-                    name: 'Test Agent',
-                    type: 'fullstack',
-                    status: 'idle',
-                    template: { name: 'test-template' },
-                    tasksCompleted: 0,
-                    currentTask: null,
-                    sessionFile: 'test-agent_session.md',
-                    createdAt: '2023-01-01T10:00:00.000Z'
-                }]
+                agents: [
+                    {
+                        id: 'test-agent',
+                        name: 'Test Agent',
+                        type: 'fullstack',
+                        status: 'idle',
+                        template: { name: 'test-template' },
+                        tasksCompleted: 0,
+                        currentTask: null,
+                        sessionFile: 'test-agent_session.md',
+                        createdAt: '2023-01-01T10:00:00.000Z'
+                    }
+                ]
             });
         });
 
@@ -202,28 +204,30 @@ describe('AgentPersistence', () => {
         });
 
         it('should handle agents with complex current tasks', async () => {
-            const agents: Agent[] = [{
-                id: 'agent-complex',
-                name: 'Complex Agent',
-                type: 'testing',
-                status: 'working',
-                terminal: {} as any,
-                currentTask: {
-                    id: 'complex-task',
-                    title: 'Complex Task',
-                    description: 'A task with many properties',
-                    priority: 'medium',
-                    status: 'in-progress',
-                    assignedTo: 'agent-complex',
-                    files: ['file1.js', 'file2.ts'],
-                    createdAt: new Date('2023-01-01'),
-                    dependsOn: ['task-dep-1'],
-                    tags: ['tag1', 'tag2'],
-                    estimatedDuration: 120
-                },
-                startTime: new Date('2023-01-01'),
-                tasksCompleted: 2
-            }];
+            const agents: Agent[] = [
+                {
+                    id: 'agent-complex',
+                    name: 'Complex Agent',
+                    type: 'testing',
+                    status: 'working',
+                    terminal: {} as any,
+                    currentTask: {
+                        id: 'complex-task',
+                        title: 'Complex Task',
+                        description: 'A task with many properties',
+                        priority: 'medium',
+                        status: 'in-progress',
+                        assignedTo: 'agent-complex',
+                        files: ['file1.js', 'file2.ts'],
+                        createdAt: new Date('2023-01-01'),
+                        dependsOn: ['task-dep-1'],
+                        tags: ['tag1', 'tag2'],
+                        estimatedDuration: 120
+                    },
+                    startTime: new Date('2023-01-01'),
+                    tasksCompleted: 2
+                }
+            ];
 
             await agentPersistence.saveAgentState(agents);
 
@@ -258,9 +262,7 @@ describe('AgentPersistence', () => {
             const result = await agentPersistence.loadAgentState();
 
             expect(result).toEqual(stateData.agents);
-            expect(mockLoggingService.debug).toHaveBeenCalledWith(
-                expect.stringContaining('Loaded state for 1 agents')
-            );
+            expect(mockLoggingService.debug).toHaveBeenCalledWith(expect.stringContaining('Loaded state for 1 agents'));
         });
 
         it('should return empty array if state file does not exist', async () => {
@@ -536,22 +538,20 @@ describe('AgentPersistence', () => {
         it('should archive files older than specified days', async () => {
             const oldFiles = ['old-session.md', 'recent-session.md'];
             const now = Date.now();
-            const oldTime = now - (8 * 24 * 60 * 60 * 1000); // 8 days ago
-            const recentTime = now - (5 * 24 * 60 * 60 * 1000); // 5 days ago
+            const oldTime = now - 8 * 24 * 60 * 60 * 1000; // 8 days ago
+            const recentTime = now - 5 * 24 * 60 * 60 * 1000; // 5 days ago
 
-            mockFs.existsSync = jest.fn().mockImplementation((path) => {
+            mockFs.existsSync = jest.fn().mockImplementation(path => {
                 return !path.includes('archive'); // Archive dir doesn't exist
             });
             mockFs.readdirSync = jest.fn().mockReturnValue(oldFiles);
-            mockFs.statSync = jest.fn().mockImplementation((filePath) => ({
+            mockFs.statSync = jest.fn().mockImplementation(filePath => ({
                 mtime: new Date(filePath.includes('old') ? oldTime : recentTime)
             }));
 
             await agentPersistence.archiveOldSessions(7);
 
-            expect(mockFs.mkdirSync).toHaveBeenCalledWith(
-                path.join(workspaceRoot, '.nofx', 'archive')
-            );
+            expect(mockFs.mkdirSync).toHaveBeenCalledWith(path.join(workspaceRoot, '.nofx', 'archive'));
             expect(mockFs.renameSync).toHaveBeenCalledWith(
                 path.join(workspaceRoot, '.nofx', 'sessions', 'old-session.md'),
                 path.join(workspaceRoot, '.nofx', 'archive', 'old-session.md')
@@ -564,7 +564,7 @@ describe('AgentPersistence', () => {
 
         it('should use default 7 days if not specified', async () => {
             const files = ['test-session.md'];
-            const oldTime = Date.now() - (8 * 24 * 60 * 60 * 1000);
+            const oldTime = Date.now() - 8 * 24 * 60 * 60 * 1000;
 
             mockFs.existsSync = jest.fn().mockReturnValue(false);
             mockFs.readdirSync = jest.fn().mockReturnValue(files);
@@ -577,7 +577,7 @@ describe('AgentPersistence', () => {
 
         it('should log archived sessions', async () => {
             const files = ['archived-session.md'];
-            const oldTime = Date.now() - (10 * 24 * 60 * 60 * 1000);
+            const oldTime = Date.now() - 10 * 24 * 60 * 60 * 1000;
 
             mockFs.existsSync = jest.fn().mockReturnValue(false);
             mockFs.readdirSync = jest.fn().mockReturnValue(files);
@@ -597,9 +597,7 @@ describe('AgentPersistence', () => {
 
             await agentPersistence.cleanup();
 
-            expect(mockFs.unlinkSync).toHaveBeenCalledWith(
-                path.join(workspaceRoot, '.nofx', 'agents.json')
-            );
+            expect(mockFs.unlinkSync).toHaveBeenCalledWith(path.join(workspaceRoot, '.nofx', 'agents.json'));
             expect(mockFs.unlinkSync).toHaveBeenCalledWith(
                 path.join(workspaceRoot, '.nofx', 'sessions', 'agent1_session.md')
             );
@@ -615,9 +613,7 @@ describe('AgentPersistence', () => {
 
             await agentPersistence.cleanup();
 
-            expect(mockFs.unlinkSync).not.toHaveBeenCalledWith(
-                expect.stringContaining('agents.json')
-            );
+            expect(mockFs.unlinkSync).not.toHaveBeenCalledWith(expect.stringContaining('agents.json'));
         });
     });
 
@@ -636,7 +632,7 @@ describe('AgentPersistence', () => {
             const sessionContent = '# Session content\nTest session data';
 
             mockFs.existsSync = jest.fn().mockReturnValue(true);
-            mockFs.readFileSync = jest.fn().mockImplementation((filePath) => {
+            mockFs.readFileSync = jest.fn().mockImplementation(filePath => {
                 if (filePath.includes('agents.json')) {
                     return JSON.stringify({ agents: mockState });
                 }
@@ -654,10 +650,7 @@ describe('AgentPersistence', () => {
                 exportPath,
                 expect.stringContaining('## Agent: Test Agent 1')
             );
-            expect(mockFs.writeFileSync).toHaveBeenCalledWith(
-                exportPath,
-                expect.stringContaining(sessionContent)
-            );
+            expect(mockFs.writeFileSync).toHaveBeenCalledWith(exportPath, expect.stringContaining(sessionContent));
         });
 
         it('should handle agents without sessions', async () => {
@@ -671,10 +664,10 @@ describe('AgentPersistence', () => {
                 }
             ];
 
-            mockFs.existsSync = jest.fn().mockImplementation((filePath) => {
+            mockFs.existsSync = jest.fn().mockImplementation(filePath => {
                 return filePath.includes('agents.json');
             });
-            mockFs.readFileSync = jest.fn().mockImplementation((filePath) => {
+            mockFs.readFileSync = jest.fn().mockImplementation(filePath => {
                 if (filePath.includes('agents.json')) {
                     return JSON.stringify({ agents: mockState });
                 }
@@ -698,9 +691,7 @@ describe('AgentPersistence', () => {
 
             await agentPersistence.clearAll();
 
-            expect(mockFsPromises.unlink).toHaveBeenCalledWith(
-                path.join(workspaceRoot, '.nofx', 'agents.json')
-            );
+            expect(mockFsPromises.unlink).toHaveBeenCalledWith(path.join(workspaceRoot, '.nofx', 'agents.json'));
             expect(mockFsPromises.unlink).toHaveBeenCalledWith(
                 path.join(workspaceRoot, '.nofx', 'sessions', 'agent1_session.md')
             );
@@ -716,9 +707,7 @@ describe('AgentPersistence', () => {
 
             await agentPersistence.clearAll();
 
-            expect(mockFsPromises.unlink).not.toHaveBeenCalledWith(
-                expect.stringContaining('agents.json')
-            );
+            expect(mockFsPromises.unlink).not.toHaveBeenCalledWith(expect.stringContaining('agents.json'));
         });
 
         it('should handle errors and log them', async () => {
@@ -736,7 +725,7 @@ describe('AgentPersistence', () => {
             const archiveName = 'backup-test';
             const sessionFiles = ['agent1_session.md', 'agent2_session.md'];
 
-            mockFs.existsSync = jest.fn().mockImplementation((path) => {
+            mockFs.existsSync = jest.fn().mockImplementation(path => {
                 return path.includes('agents.json');
             });
             mockFsPromises.readdir = jest.fn().mockResolvedValue(sessionFiles);
@@ -744,17 +733,12 @@ describe('AgentPersistence', () => {
             const archivePath = await agentPersistence.archiveSessions(archiveName);
 
             expect(archivePath).toMatch(new RegExp('backup-test_\\d{4}-\\d{2}-\\d{2}T'));
-            expect(mockFsPromises.mkdir).toHaveBeenCalledWith(
-                expect.stringContaining('archives'),
-                { recursive: true }
-            );
+            expect(mockFsPromises.mkdir).toHaveBeenCalledWith(expect.stringContaining('archives'), { recursive: true });
             expect(mockFsPromises.copyFile).toHaveBeenCalledWith(
                 path.join(workspaceRoot, '.nofx', 'sessions', 'agent1_session.md'),
                 expect.stringContaining('agent1_session.md')
             );
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                expect.stringContaining('Archived sessions to')
-            );
+            expect(mockLoggingService.info).toHaveBeenCalledWith(expect.stringContaining('Archived sessions to'));
         });
 
         it('should copy agents.json if it exists', async () => {

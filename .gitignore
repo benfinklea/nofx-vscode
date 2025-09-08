@@ -6,5 +6,19 @@ node_modules
 .DS_Store
 *.log
 
+# Sensitive files
+.env
+.env.*
+.env.local
+.env.production
+config/secrets.json
+private.key
+*.pem
+*.key
+credentials.json
+credentials
+id_rsa
+id_rsa.pub
+
 # NofX persistence data
 .nofx/

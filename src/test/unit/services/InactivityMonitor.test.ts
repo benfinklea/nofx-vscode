@@ -1,10 +1,23 @@
 import { InactivityMonitor, InactivityConfig, InactivityStatus } from '../../../services/InactivityMonitor';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 describe('InactivityMonitor', () => {
     let monitor: InactivityMonitor;
     let consoleLogSpy: jest.SpyInstance;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.useFakeTimers();
         monitor = new InactivityMonitor();
         consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
@@ -125,12 +138,16 @@ describe('InactivityMonitor', () => {
 
         it('should log activity with type', () => {
             monitor.recordActivity('agent-1', 'code-completion');
-            expect(consoleLogSpy).toHaveBeenCalledWith('[InactivityMonitor] Activity recorded for agent agent-1: code-completion');
+            expect(consoleLogSpy).toHaveBeenCalledWith(
+                '[InactivityMonitor] Activity recorded for agent agent-1: code-completion'
+            );
         });
 
         it('should log activity without type', () => {
             monitor.recordActivity('agent-1');
-            expect(consoleLogSpy).toHaveBeenCalledWith('[InactivityMonitor] Activity recorded for agent agent-1: general');
+            expect(consoleLogSpy).toHaveBeenCalledWith(
+                '[InactivityMonitor] Activity recorded for agent agent-1: general'
+            );
         });
 
         it('should re-setup timers after recording activity', () => {

@@ -12,11 +12,27 @@ import { MetricsService } from '../../services/MetricsService';
 import { CommandService } from '../../services/CommandService';
 import { setupMockWorkspace, clearMockWorkspace } from './setup';
 import { TestHarness } from './testHarness';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
 
 /**
  * Comprehensive smoke tests for all commands registered in package.json
  * This test suite verifies that all commands can be executed without throwing unhandled exceptions
  */
+jest.mock('vscode');
+
+jest.setTimeout(10000);
+
+jest.mock('ws');
 describe('Command Smoke Tests', () => {
     let container: Container;
     let context: vscode.ExtensionContext;
@@ -86,9 +102,7 @@ describe('Command Smoke Tests', () => {
     // Dynamically determine based on known patterns
     const UI_COMMANDS = () => {
         const patterns = ['add', 'create', 'edit', 'browse', 'import', 'start', 'quickStart'];
-        return expected.filter(cmd =>
-            patterns.some(pattern => cmd.toLowerCase().includes(pattern.toLowerCase()))
-        );
+        return expected.filter(cmd => patterns.some(pattern => cmd.toLowerCase().includes(pattern.toLowerCase())));
     };
 
     // Commands that are interactive/external and should be skipped or mocked
@@ -221,6 +235,10 @@ describe('Command Smoke Tests', () => {
     describe('Command Execution Without Errors', () => {
         // Mock UI interactions
         beforeEach(() => {
+            const mockWorkspace = {
+                getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() })
+            };
+            (global as any).vscode = { workspace: mockWorkspace };
             // Mock quick pick
             jest.spyOn(vscode.window, 'showQuickPick').mockImplementation(async (items: any) => {
                 if (Array.isArray(items)) {
@@ -274,9 +292,7 @@ describe('Command Smoke Tests', () => {
                         'Claude CLI not found'
                     ];
 
-                    const isExpectedError = expectedErrors.some(msg =>
-                        error!.message.includes(msg)
-                    );
+                    const isExpectedError = expectedErrors.some(msg => error!.message.includes(msg));
 
                     expect(isExpectedError).toBe(true);
                 }
@@ -287,11 +303,7 @@ describe('Command Smoke Tests', () => {
             // Clear mock workspace to simulate no workspace
             clearMockWorkspace();
 
-            const workspaceCommands = [
-                'nofx.addAgent',
-                'nofx.startConductor',
-                'nofx.createTask'
-            ];
+            const workspaceCommands = ['nofx.addAgent', 'nofx.startConductor', 'nofx.createTask'];
 
             for (const command of workspaceCommands) {
                 const errorSpy = jest.spyOn(vscode.window, 'showErrorMessage');
@@ -312,9 +324,7 @@ describe('Command Smoke Tests', () => {
 
             for (const command of UI_COMMANDS) {
                 // Should not throw when user cancels
-                await expect(
-                    vscode.commands.executeCommand(command)
-                ).resolves.not.toThrow();
+                await expect(vscode.commands.executeCommand(command)).resolves.not.toThrow();
             }
         });
     });
@@ -369,16 +379,11 @@ describe('Command Smoke Tests', () => {
             expect(config.get('testMode')).toBe(true);
 
             // Verify orchestration server doesn't start in test mode
-            const orchestrationCommands = [
-                'nofx.showOrchestrator',
-                'nofx.openMessageFlow'
-            ];
+            const orchestrationCommands = ['nofx.showOrchestrator', 'nofx.openMessageFlow'];
 
             for (const command of orchestrationCommands) {
                 // Should execute without starting actual servers
-                await expect(
-                    vscode.commands.executeCommand(command)
-                ).resolves.not.toThrow();
+                await expect(vscode.commands.executeCommand(command)).resolves.not.toThrow();
             }
         });
 
@@ -390,9 +395,7 @@ describe('Command Smoke Tests', () => {
             ];
 
             for (const command of externalCommands) {
-                await expect(
-                    vscode.commands.executeCommand(command)
-                ).resolves.not.toThrow();
+                await expect(vscode.commands.executeCommand(command)).resolves.not.toThrow();
             }
         });
 

@@ -64,10 +64,18 @@ try {
             return this.analyzeFile();
         }
 
-        getComponents() { return new Map(); }
-        getDependencyGraph() { return new Map(); }
-        findCircularDependencies() { return []; }
-        findUnusedExports() { return []; }
+        getComponents() {
+            return new Map();
+        }
+        getDependencyGraph() {
+            return new Map();
+        }
+        findCircularDependencies() {
+            return [];
+        }
+        findUnusedExports() {
+            return [];
+        }
         generateMetrics() {
             return {
                 averageComplexity: 0,
@@ -77,10 +85,18 @@ try {
                 functionCount: 0
             };
         }
-        calculateQualityScore() { return 100; }
-        generateSuggestions() { return ['TypeScript not available']; }
-        isCached() { return false; }
-        getCachedAnalysis() { return undefined; }
+        calculateQualityScore() {
+            return 100;
+        }
+        generateSuggestions() {
+            return ['TypeScript not available'];
+        }
+        isCached() {
+            return false;
+        }
+        getCachedAnalysis() {
+            return undefined;
+        }
     };
 }
 
@@ -104,10 +120,30 @@ export type {
     AggregatedComplexityMetrics,
     FileChangeEvent,
     AnalysisCacheEntry,
-    AnalyzerPerformance
+    AnalyzerPerformance,
+    PerformanceSnapshot,
+    PerformanceHistory,
+    PerformanceTrend,
+    ScoringWeights,
+    PerformanceThresholds,
+    StuckAgentDetection
 } from './types';
 
 // Re-export commonly used types for convenience
-export type {
-    ImportSpecifier
+export type { ImportSpecifier } from './types';
+
+// Load balancing types - re-exported from types.ts
+export {
+    LoadBalancingStrategy,
+    LoadBalancingConfig,
+    LoadBalancingMetrics,
+    LoadBalancingEvent,
+    AgentCapacityScore,
+    TaskReassignmentReason,
+    AgentWorkload,
+    TaskDistributionPlan,
+    TaskReassignment,
+    LoadBalancingResult,
+    ReassignmentResult,
+    CapacityScoringWeights
 } from './types';

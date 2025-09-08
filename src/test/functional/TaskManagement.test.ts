@@ -15,6 +15,19 @@ import { Task, TaskStatus } from '../../types/task';
 import { Agent } from '../../types/agent';
 import { setupMockWorkspace, clearMockWorkspace } from './setup';
 import { TestHarness } from './testHarness';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../helpers/mockFactories';
+
+jest.mock('vscode');
 
 describe('Task Management', () => {
     let container: Container;
@@ -33,6 +46,8 @@ describe('Task Management', () => {
     });
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         // Reset container state between tests but preserve command registrations
         TestHarness.resetContainer();
 
@@ -204,7 +219,9 @@ describe('Task Management', () => {
             const task1 = taskQueue.addTask({ description: 'Task 1', priority: 'medium' });
             const task2 = taskQueue.addTask({ description: 'Task 2', priority: 'high' });
 
-            jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValueOnce(task1).mockResolvedValueOnce('Resolve by priority');
+            jest.spyOn(vscode.window, 'showQuickPick')
+                .mockResolvedValueOnce(task1)
+                .mockResolvedValueOnce('Resolve by priority');
 
             await vscode.commands.executeCommand('nofx.resolveTaskConflict', { taskId: task1.id });
 
@@ -303,4 +320,3 @@ describe('Task Management', () => {
         });
     });
 });
-

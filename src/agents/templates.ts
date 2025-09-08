@@ -164,11 +164,7 @@ export const AGENT_GROUPS: { [key: string]: AgentGroupTemplate } = {
     'fullstack-team': {
         name: 'Full-Stack Team',
         description: 'Next.js developer, Backend engineer, and QA',
-        agents: [
-            AGENT_TEMPLATES['fullstack-next'],
-            AGENT_TEMPLATES['backend-node'],
-            AGENT_TEMPLATES['qa-automation']
-        ]
+        agents: [AGENT_TEMPLATES['fullstack-next'], AGENT_TEMPLATES['backend-node'], AGENT_TEMPLATES['qa-automation']]
     },
 
     'startup-team': {

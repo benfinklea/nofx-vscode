@@ -45,26 +45,14 @@ export class ConductorPanel {
         loggingService: ILoggingService,
         webviewHostFactory: WebviewHostFactory = createWebviewHost
     ): ConductorPanel {
-        const panel = vscode.window.createWebviewPanel(
-            'nofxConductor',
-            'NofX Conductor',
-            vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-                localResourceRoots: [
-                    vscode.Uri.joinPath(context.extensionUri, 'webview')
-                ]
-            }
-        );
+        const panel = vscode.window.createWebviewPanel('nofxConductor', 'NofX Conductor', vscode.ViewColumn.One, {
+            enableScripts: true,
+            retainContextWhenHidden: true,
+            localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'webview')]
+        });
 
         const webviewHost = webviewHostFactory(panel, loggingService);
-        ConductorPanel.currentPanel = new ConductorPanel(
-            webviewHost,
-            context,
-            viewModel,
-            loggingService
-        );
+        ConductorPanel.currentPanel = new ConductorPanel(webviewHost, context, viewModel, loggingService);
 
         return ConductorPanel.currentPanel;
     }
@@ -85,7 +73,6 @@ export class ConductorPanel {
     public reveal() {
         this.webviewHost.reveal();
     }
-
 
     public dispose() {
         if (this.disposed) {

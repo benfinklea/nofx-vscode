@@ -10,6 +10,10 @@ interface ScoringWeights {
     performanceFactor: number;
 }
 
+interface CustomAgentThreshold {
+    customAgentThreshold: number;
+}
+
 interface AgentScore {
     agent: Agent;
     score: number;
@@ -26,6 +30,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
     private readonly logger: ILoggingService;
     private readonly configService: IConfigurationService;
     private weights: ScoringWeights;
+    private customAgentThreshold: number;
     private configChangeDisposable?: vscode.Disposable;
 
     // Bidirectional capability synonyms using sets for efficient matching
@@ -50,12 +55,15 @@ export class CapabilityMatcher implements ICapabilityMatcher {
 
         // Initialize with default weights
         this.weights = {
-            capabilityMatch: 0.40,
+            capabilityMatch: 0.4,
             specializationMatch: 0.25,
-            typeMatch: 0.20,
-            workloadFactor: 0.10,
+            typeMatch: 0.2,
+            workloadFactor: 0.1,
             performanceFactor: 0.05
         };
+
+        // Initialize custom agent threshold (70% by default)
+        this.customAgentThreshold = 0.7;
 
         // Initialize bidirectional capability synonyms
         this.initializeCapabilitySynonyms();
@@ -65,7 +73,10 @@ export class CapabilityMatcher implements ICapabilityMatcher {
 
         // Listen to configuration changes using proper IConfigurationService API
         this.configChangeDisposable = this.configService.onDidChange((e: vscode.ConfigurationChangeEvent) => {
-            if (e.affectsConfiguration('nofx.matcher.weights')) {
+            if (
+                e.affectsConfiguration('nofx.matcher.weights') ||
+                e.affectsConfiguration('nofx.matcher.customAgentThreshold')
+            ) {
                 this.loadWeightsFromConfig();
             }
         });
@@ -84,18 +95,31 @@ export class CapabilityMatcher implements ICapabilityMatcher {
      */
     scoreAgentWithBreakdown(agent: Agent, task: Task): { score: number; breakdown: AgentScore['breakdown'] } {
         const breakdown = this.calculateScoreBreakdown(agent, task);
+        
+        // Ensure all breakdown values are finite numbers
+        const safeBreakdown = {
+            capabilityMatch: Number.isFinite(breakdown.capabilityMatch) ? breakdown.capabilityMatch : 0,
+            specializationMatch: Number.isFinite(breakdown.specializationMatch) ? breakdown.specializationMatch : 0,
+            typeMatch: Number.isFinite(breakdown.typeMatch) ? breakdown.typeMatch : 0,
+            workloadFactor: Number.isFinite(breakdown.workloadFactor) ? breakdown.workloadFactor : 0,
+            performanceFactor: Number.isFinite(breakdown.performanceFactor) ? breakdown.performanceFactor : 0
+        };
+        
         const totalScore =
-            breakdown.capabilityMatch * this.weights.capabilityMatch +
-            breakdown.specializationMatch * this.weights.specializationMatch +
-            breakdown.typeMatch * this.weights.typeMatch +
-            breakdown.workloadFactor * this.weights.workloadFactor +
-            breakdown.performanceFactor * this.weights.performanceFactor;
+            safeBreakdown.capabilityMatch * this.weights.capabilityMatch +
+            safeBreakdown.specializationMatch * this.weights.specializationMatch +
+            safeBreakdown.typeMatch * this.weights.typeMatch +
+            safeBreakdown.workloadFactor * this.weights.workloadFactor +
+            safeBreakdown.performanceFactor * this.weights.performanceFactor;
 
+        // Ensure total score is finite, otherwise default to 0
+        const safeTotalScore = Number.isFinite(totalScore) ? totalScore : 0;
+        
         // Clamp total score to [0, 1] range
-        const clampedScore = Math.max(0, Math.min(1, totalScore));
+        const clampedScore = Math.max(0, Math.min(1, safeTotalScore));
 
-        this.logger.debug(`Agent ${agent.id} scored ${clampedScore.toFixed(2)} for task ${task.id}`, breakdown);
-        return { score: clampedScore, breakdown };
+        this.logger.debug(`Agent ${agent.id} scored ${clampedScore.toFixed(2)} for task ${task.id}`, safeBreakdown);
+        return { score: clampedScore, breakdown: safeBreakdown };
     }
 
     /**
@@ -127,11 +151,15 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         // Check minimum score threshold (configurable, default 0)
         const minScore = this.configService?.get<number>('nofx.matcher.minScore', 0) || 0;
         if (bestAgent.score < minScore) {
-            this.logger.warn(`Best agent ${bestAgent.agent.id} score ${bestAgent.score.toFixed(2)} below minimum threshold ${minScore} for task ${task.id}`);
+            this.logger.warn(
+                `Best agent ${bestAgent.agent.id} score ${bestAgent.score.toFixed(2)} below minimum threshold ${minScore} for task ${task.id}`
+            );
             return null;
         }
 
-        this.logger.info(`Best agent for task ${task.id}: ${bestAgent.agent.id} (score: ${bestAgent.score.toFixed(2)})`);
+        this.logger.info(
+            `Best agent for task ${task.id}: ${bestAgent.agent.id} (score: ${bestAgent.score.toFixed(2)})`
+        );
 
         return bestAgent.agent;
     }
@@ -139,7 +167,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
     /**
      * Ranks all agents by their suitability for a task
      */
-    rankAgents(agents: Agent[], task: Task): Array<{agent: Agent, score: number}> {
+    rankAgents(agents: Agent[], task: Task): Array<{ agent: Agent; score: number }> {
         return agents
             .map(agent => ({
                 agent,
@@ -152,13 +180,17 @@ export class CapabilityMatcher implements ICapabilityMatcher {
      * Calculates capability match score between agent and task
      */
     calculateCapabilityMatch(agentCapabilities: string[], requiredCapabilities: string[]): number {
-        if (requiredCapabilities.length === 0) {
+        // Safely handle null/undefined arrays
+        const agentCaps = Array.isArray(agentCapabilities) ? agentCapabilities : [];
+        const requiredCaps = Array.isArray(requiredCapabilities) ? requiredCapabilities : [];
+        
+        if (requiredCaps.length === 0) {
             return 1.0; // No requirements means perfect match
         }
 
         // Normalize capabilities to lowercase
-        const normalizedAgentCapabilities = agentCapabilities.map(cap => cap.toLowerCase());
-        const normalizedRequiredCapabilities = requiredCapabilities.map(cap => cap.toLowerCase());
+        const normalizedAgentCapabilities = agentCaps.map(cap => (cap || '').toLowerCase());
+        const normalizedRequiredCapabilities = requiredCaps.map(cap => (cap || '').toLowerCase());
 
         let matchCount = 0;
         const totalRequired = normalizedRequiredCapabilities.length;
@@ -169,14 +201,22 @@ export class CapabilityMatcher implements ICapabilityMatcher {
             }
         }
 
-        const matchScore = matchCount / totalRequired;
+        const matchScore = totalRequired > 0 ? matchCount / totalRequired : 0;
 
         // Apply negative penalty for poor capability matches
         if (matchScore === 0) {
             return -0.2;
         }
 
-        return matchScore;
+        // Ensure result is a valid number
+        return Number.isFinite(matchScore) ? matchScore : 0;
+    }
+
+    /**
+     * Alias for calculateCapabilityMatch - used by TaskQueue
+     */
+    calculateMatchScore(agentCapabilities: string[], requiredCapabilities: string[]): number {
+        return this.calculateCapabilityMatch(agentCapabilities, requiredCapabilities);
     }
 
     /**
@@ -281,15 +321,23 @@ export class CapabilityMatcher implements ICapabilityMatcher {
     /**
      * Calculates specialization match score
      */
-    private calculateSpecializationMatch(specialization: string | undefined, taskDescription: string, taskTags: string[]): number {
+    private calculateSpecializationMatch(
+        specialization: string | undefined,
+        taskDescription: string,
+        taskTags: string[]
+    ): number {
         // Treat missing specialization as neutral (return 0)
         if (!specialization || typeof specialization !== 'string') {
             return 0;
         }
 
-        const specializationWords = specialization.toLowerCase().split(/[,\s]+/);
-        const descriptionWords = taskDescription.toLowerCase().split(/\s+/);
-        const tagWords = taskTags.map(tag => tag.toLowerCase());
+        // Safely handle task inputs
+        const safeTaskDescription = taskDescription || '';
+        const safeTags = Array.isArray(taskTags) ? taskTags : [];
+
+        const specializationWords = specialization.toLowerCase().split(/[,\s]+/).filter(word => word.length > 0);
+        const descriptionWords = safeTaskDescription.toLowerCase().split(/\s+/).filter(word => word.length > 0);
+        const tagWords = safeTags.map(tag => (tag || '').toLowerCase()).filter(tag => tag.length > 0);
 
         let matchCount = 0;
         const totalSpecializationWords = specializationWords.length;
@@ -307,7 +355,8 @@ export class CapabilityMatcher implements ICapabilityMatcher {
             return -0.1;
         }
 
-        return matchScore;
+        // Ensure result is a valid number
+        return Number.isFinite(matchScore) ? matchScore : 0;
     }
 
     /**
@@ -319,6 +368,11 @@ export class CapabilityMatcher implements ICapabilityMatcher {
             return 0;
         }
 
+        // Safely handle null/undefined task
+        if (!task) {
+            return 0;
+        }
+
         // Infer task type from description and tags
         const taskType = this.inferTaskType(task);
 
@@ -326,7 +380,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
             return 0; // Return 0 for unknown types to avoid bias
         }
 
-        const compatibleTypes = this.typeCompatibility.get(agentType) || [];
+        const compatibleTypes = this.typeCompatibility.get(agentType.toLowerCase()) || [];
         if (compatibleTypes.includes(taskType)) {
             return 1.0;
         } else {
@@ -339,7 +393,13 @@ export class CapabilityMatcher implements ICapabilityMatcher {
      * Infers task type from description and tags
      */
     private inferTaskType(task: Task): string | null {
-        const text = `${task.description} ${(task.tags || []).join(' ')}`.toLowerCase();
+        if (!task) {
+            return null;
+        }
+        
+        const description = task.description || '';
+        const tags = Array.isArray(task.tags) ? task.tags : [];
+        const text = `${description} ${tags.join(' ')}`.toLowerCase();
 
         if (text.includes('frontend') || text.includes('react') || text.includes('ui') || text.includes('css')) {
             return 'frontend';
@@ -384,12 +444,13 @@ export class CapabilityMatcher implements ICapabilityMatcher {
      */
     private calculatePerformanceFactor(agent: Agent): number {
         // Simple heuristic based on tasks completed
-        if (agent.tasksCompleted === 0) {
+        const tasksCompleted = agent.tasksCompleted || 0;
+        if (tasksCompleted === 0) {
             return 0.5; // Neutral for new agents
         }
 
         // Prefer agents with more completed tasks (experience)
-        return Math.min(1.0, agent.tasksCompleted / 10);
+        return Math.min(1.0, tasksCompleted / 10);
     }
 
     /**
@@ -463,19 +524,102 @@ export class CapabilityMatcher implements ICapabilityMatcher {
     }
 
     /**
+     * Gets the custom agent threshold
+     */
+    getCustomAgentThreshold(): number {
+        return this.customAgentThreshold;
+    }
+
+    /**
+     * Gets the best agent score for a task without returning the agent
+     */
+    getBestAgentScore(agents: Agent[], task: Task): number {
+        if (agents.length === 0) {
+            return 0;
+        }
+
+        // Filter to only idle agents
+        const idleAgents = agents.filter(agent => agent.status === 'idle');
+        if (idleAgents.length === 0) {
+            return 0;
+        }
+
+        // Score all idle agents and get the highest score
+        const scores = idleAgents.map(agent => this.scoreAgent(agent, task));
+        return Math.max(...scores);
+    }
+
+    /**
+     * Determines if a custom agent should be created based on threshold
+     */
+    shouldCreateCustomAgent(agents: Agent[], task: Task): boolean {
+        // Check if there are any idle agents first
+        const idleAgents = agents.filter(agent => agent.status === 'idle');
+        if (idleAgents.length === 0) {
+            this.logger.info(`Custom agent creation deferred for task ${task.id} - no idle agents available`);
+            return false;
+        }
+
+        const bestScore = this.getBestAgentScore(agents, task);
+        const shouldCreate = bestScore < this.customAgentThreshold;
+
+        if (shouldCreate) {
+            this.logger.info(
+                `Custom agent creation triggered for task ${task.id}. Best score: ${bestScore.toFixed(2)}, threshold: ${this.customAgentThreshold}`
+            );
+        }
+
+        return shouldCreate;
+    }
+
+    /**
+     * Gets explanation for why custom agent creation was triggered
+     */
+    getThresholdExplanation(bestScore: number, threshold: number): string {
+        const percentage = (bestScore * 100).toFixed(1);
+        const thresholdPercentage = (threshold * 100).toFixed(1);
+
+        return `Best available agent scored ${percentage}% (${bestScore.toFixed(2)}), which is below the custom agent threshold of ${thresholdPercentage}% (${threshold.toFixed(2)}). A specialized custom agent will be created.`;
+    }
+
+    /**
      * Loads weights from configuration
      */
     private loadWeightsFromConfig(): void {
         if (!this.configService) return;
 
         // Use proper IConfigurationService API with get<T>(key, default?)
-        this.weights.capabilityMatch = this.configService.get<number>('nofx.matcher.weights.capabilityMatch', this.weights.capabilityMatch);
-        this.weights.specializationMatch = this.configService.get<number>('nofx.matcher.weights.specializationMatch', this.weights.specializationMatch);
-        this.weights.typeMatch = this.configService.get<number>('nofx.matcher.weights.typeMatch', this.weights.typeMatch);
-        this.weights.workloadFactor = this.configService.get<number>('nofx.matcher.weights.workloadFactor', this.weights.workloadFactor);
-        this.weights.performanceFactor = this.configService.get<number>('nofx.matcher.weights.performanceFactor', this.weights.performanceFactor);
+        this.weights.capabilityMatch = this.configService.get<number>(
+            'nofx.matcher.weights.capabilityMatch',
+            this.weights.capabilityMatch
+        );
+        this.weights.specializationMatch = this.configService.get<number>(
+            'nofx.matcher.weights.specializationMatch',
+            this.weights.specializationMatch
+        );
+        this.weights.typeMatch = this.configService.get<number>(
+            'nofx.matcher.weights.typeMatch',
+            this.weights.typeMatch
+        );
+        this.weights.workloadFactor = this.configService.get<number>(
+            'nofx.matcher.weights.workloadFactor',
+            this.weights.workloadFactor
+        );
+        this.weights.performanceFactor = this.configService.get<number>(
+            'nofx.matcher.weights.performanceFactor',
+            this.weights.performanceFactor
+        );
 
-        this.logger.info('CapabilityMatcher weights loaded from configuration', this.weights);
+        // Load custom agent threshold with validation and clamping
+        const t = this.configService.get<number>('nofx.matcher.customAgentThreshold', this.customAgentThreshold);
+        this.customAgentThreshold = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0.7;
+        if (t !== this.customAgentThreshold)
+            this.logger.warn(`Adjusted customAgentThreshold from ${t} to ${this.customAgentThreshold}`);
+
+        this.logger.info('CapabilityMatcher weights and threshold loaded from configuration', {
+            weights: this.weights,
+            customAgentThreshold: this.customAgentThreshold
+        });
     }
 
     dispose(): void {

@@ -361,7 +361,7 @@ const fullPrompt = agent.template.systemPrompt +
     'Please wait for further instructions. ' +
     "Don't do anything yet. Just wait.";
 const escapedPrompt = fullPrompt.replace(/'/g, "'\\''");
-terminal.sendText(`${claudePath} --append-system-prompt '${escapedPrompt}'`);
+terminal.sendText(`${aiPath} --append-system-prompt '${escapedPrompt}'`);
 ```
 
 ## 🚀 Future Enhancements

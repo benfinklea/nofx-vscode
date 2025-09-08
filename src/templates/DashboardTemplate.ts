@@ -249,18 +249,22 @@ export class DashboardTemplate {
             if (connections.length === 0) {
                 return '<p style="text-align: center; color: var(--vscode-descriptionForeground);">No active connections</p>';
             }
-            return connections.map(conn => \`
-                <div class="agent-card">
-                    <div class="agent-info">
-                        <div class="connection-status status-\${conn.status}"></div>
-                        <div>
-                            <strong>\${conn.name}</strong>
-                            <br><small>\${conn.status}</small>
-                            \${conn.lastMessage ? '<br><small>Last: ' + new Date(conn.lastMessage).toLocaleTimeString() + '</small>' : ''}
-                        </div>
-                    </div>
-                </div>
-            \`).join('');
+            return connections.map(function(conn) {
+                var lastMessageHtml = '';
+                if (conn.lastMessage) {
+                    lastMessageHtml = '<br><small>Last: ' + new Date(conn.lastMessage).toLocaleTimeString() + '</small>';
+                }
+                return '<div class="agent-card">' +
+                    '<div class="agent-info">' +
+                        '<div class="connection-status status-' + conn.status + '"></div>' +
+                        '<div>' +
+                            '<strong>' + conn.name + '</strong>' +
+                            '<br><small>' + conn.status + '</small>' +
+                            lastMessageHtml +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
         }
         
         function generateMessageList(messages) {
@@ -271,18 +275,19 @@ export class DashboardTemplate {
         }
         
         function createMessageElement(message) {
-            return \`
-                <div class="message-item \${message.type}">
-                    <div class="message-header">
-                        <span class="message-type">\${message.type.toUpperCase()}</span>
-                        <span class="message-timestamp">\${new Date(message.timestamp).toLocaleString()}</span>
-                    </div>
-                    <div class="message-content">\${message.content}</div>
-                    <div class="message-meta">
-                        From: \${message.source}\${message.target ? ' → ' + message.target : ''}
-                    </div>
-                </div>
-            \`;
+            var targetInfo = message.target ? ' → ' + message.target : '';
+            var safeContent = String(message.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            return '<div class="message-item ' + message.type + '">' +
+                '<div class="message-header">' +
+                    '<span class="message-type">' + message.type.toUpperCase() + '</span>' +
+                    '<span class="message-timestamp">' + new Date(message.timestamp).toLocaleString() + '</span>' +
+                '</div>' +
+                '<div class="message-content"><pre>' + safeContent + '</pre></div>' +
+                '<div class="message-meta">' +
+                    'From: ' + message.source + targetInfo +
+                '</div>' +
+            '</div>';
         }
     </script>
 </body>
@@ -342,7 +347,9 @@ export class DashboardTemplate {
         if (messages.length === 0) {
             return '<p style="text-align: center; color: var(--vscode-descriptionForeground);">No messages</p>';
         }
-        return messages.map(message => `
+        return messages
+            .map(
+                message => `
             <div class="message-item ${message.type}">
                 <div class="message-header">
                     <span class="message-type">${message.type.toUpperCase()}</span>
@@ -353,14 +360,18 @@ export class DashboardTemplate {
                     From: ${message.source}${message.target ? ' → ' + message.target : ''}
                 </div>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
     }
 
     generateAgentGrid(connections: any[]): string {
         if (connections.length === 0) {
             return '<p style="text-align: center; color: var(--vscode-descriptionForeground);">No active connections</p>';
         }
-        return connections.map(conn => `
+        return connections
+            .map(
+                conn => `
             <div class="agent-card">
                 <div class="agent-info">
                     <div class="connection-status status-${conn.status}"></div>
@@ -371,13 +382,15 @@ export class DashboardTemplate {
                     </div>
                 </div>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
     }
 
     private generateSourceOptions(connections: any[]): string {
         const sources = new Set(connections.map(conn => conn.name));
-        return Array.from(sources).map(source =>
-            `<option value="${source}">${source}</option>`
-        ).join('');
+        return Array.from(sources)
+            .map(source => `<option value="${source}">${source}</option>`)
+            .join('');
     }
 }

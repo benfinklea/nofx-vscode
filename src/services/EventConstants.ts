@@ -9,12 +9,22 @@ export const DOMAIN_EVENTS = {
     AGENT_CREATED: 'agent.created',
     AGENT_REMOVED: 'agent.removed',
     AGENT_STATUS_CHANGED: 'agent.status.changed',
+    AGENT_TERMINATED: 'agent.terminated',
+    AGENT_FAILED: 'agent.failed',
+    AGENT_RECOVERY_STARTED: 'agent.recovery.started',
+    AGENT_RECOVERY_COMPLETED: 'agent.recovery.completed',
 
     // Agent lifecycle events
     AGENT_LIFECYCLE_SPAWNING: 'agent.lifecycle.spawning',
     AGENT_LIFECYCLE_SPAWNED: 'agent.lifecycle.spawned',
     AGENT_LIFECYCLE_REMOVING: 'agent.lifecycle.removing',
     AGENT_LIFECYCLE_REMOVED: 'agent.lifecycle.removed',
+
+    // Agent spawn events (batch operations)
+    AGENT_SPAWN_REQUESTED: 'agent.spawn.requested',
+    AGENT_SPAWN_SUCCESS: 'agent.spawn.success',
+    AGENT_SPAWN_FAILED: 'agent.spawn.failed',
+    AGENT_SPAWN_BATCH_COMPLETE: 'agent.spawn.batch.complete',
 
     // Task events
     TASK_CREATED: 'task.created',
@@ -25,6 +35,8 @@ export const DOMAIN_EVENTS = {
     TASK_BLOCKED: 'task.blocked',
     TASK_READY: 'task.ready',
     TASK_WAITING: 'task.waiting',
+    TASK_ADDED: 'task.added',
+    TASK_PROGRESS: 'task.progress',
     TASK_DEPENDENCY_ADDED: 'task.dependency.added',
     TASK_DEPENDENCY_REMOVED: 'task.dependency.removed',
     TASK_DEPENDENCY_RESOLVED: 'task.dependency.resolved',
@@ -49,16 +61,57 @@ export const DOMAIN_EVENTS = {
     WORKTREE_CREATED: 'worktree.created',
     WORKTREE_REMOVED: 'worktree.removed',
     WORKTREE_MERGED: 'worktree.merged',
+    WORKTREE_OPERATION_COMPLETE: 'worktree.operation.complete',
 
     // Terminal events
     TERMINAL_CREATED: 'terminal.created',
     TERMINAL_CLOSED: 'terminal.closed',
     TERMINAL_DISPOSED: 'terminal.disposed',
+    TERMINAL_COMMAND: 'terminal.command',
 
     // Agent task events
     AGENT_TASK_ASSIGNED: 'agent.task.assigned',
     AGENT_TASK_COMPLETED: 'agent.task.completed',
-    AGENT_TASK_INTERRUPTED: 'agent.task.interrupted'
+    AGENT_TASK_INTERRUPTED: 'agent.task.interrupted',
+
+    // Session management events
+    SESSION_CREATED: 'session.created',
+    SESSION_ARCHIVED: 'session.archived',
+    SESSION_RESTORED: 'session.restored',
+    SESSION_EXPIRED: 'session.expired',
+    SESSION_EXPIRY_WARNING: 'session.expiry.warning',
+    SESSION_TASK_STARTED: 'session.task.started',
+    SESSION_TASK_COMPLETED: 'session.task.completed',
+
+    // Persistence events
+    PERSISTENCE_OPERATION_COMPLETE: 'persistence.operation.complete',
+
+    // Dashboard events
+    DASHBOARD_COMMAND: 'dashboard.command',
+
+    // System events
+    SYSTEM_ERROR: 'system.error',
+
+    // Metrics events
+    METRICS_UPDATED: 'metrics.updated',
+
+    // Load balancing events
+    LOAD_BALANCING_EVENT: 'load.balancing.event'
+} as const;
+
+// Alias for common agent events
+export const AGENT_EVENTS = {
+    AGENT_CREATED: DOMAIN_EVENTS.AGENT_CREATED,
+    AGENT_TERMINATED: DOMAIN_EVENTS.AGENT_TERMINATED,
+    ALL_TERMINATED: 'agent.all.terminated'
+} as const;
+
+// Alias for common task events
+export const TASK_EVENTS = {
+    TASK_CREATED: DOMAIN_EVENTS.TASK_CREATED,
+    TASK_ASSIGNED: DOMAIN_EVENTS.TASK_ASSIGNED,
+    TASK_COMPLETED: DOMAIN_EVENTS.TASK_COMPLETED,
+    TASK_FAILED: DOMAIN_EVENTS.TASK_FAILED
 } as const;
 
 // Configuration events
@@ -263,7 +316,7 @@ export interface MessageValidationFailedPayload {
 }
 
 // Type helpers for event names
-export type DomainEventName = typeof DOMAIN_EVENTS[keyof typeof DOMAIN_EVENTS];
-export type OrchEventName = typeof ORCH_EVENTS[keyof typeof ORCH_EVENTS];
-export type UIEventName = typeof UI_EVENTS[keyof typeof UI_EVENTS];
+export type DomainEventName = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];
+export type OrchEventName = (typeof ORCH_EVENTS)[keyof typeof ORCH_EVENTS];
+export type UIEventName = (typeof UI_EVENTS)[keyof typeof UI_EVENTS];
 export type EventName = DomainEventName | OrchEventName | UIEventName;

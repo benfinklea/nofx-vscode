@@ -2,6 +2,17 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AgentTemplateManager, AgentTemplate } from '../../../agents/AgentTemplateManager';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 jest.mock('vscode');
 jest.mock('fs');
@@ -14,6 +25,8 @@ describe('AgentTemplateManager', () => {
     const mockBuiltInTemplatesDir = path.join(__dirname, 'templates');
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.clearAllMocks();
 
         // Mock fs operations
@@ -84,9 +97,7 @@ describe('AgentTemplateManager', () => {
                 }
             };
 
-            (fs.existsSync as jest.Mock).mockImplementation((dir) =>
-                dir.includes('templates')
-            );
+            (fs.existsSync as jest.Mock).mockImplementation(dir => dir.includes('templates'));
             (fs.readdirSync as jest.Mock).mockReturnValue(['test.json']);
             (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(mockTemplate));
 
@@ -140,12 +151,12 @@ describe('AgentTemplateManager', () => {
             };
 
             (fs.existsSync as jest.Mock).mockImplementation(() => true);
-            (fs.readdirSync as jest.Mock).mockImplementation((dir) => {
+            (fs.readdirSync as jest.Mock).mockImplementation(dir => {
                 if (dir === mockBuiltInTemplatesDir) return ['backend.json'];
                 if (dir === mockTemplatesDir) return ['backend-specialist.json'];
                 return [];
             });
-            (fs.readFileSync as jest.Mock).mockImplementation((filepath) => {
+            (fs.readFileSync as jest.Mock).mockImplementation(filepath => {
                 if (filepath.includes('backend.json')) return JSON.stringify(builtInTemplate);
                 if (filepath.includes('backend-specialist.json')) return JSON.stringify(userTemplate);
                 return '{}';
@@ -180,10 +191,8 @@ describe('AgentTemplateManager', () => {
                 }
             };
 
-            (fs.existsSync as jest.Mock).mockImplementation((dir) =>
-                dir === mockCustomTemplatesDir
-            );
-            (fs.readdirSync as jest.Mock).mockImplementation((dir) => {
+            (fs.existsSync as jest.Mock).mockImplementation(dir => dir === mockCustomTemplatesDir);
+            (fs.readdirSync as jest.Mock).mockImplementation(dir => {
                 if (dir === mockCustomTemplatesDir) return ['my-agent.json'];
                 return [];
             });
@@ -268,16 +277,15 @@ describe('AgentTemplateManager', () => {
                 }
             };
 
-            (fs.existsSync as jest.Mock).mockImplementation((filepath) =>
-                filepath.includes('existing.json')
-            );
+            (fs.existsSync as jest.Mock).mockImplementation(filepath => filepath.includes('existing.json'));
             (vscode.window.showWarningMessage as jest.Mock).mockResolvedValue('Yes');
 
             const result = await manager.createTemplate(template);
 
             expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
                 expect.stringContaining('already exists'),
-                'Yes', 'No'
+                'Yes',
+                'No'
             );
             expect(result).toBe(true);
         });
@@ -361,7 +369,7 @@ describe('AgentTemplateManager', () => {
 
             (fs.existsSync as jest.Mock).mockReturnValue(true);
             (fs.readdirSync as jest.Mock).mockReturnValue(['frontend.json', 'backend.json']);
-            (fs.readFileSync as jest.Mock).mockImplementation((filepath) => {
+            (fs.readFileSync as jest.Mock).mockImplementation(filepath => {
                 if (filepath.includes('frontend.json')) return JSON.stringify(templates[0]);
                 if (filepath.includes('backend.json')) return JSON.stringify(templates[1]);
                 return '{}';
@@ -439,7 +447,7 @@ describe('AgentTemplateManager', () => {
                 }
             };
 
-            (fs.existsSync as jest.Mock).mockImplementation((filepath) => {
+            (fs.existsSync as jest.Mock).mockImplementation(filepath => {
                 if (filepath === mockTemplatesDir) return true;
                 if (filepath.includes('original.json')) return true;
                 return false;
@@ -524,17 +532,12 @@ describe('AgentTemplateManager', () => {
             };
 
             const uri = { fsPath: '/path/to/template.json' } as vscode.Uri;
-            (vscode.workspace.fs.readFile as jest.Mock).mockResolvedValue(
-                Buffer.from(JSON.stringify(templateContent))
-            );
+            (vscode.workspace.fs.readFile as jest.Mock).mockResolvedValue(Buffer.from(JSON.stringify(templateContent)));
 
             const result = await manager.importTemplate(uri);
 
             expect(result).toBe(true);
-            expect(fs.writeFileSync).toHaveBeenCalledWith(
-                expect.stringContaining('imported.json'),
-                expect.any(String)
-            );
+            expect(fs.writeFileSync).toHaveBeenCalledWith(expect.stringContaining('imported.json'), expect.any(String));
         });
 
         it('should reject invalid template format', async () => {
@@ -544,9 +547,7 @@ describe('AgentTemplateManager', () => {
             };
 
             const uri = { fsPath: '/path/to/invalid.json' } as vscode.Uri;
-            (vscode.workspace.fs.readFile as jest.Mock).mockResolvedValue(
-                Buffer.from(JSON.stringify(invalidTemplate))
-            );
+            (vscode.workspace.fs.readFile as jest.Mock).mockResolvedValue(Buffer.from(JSON.stringify(invalidTemplate)));
 
             const result = await manager.importTemplate(uri);
 
@@ -558,16 +559,12 @@ describe('AgentTemplateManager', () => {
 
         it('should handle file read errors', async () => {
             const uri = { fsPath: '/path/to/nonexistent.json' } as vscode.Uri;
-            (vscode.workspace.fs.readFile as jest.Mock).mockRejectedValue(
-                new Error('File not found')
-            );
+            (vscode.workspace.fs.readFile as jest.Mock).mockRejectedValue(new Error('File not found'));
 
             const result = await manager.importTemplate(uri);
 
             expect(result).toBe(false);
-            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-                expect.stringContaining('Failed to import')
-            );
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining('Failed to import'));
         });
     });
 
@@ -605,13 +602,8 @@ describe('AgentTemplateManager', () => {
 
             await manager.exportTemplate('export-test');
 
-            expect(vscode.workspace.fs.writeFile).toHaveBeenCalledWith(
-                saveUri,
-                expect.any(Buffer)
-            );
-            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                expect.stringContaining('exported')
-            );
+            expect(vscode.workspace.fs.writeFile).toHaveBeenCalledWith(saveUri, expect.any(Buffer));
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(expect.stringContaining('exported'));
         });
 
         it('should handle cancelled save dialog', async () => {
@@ -680,7 +672,7 @@ describe('AgentTemplateManager', () => {
                 }
             };
 
-            (fs.existsSync as jest.Mock).mockImplementation((filepath) => {
+            (fs.existsSync as jest.Mock).mockImplementation(filepath => {
                 if (filepath === mockTemplatesDir) return true;
                 if (filepath.includes('editable.json')) return true;
                 return false;
@@ -695,9 +687,7 @@ describe('AgentTemplateManager', () => {
 
             await manager.editTemplate('editable');
 
-            expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(
-                expect.stringContaining('editable.json')
-            );
+            expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(expect.stringContaining('editable.json'));
             expect(vscode.window.showTextDocument).toHaveBeenCalledWith(mockDocument);
         });
 
@@ -723,12 +713,12 @@ describe('AgentTemplateManager', () => {
                 }
             };
 
-            (fs.existsSync as jest.Mock).mockImplementation((filepath) => {
+            (fs.existsSync as jest.Mock).mockImplementation(filepath => {
                 if (filepath === mockCustomTemplatesDir) return true;
                 if (filepath.includes('my-custom.json')) return true;
                 return false;
             });
-            (fs.readdirSync as jest.Mock).mockImplementation((dir) => {
+            (fs.readdirSync as jest.Mock).mockImplementation(dir => {
                 if (dir === mockCustomTemplatesDir) return ['my-custom.json'];
                 return [];
             });

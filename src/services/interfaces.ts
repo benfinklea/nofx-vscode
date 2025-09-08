@@ -34,9 +34,14 @@ export const SERVICE_TOKENS = {
     ConductorViewModel: Symbol('ConductorViewModel'),
     DashboardViewModel: Symbol('DashboardViewModel'),
     TreeStateManager: Symbol('TreeStateManager'),
+    TaskToolBridge: Symbol('TaskToolBridge'),
+    TerminalMonitor: Symbol('TerminalMonitor'),
     AgentTreeViewHost: Symbol('AgentTreeViewHost'),
     MetricsService: Symbol('MetricsService'),
-    ConfigurationValidator: Symbol('ConfigurationValidator')
+    ConfigurationValidator: Symbol('ConfigurationValidator'),
+    SessionPersistenceService: Symbol('SessionPersistenceService'),
+    AutoWorktreeManager: Symbol('AutoWorktreeManager'),
+    AgentNotificationService: Symbol('AgentNotificationService')
 } as const;
 
 // Configuration service for managing VS Code configuration
@@ -51,11 +56,14 @@ export interface IConfigurationService {
 
     // NofX specific configuration methods
     getMaxAgents(): number;
-    getClaudePath(): string;
+    getAiProvider(): string;
+    getAiPath(): string;
     isAutoAssignTasks(): boolean;
     isUseWorktrees(): boolean;
+    isAutoManageWorktrees(): boolean;
     isShowAgentTerminalOnSpawn(): boolean;
     isClaudeSkipPermissions(): boolean;
+    getClaudeInitializationDelay(): number;
     getTemplatesPath(): string;
     isPersistAgents(): boolean;
     getLogLevel(): string;
@@ -73,10 +81,19 @@ export interface INotificationService {
     showInformation(message: string, ...items: string[]): Promise<string | undefined>;
     showWarning(message: string, ...items: string[]): Promise<string | undefined>;
     showError(message: string, ...items: string[]): Promise<string | undefined>;
-    showQuickPick<T extends vscode.QuickPickItem>(items: T[], options?: vscode.QuickPickOptions): Promise<T | undefined>;
-    showQuickPick<T extends vscode.QuickPickItem>(items: T[], options?: vscode.QuickPickOptions & { canPickMany: true }): Promise<T[] | undefined>;
+    showQuickPick<T extends vscode.QuickPickItem>(
+        items: T[],
+        options?: vscode.QuickPickOptions
+    ): Promise<T | undefined>;
+    showQuickPick<T extends vscode.QuickPickItem>(
+        items: T[],
+        options?: vscode.QuickPickOptions & { canPickMany: true }
+    ): Promise<T[] | undefined>;
     showInputBox(options?: vscode.InputBoxOptions): Promise<string | undefined>;
-    withProgress<T>(options: vscode.ProgressOptions, task: (progress: vscode.Progress<{ message?: string; increment?: number }>) => Promise<T>): Promise<T>;
+    withProgress<T>(
+        options: vscode.ProgressOptions,
+        task: (progress: vscode.Progress<{ message?: string; increment?: number }>) => Promise<T>
+    ): Promise<T>;
 
     // Confirmation dialogs
     confirm(message: string, confirmText?: string): Promise<boolean>;
@@ -84,11 +101,13 @@ export interface INotificationService {
 }
 
 // Log levels for the logging service
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = 'trace' | 'debug' | 'agents' | 'info' | 'warn' | 'error' | 'none';
 
 // Logging service for centralized, configurable logging
 export interface ILoggingService {
+    trace(message: string, data?: any): void;
     debug(message: string, data?: any): void;
+    agents(message: string, data?: any): void;
     info(message: string, data?: any): void;
     warn(message: string, data?: any): void;
     error(message: string, data?: any): void;
@@ -118,7 +137,7 @@ export interface IEventBus {
 
     // Utility methods
     once(event: string, handler: (data?: any) => void): vscode.Disposable;
-    filter(event: string, predicate: (data?: any) => boolean): { event: vscode.Event<any>, dispose: () => void };
+    filter(event: string, predicate: (data?: any) => boolean): { event: vscode.Event<any>; dispose: () => void };
     subscribePattern(pattern: string, handler: (event: string, data?: any) => void): vscode.Disposable;
 
     // Configuration methods
@@ -145,7 +164,11 @@ export interface IErrorHandler {
 // Command service for managing VS Code commands
 export interface ICommandService {
     register(commandId: string, handler: (...args: any[]) => any, thisArg?: any): vscode.Disposable;
-    registerTextEditorCommand(commandId: string, handler: (textEditor: vscode.TextEditor, edit: vscode.TextEditorEdit, ...args: any[]) => void, thisArg?: any): vscode.Disposable;
+    registerTextEditorCommand(
+        commandId: string,
+        handler: (textEditor: vscode.TextEditor, edit: vscode.TextEditorEdit, ...args: any[]) => void,
+        thisArg?: any
+    ): vscode.Disposable;
     execute(commandId: string, ...args: any[]): Promise<any>;
     getCommands(filterInternal?: boolean): Promise<string[]>;
     getRegisteredCommands(): string[];
@@ -161,6 +184,7 @@ export interface ITerminalManager {
     disposeTerminal(agentId: string): void;
     initializeAgentTerminal(agent: any, workingDirectory?: string): Promise<void>;
     createEphemeralTerminal(name: string): vscode.Terminal;
+    performHealthCheck(agentId: string): Promise<{ healthy: boolean; issues: string[] }>;
     onTerminalClosed: vscode.Event<vscode.Terminal>;
     dispose(): void;
 }
@@ -181,6 +205,8 @@ export interface IAgentLifecycleManager {
     spawnAgent(config: any, restoredId?: string): Promise<any>;
     removeAgent(agentId: string): Promise<boolean>;
     initialize(): Promise<void>;
+    startTaskMonitoring(agentId: string): void;
+    stopTaskMonitoring(agentId: string): void;
     dispose(): void;
 }
 
@@ -255,24 +281,27 @@ export class CircularDependencyError extends Error {
  */
 export const CONFIG_KEYS = {
     // Active in package.json
-    MAX_AGENTS: 'maxAgents',           // Maximum number of concurrent agents
-    CLAUDE_PATH: 'claudePath',         // Path to Claude Code CLI
+    MAX_AGENTS: 'maxAgents', // Maximum number of concurrent agents
+    AI_PROVIDER: 'aiProvider', // Selected AI provider (claude, aider, etc.)
+    AI_PATH: 'aiPath', // Path to AI CLI (Claude, Aider, etc.)
     AUTO_ASSIGN_TASKS: 'autoAssignTasks', // Auto-assign tasks to agents
-    AUTO_START: 'autoStart',           // Auto-start NofX on VS Code open
+    AUTO_START: 'autoStart', // Auto-start NofX on VS Code open
     AUTO_OPEN_DASHBOARD: 'autoOpenDashboard', // Auto-open MessageFlowDashboard on activation
-    USE_WORKTREES: 'useWorktrees',     // Use Git worktrees for agents
+    USE_WORKTREES: 'useWorktrees', // Use Git worktrees for agents
+    AUTO_MANAGE_WORKTREES: 'autoManageWorktrees', // Automatically manage worktrees
     SHOW_AGENT_TERMINAL_ON_SPAWN: 'showAgentTerminalOnSpawn', // Show agent terminal when spawned
     CLAUDE_SKIP_PERMISSIONS: 'claudeSkipPermissions', // Add --dangerously-skip-permissions flag
+    CLAUDE_INITIALIZATION_DELAY: 'nofx.claudeInitializationDelay', // Seconds to wait for Claude to initialize
     // Future/internal use (not in package.json yet)
-    TEMPLATES_PATH: 'templatesPath',   // (future) Custom templates path
-    PERSIST_AGENTS: 'persistAgents',   // (future) Persist agent state
-    LOG_LEVEL: 'logLevel',             // (future) Logging level
+    TEMPLATES_PATH: 'templatesPath', // (future) Custom templates path
+    PERSIST_AGENTS: 'persistAgents', // (future) Persist agent state
+    LOG_LEVEL: 'logLevel', // (future) Logging level
     ORCHESTRATION_PORT: 'orchestrationPort', // (future) WebSocket server port
     // Metrics configuration
-    ENABLE_METRICS: 'enableMetrics',   // Enable metrics collection
+    ENABLE_METRICS: 'enableMetrics', // Enable metrics collection
     METRICS_OUTPUT_LEVEL: 'metricsOutputLevel', // Metrics output detail level
     METRICS_RETENTION_HOURS: 'metricsRetentionHours', // Metrics retention hours
-    TEST_MODE: 'testMode',             // Test mode flag
+    TEST_MODE: 'testMode', // Test mode flag
     CLAUDE_COMMAND_STYLE: 'claudeCommandStyle', // Claude command style
     // Orchestration service configuration
     ORCH_HEARTBEAT_INTERVAL: 'orchestration.heartbeatInterval',
@@ -296,7 +325,17 @@ export interface IUIStateManager {
     updateAgentStats(): void;
     updateTaskStats(): void;
     getAgentStats(): { total: number; idle: number; working: number; error: number; offline: number };
-    getTaskStats(): { queued: number; validated: number; ready: number; assigned: number; inProgress: number; completed: number; failed: number; blocked: number; conflicted: number };
+    getTaskStats(): {
+        queued: number;
+        validated: number;
+        ready: number;
+        assigned: number;
+        inProgress: number;
+        completed: number;
+        failed: number;
+        blocked: number;
+        conflicted: number;
+    };
     getAgents(): AgentDTO[];
     getTasks(): TaskDTO[];
     getTasksByStatus(status: string): TaskDTO[];
@@ -354,7 +393,12 @@ export interface IDashboardViewModel {
     applyFilter(filter: { messageType?: string; timeRange?: string; source?: string }): void;
     clearMessages(): void;
     exportMessages(): void;
-    calculateMessageStats(): { totalMessages: number; successRate: number; averageResponseTime: number; activeConnections: number };
+    calculateMessageStats(): {
+        totalMessages: number;
+        successRate: number;
+        averageResponseTime: number;
+        activeConnections: number;
+    };
     calculateSuccessRate(): number;
     subscribe(callback: (state: DashboardViewState) => void): vscode.Disposable;
     dispose(): void;
@@ -411,7 +455,14 @@ export interface IPriorityTaskQueue {
     moveToReady(task: Task): void;
     updatePriority(taskId: string, newPriority: number): boolean;
     enqueueMany(tasks: Task[]): void;
-    getStats(): { size: number; averagePriority: number; oldestTask?: Task; newestTask?: Task; averageWaitMs: number; depthHistory: number[] };
+    getStats(): {
+        size: number;
+        averagePriority: number;
+        oldestTask?: Task;
+        newestTask?: Task;
+        averageWaitMs: number;
+        depthHistory: number[];
+    };
     size(): number;
     isEmpty(): boolean;
     toArray(): Task[];
@@ -422,9 +473,13 @@ export interface IPriorityTaskQueue {
 export interface ICapabilityMatcher {
     scoreAgent(agent: Agent, task: Task): number;
     findBestAgent(agents: Agent[], task: Task): Agent | null;
-    rankAgents(agents: Agent[], task: Task): Array<{agent: Agent, score: number}>;
+    rankAgents(agents: Agent[], task: Task): Array<{ agent: Agent; score: number }>;
     calculateCapabilityMatch(agentCapabilities: string[], requiredCapabilities: string[]): number;
+    calculateMatchScore(agentCapabilities: string[], requiredCapabilities: string[]): number; // Added for TaskQueue
     getMatchExplanation(agent: Agent, task: Task): string;
+    getCustomAgentThreshold(): number;
+    getBestAgentScore(agents: Agent[], task: Task): number;
+    shouldCreateCustomAgent(agents: Agent[], task: Task): boolean;
     dispose(): void;
 }
 
@@ -494,10 +549,10 @@ export interface ITaskDependencyManager {
     checkConflicts(task: Task, activeTasks: Task[]): string[];
     resolveConflict(taskId: string, resolution: 'block' | 'allow' | 'merge', task?: Task): boolean;
     getDependentTasks(taskId: string): string[];
-    getSoftDependents(taskId: string): string[];
+    getSoftDependents(taskId: string, allTasks?: Task[]): string[];
     getDependencyGraph(): Record<string, string[]>;
     getSoftDependencyGraph(): Record<string, string[]>;
-    getConflicts(): {taskId: string; conflictingTasks: string[]; reason: string}[];
+    getConflicts(): { taskId: string; conflictingTasks: string[]; reason: string }[];
     dispose(): void;
 }
 
@@ -589,7 +644,7 @@ export interface IMessagePersistenceService {
     getHistory(clientId?: string, messageType?: string): Promise<any[]>;
     getHistory(filter?: MessageFilter): Promise<any[]>;
     clear(): Promise<void>;
-    getStats(): Promise<{totalMessages: number, oldestMessage: Date}>;
+    getStats(): Promise<{ totalMessages: number; oldestMessage: Date }>;
     dispose(): void;
 }
 
@@ -622,6 +677,8 @@ export interface IMetricsService {
     incrementCounter(name: string, tags?: Record<string, string>): void;
     recordDuration(name: string, duration: number, tags?: Record<string, string>): void;
     setGauge(name: string, value: number, tags?: Record<string, string>): void;
+    recordGauge(name: string, value: number, tags?: Record<string, string>): void; // Alias for setGauge
+    recordLoadBalancingMetric(name: string, value: number, tags?: Record<string, string>): void;
     startTimer(name: string): string;
     endTimer(timerId: string): void;
     getMetrics(): MetricData[];
@@ -647,3 +704,47 @@ export const METRICS_CONFIG_KEYS = {
     METRICS_OUTPUT_LEVEL: CONFIG_KEYS.METRICS_OUTPUT_LEVEL,
     METRICS_RETENTION_HOURS: CONFIG_KEYS.METRICS_RETENTION_HOURS
 } as const;
+
+// Task Tool Bridge interface for sub-agent management
+export interface ITaskToolBridge {
+    executeTaskForAgent(
+        parentAgentId: string,
+        type: string,
+        description: string,
+        prompt: string,
+        options?: {
+            priority?: number;
+            timeout?: number;
+            context?: Record<string, any>;
+        }
+    ): Promise<any>;
+
+    cancelTask(taskId: string): Promise<void>;
+    cancelAgentTasks(parentAgentId: string): Promise<void>;
+    getAgentTasks(parentAgentId: string): any[];
+    getQueuedTasks(parentAgentId: string): any[];
+    getStats(): any;
+    getAgentStats(parentAgentId: string): any;
+    getStatistics(): any;
+    dispose(): void;
+}
+
+// Message Router Service interface for handling message routing
+export interface IMessageRouter {
+    route(message: any): Promise<void>;
+    setDashboardCallback(callback?: (message: any) => void): void;
+    clearDashboardCallback(): void;
+    getDeliveryStats(): any;
+    dispose(): void;
+}
+
+// Session Persistence Service interface for managing agent sessions
+export interface ISessionPersistenceService {
+    createSession(agent: any, workingDirectory?: string): Promise<any>;
+    restoreSession(sessionId: string, options: any): Promise<any | null>;
+    archiveSession(sessionId: string): Promise<void>;
+    getSessionSummaries(): Promise<any[]>;
+    getActiveSession(agentId: string): Promise<any | null>;
+    updateSession(sessionId: string, updates: Partial<any>): Promise<void>;
+    dispose(): void;
+}

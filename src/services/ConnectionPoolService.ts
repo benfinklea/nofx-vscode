@@ -9,13 +9,20 @@ import {
     ManagedConnection,
     ConnectionMetadata
 } from './interfaces';
+import { OrchestratorMessage, MessageType, createMessage, generateMessageId } from '../orchestration/MessageProtocol';
 import {
-    OrchestratorMessage,
-    MessageType,
-    createMessage,
-    generateMessageId
-} from '../orchestration/MessageProtocol';
-import { ORCH_EVENTS, ClientConnectedPayload, ClientDisconnectedPayload, LogicalIdRegisteredPayload, LogicalIdUnregisteredPayload, HeartbeatSentPayload, HeartbeatReceivedPayload, ConnectionTimeoutPayload, MessageBroadcastedPayload, ConnectionWelcomeSentPayload, MessageDeliveryFailedPayload } from './EventConstants';
+    ORCH_EVENTS,
+    ClientConnectedPayload,
+    ClientDisconnectedPayload,
+    LogicalIdRegisteredPayload,
+    LogicalIdUnregisteredPayload,
+    HeartbeatSentPayload,
+    HeartbeatReceivedPayload,
+    ConnectionTimeoutPayload,
+    MessageBroadcastedPayload,
+    ConnectionWelcomeSentPayload,
+    MessageDeliveryFailedPayload
+} from './EventConstants';
 
 export class ConnectionPoolService implements IConnectionPoolService {
     private connections: Map<string, ManagedConnection> = new Map();
@@ -363,7 +370,7 @@ export class ConnectionPoolService implements IConnectionPoolService {
         });
 
         // Handle connection errors
-        ws.on('error', (error) => {
+        ws.on('error', error => {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler.handleError(err, `WebSocket error for client ${clientId}`);
         });
@@ -376,16 +383,11 @@ export class ConnectionPoolService implements IConnectionPoolService {
     }
 
     private sendWelcomeMessage(ws: WebSocket, clientId: string): void {
-        const welcomeMessage = createMessage(
-            'system',
+        const welcomeMessage = createMessage('system', clientId, MessageType.CONNECTION_ESTABLISHED, {
             clientId,
-            MessageType.CONNECTION_ESTABLISHED,
-            {
-                clientId,
-                serverTime: new Date().toISOString(),
-                message: 'Welcome to NofX Orchestration Server'
-            }
-        );
+            serverTime: new Date().toISOString(),
+            message: 'Welcome to NofX Orchestration Server'
+        });
 
         try {
             ws.send(JSON.stringify(welcomeMessage));

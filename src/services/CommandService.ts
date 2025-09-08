@@ -28,9 +28,15 @@ export class CommandService implements ICommandService {
         return disposable;
     }
 
-    registerTextEditorCommand(commandId: string, handler: (textEditor: vscode.TextEditor, edit: vscode.TextEditorEdit, ...args: any[]) => void, thisArg?: any): vscode.Disposable {
+    registerTextEditorCommand(
+        commandId: string,
+        handler: (textEditor: vscode.TextEditor, edit: vscode.TextEditorEdit, ...args: any[]) => void,
+        thisArg?: any
+    ): vscode.Disposable {
         if (this.registeredCommands.has(commandId)) {
-            this.loggingService?.warn(`Text editor command ${commandId} is already registered, returning existing disposable`);
+            this.loggingService?.warn(
+                `Text editor command ${commandId} is already registered, returning existing disposable`
+            );
             return this.commandDisposables.get(commandId)!;
         }
 
@@ -115,7 +121,6 @@ export class CommandService implements ICommandService {
             if (extraCommands.length > 0) {
                 this.loggingService?.debug(`Extra commands registered: ${extraCommands.join(', ')}`);
             }
-
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler?.handleError(err, 'Error verifying commands');

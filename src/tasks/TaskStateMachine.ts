@@ -192,7 +192,7 @@ export class TaskStateMachine implements ITaskStateMachine {
     /**
      * Gets the state machine configuration for debugging
      */
-    getStateMachineConfig(): { transitions: Map<TaskStatus, TaskStatus[]>, requiredFields: Map<TaskStatus, string[]> } {
+    getStateMachineConfig(): { transitions: Map<TaskStatus, TaskStatus[]>; requiredFields: Map<TaskStatus, string[]> } {
         return {
             transitions: new Map(this.validTransitions),
             requiredFields: new Map(this.requiredFields)
@@ -213,7 +213,9 @@ export class TaskStateMachine implements ITaskStateMachine {
         // If no task reader available, allow transition (return empty errors)
         // This prevents blocking tasks when dependency validation is unavailable
         if (!this.taskReader) {
-            this.logger.debug('TaskStateMachine: No task reader available for readiness validation - allowing transition');
+            this.logger.debug(
+                'TaskStateMachine: No task reader available for readiness validation - allowing transition'
+            );
             return errors;
         }
 

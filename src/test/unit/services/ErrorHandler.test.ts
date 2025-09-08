@@ -1,5 +1,16 @@
 import { ErrorHandler } from '../../../services/ErrorHandler';
 import { ILoggingService, INotificationService, ErrorSeverity } from '../../../services/interfaces';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 describe('ErrorHandler', () => {
     let errorHandler: ErrorHandler;
@@ -7,26 +18,16 @@ describe('ErrorHandler', () => {
     let mockNotificationService: jest.Mocked<INotificationService>;
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.clearAllMocks();
         jest.clearAllTimers();
 
         // Mock LoggingService
-        mockLoggingService = {
-            log: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
-            debug: jest.fn()
-        } as any;
+        mockLoggingService = createMockLoggingService();
 
         // Mock NotificationService
-        mockNotificationService = {
-            showInformation: jest.fn().mockResolvedValue(undefined),
-            showWarning: jest.fn().mockResolvedValue(undefined),
-            showError: jest.fn().mockResolvedValue(undefined),
-            showInputBox: jest.fn(),
-            showQuickPick: jest.fn()
-        } as any;
+        mockNotificationService = createMockNotificationService();
 
         errorHandler = new ErrorHandler(mockLoggingService, mockNotificationService);
     });
@@ -116,10 +117,7 @@ describe('ErrorHandler', () => {
 
     describe('handleAsync', () => {
         it('should handle successful async operations', async () => {
-            const result = await errorHandler.handleAsync(
-                async () => 'success',
-                'AsyncContext'
-            );
+            const result = await errorHandler.handleAsync(async () => 'success', 'AsyncContext');
 
             expect(result).toBe('success');
             expect(mockLoggingService.error).not.toHaveBeenCalled();
@@ -129,10 +127,9 @@ describe('ErrorHandler', () => {
             const error = new Error('Async error');
 
             await expect(
-                errorHandler.handleAsync(
-                    async () => { throw error; },
-                    'AsyncContext'
-                )
+                errorHandler.handleAsync(async () => {
+                    throw error;
+                }, 'AsyncContext')
             ).rejects.toThrow('Async error');
 
             expect(mockLoggingService.error).toHaveBeenCalledWith(
@@ -146,10 +143,9 @@ describe('ErrorHandler', () => {
 
         it('should convert non-Error objects to Error', async () => {
             await expect(
-                errorHandler.handleAsync(
-                    async () => { throw 'string error'; },
-                    'AsyncContext'
-                )
+                errorHandler.handleAsync(async () => {
+                    throw 'string error';
+                }, 'AsyncContext')
             ).rejects.toThrow('string error');
 
             expect(mockLoggingService.error).toHaveBeenCalledWith(
@@ -163,10 +159,7 @@ describe('ErrorHandler', () => {
 
     describe('wrapSync', () => {
         it('should handle successful sync operations', () => {
-            const result = errorHandler.wrapSync(
-                () => 'success',
-                'SyncContext'
-            );
+            const result = errorHandler.wrapSync(() => 'success', 'SyncContext');
 
             expect(result).toBe('success');
             expect(mockLoggingService.error).not.toHaveBeenCalled();
@@ -176,10 +169,9 @@ describe('ErrorHandler', () => {
             const error = new Error('Sync error');
 
             expect(() =>
-                errorHandler.wrapSync(
-                    () => { throw error; },
-                    'SyncContext'
-                )
+                errorHandler.wrapSync(() => {
+                    throw error;
+                }, 'SyncContext')
             ).toThrow('Sync error');
 
             expect(mockLoggingService.error).toHaveBeenCalledWith(
@@ -193,10 +185,9 @@ describe('ErrorHandler', () => {
 
         it('should convert non-Error objects to Error', () => {
             expect(() =>
-                errorHandler.wrapSync(
-                    () => { throw 'string error'; },
-                    'SyncContext'
-                )
+                errorHandler.wrapSync(() => {
+                    throw 'string error';
+                }, 'SyncContext')
             ).toThrow('string error');
 
             expect(mockLoggingService.error).toHaveBeenCalledWith(
@@ -230,7 +221,8 @@ describe('ErrorHandler', () => {
         });
 
         it('should retry on failure and succeed on subsequent attempt', async () => {
-            const operation = jest.fn()
+            const operation = jest
+                .fn()
                 .mockRejectedValueOnce(new Error('First fail'))
                 .mockRejectedValueOnce(new Error('Second fail'))
                 .mockResolvedValueOnce('success');
@@ -274,13 +266,12 @@ describe('ErrorHandler', () => {
                     attempts: 3
                 })
             );
-            expect(mockNotificationService.showError).toHaveBeenCalledWith(
-                expect.stringContaining('Persistent error')
-            );
+            expect(mockNotificationService.showError).toHaveBeenCalledWith(expect.stringContaining('Persistent error'));
         });
 
         it('should use exponential backoff for retries', async () => {
-            const operation = jest.fn()
+            const operation = jest
+                .fn()
                 .mockRejectedValueOnce(new Error('Fail 1'))
                 .mockRejectedValueOnce(new Error('Fail 2'))
                 .mockResolvedValueOnce('success');

@@ -1,5 +1,13 @@
 import * as vscode from 'vscode';
-import { IUIStateManager, IEventBus, ILoggingService, IDashboardViewModel, IMessagePersistenceService, IConnectionPoolService, MessageFilter } from '../services/interfaces';
+import {
+    IUIStateManager,
+    IEventBus,
+    ILoggingService,
+    IDashboardViewModel,
+    IMessagePersistenceService,
+    IConnectionPoolService,
+    MessageFilter
+} from '../services/interfaces';
 import { DashboardViewState, WebviewCommand, WEBVIEW_COMMANDS } from '../types/ui';
 import { OrchestrationServer } from '../orchestration/OrchestrationServer';
 import { OrchestratorMessage, MessageType } from '../orchestration/MessageProtocol';
@@ -22,9 +30,9 @@ export class DashboardViewModel implements IDashboardViewModel {
         limit?: number;
         offset?: number;
     } = {
-            limit: 100,
-            offset: 0
-        };
+        limit: 100,
+        offset: 0
+    };
     private connectionStatus: Map<string, 'connected' | 'disconnected'> = new Map();
     private clientToLogical = new Map<string, string>();
     private statistics: {
@@ -33,11 +41,11 @@ export class DashboardViewModel implements IDashboardViewModel {
         averageResponseTime: number;
         activeConnections: number;
     } = {
-            totalMessages: 0,
-            successRate: 0,
-            averageResponseTime: 0,
-            activeConnections: 0
-        };
+        totalMessages: 0,
+        successRate: 0,
+        averageResponseTime: 0,
+        activeConnections: 0
+    };
 
     // Event subscriptions
     private subscriptions: vscode.Disposable[] = [];
@@ -66,45 +74,149 @@ export class DashboardViewModel implements IDashboardViewModel {
     private initialize(): void {
         this.loggingService.info('DashboardViewModel: Initializing');
 
-        // Subscribe to orchestration events
-        this.subscriptions.push(
-            this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_RECEIVED, (data) => this.handleNewMessage(data.message)),
-            this.eventBus.subscribe(ORCH_EVENTS.CLIENT_CONNECTED, (data) => this.updateConnectionStatus(data)),
-            this.eventBus.subscribe(ORCH_EVENTS.CLIENT_DISCONNECTED, (data) => {
-                this.connectionStatus.set(data.clientId, 'disconnected');
-                this.publishStateChange();
-            }),
-            this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_REGISTERED, (data) => this.handleLogicalIdRegistered(data)),
-            this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_UNREGISTERED, (data) => this.handleLogicalIdUnregistered(data)),
-            // Subscribe to persistence events for real-time updates
-            this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_PERSISTED, () => this.handlePersistenceUpdate()),
-            this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_STORAGE_CLEANUP, () => this.handlePersistenceUpdate())
-        );
+        try {
+            // Subscribe to orchestration events with error handling
+            if (this.eventBus) {
+                this.subscriptions.push(
+                    this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_RECEIVED, data => {
+                        try {
+                            this.handleNewMessage(data.message);
+                        } catch (error) {
+                            this.loggingService.error('Error handling MESSAGE_RECEIVED event', error);
+                        }
+                    }),
+                    this.eventBus.subscribe(ORCH_EVENTS.CLIENT_CONNECTED, data => {
+                        try {
+                            this.updateConnectionStatus(data);
+                        } catch (error) {
+                            this.loggingService.error('Error handling CLIENT_CONNECTED event', error);
+                        }
+                    }),
+                    this.eventBus.subscribe(ORCH_EVENTS.CLIENT_DISCONNECTED, data => {
+                        try {
+                            this.connectionStatus.set(data.clientId, 'disconnected');
+                            this.publishStateChange();
+                        } catch (error) {
+                            this.loggingService.error('Error handling CLIENT_DISCONNECTED event', error);
+                        }
+                    }),
+                    this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_REGISTERED, data => {
+                        try {
+                            this.handleLogicalIdRegistered(data);
+                        } catch (error) {
+                            this.loggingService.error('Error handling LOGICAL_ID_REGISTERED event', error);
+                        }
+                    }),
+                    this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_UNREGISTERED, data => {
+                        try {
+                            this.handleLogicalIdUnregistered(data);
+                        } catch (error) {
+                            this.loggingService.error('Error handling LOGICAL_ID_UNREGISTERED event', error);
+                        }
+                    }),
+                    // Subscribe to persistence events for real-time updates
+                    this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_PERSISTED, () => {
+                        try {
+                            this.handlePersistenceUpdate();
+                        } catch (error) {
+                            this.loggingService.error('Error handling MESSAGE_PERSISTED event', error);
+                        }
+                    }),
+                    this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_STORAGE_CLEANUP, () => {
+                        try {
+                            this.handlePersistenceUpdate();
+                        } catch (error) {
+                            this.loggingService.error('Error handling MESSAGE_STORAGE_CLEANUP event', error);
+                        }
+                    })
+                );
+            } else {
+                this.loggingService.warn('EventBus not available, dashboard will not receive real-time updates');
+            }
 
-        // Register dashboard callback with orchestration server
-        this.orchestrationServer.setDashboardCallback((message) => {
-            this.handleNewMessage(message);
-        });
+            // Register dashboard callback with orchestration server
+            if (this.orchestrationServer) {
+                this.orchestrationServer.setDashboardCallback(message => {
+                    try {
+                        this.handleNewMessage(message);
+                    } catch (error) {
+                        this.loggingService.error('Error in dashboard callback', error);
+                    }
+                });
+                this.loggingService.info('Dashboard callback registered with orchestration server');
+            } else {
+                this.loggingService.warn(
+                    'OrchestrationServer not available, dashboard will not receive message updates'
+                );
+            }
+        } catch (error) {
+            this.loggingService.error('Error during DashboardViewModel initialization', error);
+        }
     }
 
     async getDashboardState(): Promise<DashboardViewState> {
-        const connections = await Promise.all(
-            Array.from(this.connectionStatus.entries()).map(async ([id, status]) => ({
-                id,
-                name: id,
-                status,
-                lastMessage: await this.getLastMessageForConnection(id)
-            }))
-        );
+        try {
+            // Get connections with error handling
+            let connections: any[] = [];
+            try {
+                connections = await Promise.all(
+                    Array.from(this.connectionStatus.entries()).map(async ([id, status]) => {
+                        try {
+                            return {
+                                id,
+                                name: id,
+                                status,
+                                lastMessage: await this.getLastMessageForConnection(id)
+                            };
+                        } catch (error) {
+                            this.loggingService.warn(`Error getting last message for connection ${id}`, error);
+                            return {
+                                id,
+                                name: id,
+                                status,
+                                lastMessage: undefined
+                            };
+                        }
+                    })
+                );
+            } catch (error) {
+                this.loggingService.error('Error getting connections', error);
+                connections = [];
+            }
 
-        const messages = await this.getFilteredMessages();
+            // Get messages with error handling
+            let messages: any[] = [];
+            try {
+                messages = await this.getFilteredMessages();
+            } catch (error) {
+                this.loggingService.error('Error getting filtered messages', error);
+                messages = [];
+            }
 
-        return {
-            connections,
-            messages,
-            stats: { ...this.statistics },
-            filters: { ...this.activeFilters }
-        };
+            // Ensure statistics are valid
+            const stats = {
+                activeConnections: this.statistics?.activeConnections ?? 0,
+                totalMessages: this.statistics?.totalMessages ?? 0,
+                successRate: this.statistics?.successRate ?? 0,
+                averageResponseTime: this.statistics?.averageResponseTime ?? 0
+            };
+
+            return {
+                connections,
+                messages,
+                stats,
+                filters: { ...this.activeFilters }
+            };
+        } catch (error) {
+            this.loggingService.error('Critical error in getDashboardState', error);
+            // Return minimal fallback state
+            return {
+                connections: [],
+                messages: [],
+                stats: { activeConnections: 0, totalMessages: 0, successRate: 0, averageResponseTime: 0 },
+                filters: {}
+            };
+        }
     }
 
     async handleCommand(command: string, data?: any): Promise<void> {
@@ -191,7 +303,12 @@ export class DashboardViewModel implements IDashboardViewModel {
         }
     }
 
-    calculateMessageStats(): { totalMessages: number; successRate: number; averageResponseTime: number; activeConnections: number } {
+    calculateMessageStats(): {
+        totalMessages: number;
+        successRate: number;
+        averageResponseTime: number;
+        activeConnections: number;
+    } {
         // Use cached history for synchronous access
         const history = this.messageBuffer;
         const connections = this.connectionPool?.getAllConnections() || new Map();
@@ -203,7 +320,7 @@ export class DashboardViewModel implements IDashboardViewModel {
 
         // Count agent connections from metadata
         let agentCount = 0;
-        connections.forEach((conn) => {
+        connections.forEach(conn => {
             if (conn.metadata.isAgent) {
                 agentCount++;
             }
@@ -319,7 +436,7 @@ export class DashboardViewModel implements IDashboardViewModel {
             if (this.activeFilters.timeRange) {
                 const now = new Date();
                 const rangeMinutes = parseInt(this.activeFilters.timeRange);
-                const fromTime = new Date(now.getTime() - (rangeMinutes * 60 * 1000));
+                const fromTime = new Date(now.getTime() - rangeMinutes * 60 * 1000);
                 filter.timeRange = {
                     from: fromTime,
                     to: now
@@ -333,7 +450,7 @@ export class DashboardViewModel implements IDashboardViewModel {
                 id: msg.id,
                 timestamp: new Date(msg.timestamp),
                 type: msg.type,
-                content: msg.payload,
+                content: typeof msg.payload === 'string' ? msg.payload : JSON.stringify(msg.payload, null, 2),
                 source: msg.from,
                 target: msg.to
             }));
@@ -347,14 +464,16 @@ export class DashboardViewModel implements IDashboardViewModel {
         } catch (error) {
             this.loggingService.error('Failed to get filtered messages from persistence', error);
             // Fallback to in-memory buffer
-            return this.messageBuffer.map(msg => ({
-                id: msg.id,
-                timestamp: new Date(msg.timestamp),
-                type: msg.type,
-                content: msg.payload,
-                source: msg.from,
-                target: msg.to
-            })).slice(-100);
+            return this.messageBuffer
+                .map(msg => ({
+                    id: msg.id,
+                    timestamp: new Date(msg.timestamp),
+                    type: msg.type,
+                    content: typeof msg.payload === 'string' ? msg.payload : JSON.stringify(msg.payload, null, 2),
+                    source: msg.from,
+                    target: msg.to
+                }))
+                .slice(-100);
         }
     }
 
@@ -364,7 +483,7 @@ export class DashboardViewModel implements IDashboardViewModel {
 
         // Count agent connections from metadata
         let agentCount = 0;
-        connections.forEach((conn) => {
+        connections.forEach(conn => {
             if (conn.metadata.isAgent) {
                 agentCount++;
             }

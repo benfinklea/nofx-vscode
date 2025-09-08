@@ -1,0 +1,422 @@
+name: Comprehensive Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  # Quick smoke tests - run first for fast feedback
+  smoke-tests:
+    name: 🔥 Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run smoke tests
+        run: npm run test:smoke
+        
+      - name: Upload smoke test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-results
+          path: test-results/smoke-metrics.json
+          
+      - name: Check deployment readiness
+        run: |
+          if [ -f test-results/smoke-metrics.json ]; then
+            passRate=$(jq -r '.passRate' test-results/smoke-metrics.json)
+            if (( $(echo "$passRate < 100" | bc -l) )); then
+              echo "❌ Smoke tests failed - blocking deployment"
+              exit 1
+            fi
+          fi
+
+  # Unit and Integration tests in parallel
+  unit-tests:
+    name: 📦 Unit Tests
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run unit tests with coverage
+        run: npm run test:unit -- --coverage
+        
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/unit/lcov.info
+          flags: unit
+          name: unit-coverage
+          
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            coverage/unit/
+            test-results/unit.json
+
+  integration-tests:
+    name: 🔗 Integration Tests
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run integration tests
+        run: npm run test:integration -- --coverage
+        
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/integration/lcov.info
+          flags: integration
+          name: integration-coverage
+          
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: |
+            coverage/integration/
+            test-results/integration.json
+
+  # E2E tests
+  e2e-tests:
+    name: 🌐 E2E Tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+      
+      - name: Run E2E tests
+        run: npm run test:e2e
+        
+      - name: Upload E2E test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: |
+            test-results/e2e-report.json
+            playwright-report/
+            test-results/screenshots/
+            test-results/videos/
+
+  # Performance tests
+  performance-tests:
+    name: 🏎️ Performance Tests
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run performance tests
+        run: npm run test:performance
+        
+      - name: Analyze performance metrics
+        run: |
+          if [ -f test-results/performance-metrics.json ]; then
+            throughput=$(jq -r '.throughput' test-results/performance-metrics.json)
+            p99=$(jq -r '.latencyP99' test-results/performance-metrics.json)
+            echo "📊 Performance Results:"
+            echo "  Throughput: $throughput msg/s"
+            echo "  P99 Latency: ${p99}ms"
+            
+            # Fail if performance degrades
+            if (( $(echo "$throughput < 1000" | bc -l) )); then
+              echo "❌ Throughput below 1000 msg/s threshold"
+              exit 1
+            fi
+            if (( $(echo "$p99 > 100" | bc -l) )); then
+              echo "❌ P99 latency exceeds 100ms threshold"
+              exit 1
+            fi
+          fi
+          
+      - name: Upload performance results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-test-results
+          path: test-results/performance-metrics.json
+
+  # Security tests
+  security-tests:
+    name: 🔒 Security Tests
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run npm audit
+        run: npm audit --json > test-results/npm-audit.json || true
+        
+      - name: Run security tests
+        run: npm run test:security
+        
+      - name: Check security test results
+        run: |
+          if [ -f test-results/security-metrics.json ]; then
+            # Check for critical vulnerabilities
+            critical=$(jq -r '.criticalVulnerabilities' test-results/security-metrics.json)
+            if [ "$critical" -gt 0 ]; then
+              echo "❌ Found $critical critical vulnerabilities"
+              exit 1
+            fi
+            
+            # Check overall security score
+            score=$(jq -r '.overallSecurityScore' test-results/security-metrics.json)
+            if (( $(echo "$score < 90" | bc -l) )); then
+              echo "❌ Security score too low: $score% (minimum: 90%)"
+              exit 1
+            fi
+            
+            # Check critical security categories
+            processExecution=$(jq -r '.processExecutionSafety.passed' test-results/security-metrics.json)
+            websocketSecurity=$(jq -r '.websocketSecurity.passed' test-results/security-metrics.json)
+            filesystemSecurity=$(jq -r '.filesystemSecurity.passed' test-results/security-metrics.json)
+            sessionSecurity=$(jq -r '.sessionSecurity.passed' test-results/security-metrics.json)
+            
+            if [ "$processExecution" != "true" ]; then
+              echo "❌ Process execution security tests failed"
+              exit 1
+            fi
+            
+            if [ "$websocketSecurity" != "true" ]; then
+              echo "❌ WebSocket security tests failed"
+              exit 1
+            fi
+            
+            if [ "$filesystemSecurity" != "true" ]; then
+              echo "❌ Filesystem security tests failed"
+              exit 1
+            fi
+            
+            if [ "$sessionSecurity" != "true" ]; then
+              echo "❌ Session security tests failed"
+              exit 1
+            fi
+            
+            echo "✅ All security tests passed (Score: $score%)"
+          else
+            echo "❌ Security metrics file not found"
+            exit 1
+          fi
+          
+      - name: Upload security results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-test-results
+          path: |
+            test-results/security-metrics.json
+            test-results/npm-audit.json
+
+  # API Contract tests
+  contract-tests:
+    name: 📝 Contract Tests
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run contract tests
+        run: npm run test:contracts
+        
+      - name: Check for breaking changes
+        run: |
+          if [ -f test-results/contract-metrics.json ]; then
+            breaking=$(jq -r '.breakingChanges' test-results/contract-metrics.json)
+            if [ "$breaking" -gt 0 ]; then
+              echo "❌ Found $breaking breaking API changes"
+              exit 1
+            fi
+          fi
+          
+      - name: Upload contract results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-test-results
+          path: test-results/contract-metrics.json
+
+  # Aggregate all metrics and generate report
+  test-report:
+    name: 📊 Test Report
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [
+      smoke-tests,
+      unit-tests,
+      integration-tests,
+      e2e-tests,
+      performance-tests,
+      security-tests,
+      contract-tests
+    ]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: test-results-artifacts/
+          
+      - name: Merge test results
+        run: |
+          mkdir -p test-results
+          find test-results-artifacts -name "*.json" -exec cp {} test-results/ \;
+          
+      - name: Generate unified report
+        run: npm run test:report
+        
+      - name: Upload unified report
+        uses: actions/upload-artifact@v4
+        with:
+          name: unified-test-report
+          path: |
+            test-results/unified-metrics.json
+            test-results/test-report.html
+            
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const metrics = JSON.parse(fs.readFileSync('test-results/unified-metrics.json', 'utf8'));
+            const { summary } = metrics;
+            
+            const icon = summary.overallHealth === 'healthy' ? '✅' : 
+                        summary.overallHealth === 'warning' ? '⚠️' : '❌';
+            
+            const comment = `## ${icon} Test Results
+            
+            **Health Status:** ${summary.overallHealth.toUpperCase()}
+            **Deployment Ready:** ${summary.deploymentReady ? '✅ YES' : '❌ NO'}
+            
+            ### Test Summary
+            - Total Tests: ${summary.totalTests}
+            - Passed: ${summary.totalPassed}
+            - Failed: ${summary.totalFailed}
+            - Pass Rate: ${((summary.totalPassed / summary.totalTests) * 100).toFixed(1)}%
+            
+            ${summary.criticalIssues.length > 0 ? `
+            ### ⚠️ Critical Issues
+            ${summary.criticalIssues.map(issue => `- ${issue}`).join('\n')}
+            ` : ''}
+            
+            [View Full Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # Deploy only if all tests pass
+  deploy-check:
+    name: 🚀 Deployment Check
+    runs-on: ubuntu-latest
+    needs: test-report
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Check deployment readiness
+        run: |
+          echo "✅ All tests passed - ready for deployment"
+          echo "DEPLOY_READY=true" >> $GITHUB_ENV
+          
+      - name: Trigger deployment
+        if: env.DEPLOY_READY == 'true'
+        run: |
+          echo "🚀 Triggering deployment workflow..."
+          # Add deployment trigger here

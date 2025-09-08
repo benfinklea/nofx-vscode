@@ -2,6 +2,17 @@ import * as vscode from 'vscode';
 import { TaskTreeProvider } from '../../../views/TaskTreeProvider';
 import { IUIStateManager, IContainer, SERVICE_TOKENS, ITaskQueue } from '../../../services/interfaces';
 import { TaskDTO } from '../../../types/ui';
+import {
+    createMockConfigurationService,
+    createMockLoggingService,
+    createMockEventBus,
+    createMockNotificationService,
+    createMockContainer,
+    createMockExtensionContext,
+    createMockOutputChannel,
+    createMockTerminal,
+    setupVSCodeMocks
+} from './../../helpers/mockFactories';
 
 // Mock VS Code API
 jest.mock('vscode');
@@ -30,6 +41,8 @@ describe('TaskTreeProvider', () => {
     };
 
     beforeEach(() => {
+        const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
+        (global as any).vscode = { workspace: mockWorkspace };
         jest.clearAllMocks();
         mockDisposables = [];
         mockRefreshFire = jest.fn();
@@ -58,7 +71,7 @@ describe('TaskTreeProvider', () => {
         mockUIStateManager = {
             getState: jest.fn(),
             getTasksByStatus: jest.fn(),
-            subscribe: jest.fn().mockImplementation((callback) => {
+            subscribe: jest.fn().mockImplementation(callback => {
                 const disposable = { dispose: jest.fn() };
                 mockDisposables.push(disposable);
                 return disposable;
