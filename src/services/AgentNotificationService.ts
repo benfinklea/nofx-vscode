@@ -21,14 +21,21 @@ export interface NotificationAction {
 
 export class AgentNotificationService {
     private statusBarItem: vscode.StatusBarItem;
+    private systemStatusBarItem: vscode.StatusBarItem; // New system-wide status
     private config: NotificationConfig;
     private notificationHistory: Map<string, Date> = new Map();
     private activeNotifications: Map<string, vscode.Disposable> = new Map();
+    private agentCount: number = 0;
+    private taskCount: number = 0;
+    private completedTaskCount: number = 0;
+    private systemHealth: 'healthy' | 'warning' | 'error' = 'healthy';
 
     constructor() {
         this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1000);
+        this.systemStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 999);
         this.config = this.loadConfiguration();
         this.setupConfigurationListener();
+        this.initializeSystemStatusBar();
     }
 
     /**
@@ -454,10 +461,112 @@ export class AgentNotificationService {
     }
 
     /**
+     * Initialize system-wide status bar
+     */
+    private initializeSystemStatusBar(): void {
+        this.systemStatusBarItem.text = '$(rocket) NofX: Initializing...';
+        this.systemStatusBarItem.tooltip = 'Click to open NofX conductor';
+        this.systemStatusBarItem.command = 'nofx.openConductorTerminal';
+        this.systemStatusBarItem.show();
+        
+        // Update to ready state after a moment
+        setTimeout(() => {
+            this.updateSystemStatus();
+        }, 1000);
+    }
+
+    /**
+     * Update system-wide status bar
+     */
+    public updateSystemStatus(
+        agentCount?: number,
+        taskCount?: number,
+        completedTaskCount?: number,
+        health?: 'healthy' | 'warning' | 'error'
+    ): void {
+        // Update counts if provided
+        if (agentCount !== undefined) this.agentCount = agentCount;
+        if (taskCount !== undefined) this.taskCount = taskCount;
+        if (completedTaskCount !== undefined) this.completedTaskCount = completedTaskCount;
+        if (health !== undefined) this.systemHealth = health;
+
+        // Build status text
+        const parts: string[] = [];
+        
+        // System health icon
+        const healthIcon = this.systemHealth === 'healthy' ? '$(pulse)' : 
+                          this.systemHealth === 'warning' ? '$(warning)' : '$(error)';
+        
+        // Agent count
+        if (this.agentCount > 0) {
+            parts.push(`$(person) ${this.agentCount}`);
+        }
+        
+        // Task progress
+        if (this.taskCount > 0) {
+            const progress = this.completedTaskCount > 0 
+                ? `${this.completedTaskCount}/${this.taskCount}`
+                : `${this.taskCount}`;
+            parts.push(`$(checklist) ${progress}`);
+        }
+        
+        // Build final text
+        const statusText = parts.length > 0 
+            ? `NofX: ${parts.join(' | ')} ${healthIcon}`
+            : `NofX: Ready ${healthIcon}`;
+        
+        this.systemStatusBarItem.text = statusText;
+        
+        // Update tooltip
+        const tooltip: string[] = ['NofX Conductor System'];
+        tooltip.push(`Agents: ${this.agentCount} active`);
+        tooltip.push(`Tasks: ${this.completedTaskCount}/${this.taskCount} complete`);
+        tooltip.push(`Health: ${this.systemHealth}`);
+        tooltip.push('Click to open conductor terminal');
+        
+        this.systemStatusBarItem.tooltip = tooltip.join('\n');
+    }
+
+    /**
+     * Quick update methods for specific metrics
+     */
+    public incrementAgentCount(): void {
+        this.updateSystemStatus(this.agentCount + 1);
+    }
+
+    public decrementAgentCount(): void {
+        this.updateSystemStatus(Math.max(0, this.agentCount - 1));
+    }
+
+    public incrementTaskCount(): void {
+        this.updateSystemStatus(undefined, this.taskCount + 1);
+    }
+
+    public incrementCompletedTaskCount(): void {
+        this.updateSystemStatus(undefined, undefined, this.completedTaskCount + 1);
+    }
+
+    public setSystemHealth(health: 'healthy' | 'warning' | 'error'): void {
+        this.updateSystemStatus(undefined, undefined, undefined, health);
+    }
+
+    /**
+     * Reset all system metrics
+     */
+    public resetSystemMetrics(): void {
+        this.agentCount = 0;
+        this.taskCount = 0;
+        this.completedTaskCount = 0;
+        this.systemHealth = 'healthy';
+        this.updateSystemStatus();
+    }
+
+    /**
      * Dispose of resources
      */
     public dispose(): void {
         this.statusBarItem.dispose();
+        this.systemStatusBarItem.dispose();
         this.activeNotifications.forEach(d => d.dispose());
         this.activeNotifications.clear();
         this.notificationHistory.clear();

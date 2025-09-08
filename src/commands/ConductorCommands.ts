@@ -6,6 +6,7 @@ import {
     INotificationService,
     IConfigurationService,
     ILoggingService,
+    IEventBus,
     IConductorViewModel,
     SERVICE_TOKENS
 } from '../services/interfaces';
@@ -40,7 +41,7 @@ export class ConductorCommands implements ICommandHandler {
 
     private conductorChat?: ConductorChat;
     private conductorWebview?: ConductorChatWebview;
-    private conductorTerminal?: ConductorTerminal | SuperSmartConductor | IntelligentConductor;
+    private conductorTerminal?: ConductorTerminal | IntelligentConductor | SuperSmartConductor;
     private currentTeamName: string = 'Active Agents';
     private agentProvider?: AgentTreeProvider;
 
@@ -179,7 +180,7 @@ export class ConductorCommands implements ICommandHandler {
 
                         // Add delay between agent creations to avoid overwhelming the terminal system
                         if (createdCount < teamAgents.length) {
-                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            await new Promise(resolve => setTimeout(resolve, 2000)); // Increased from 1000ms to 2000ms
                         }
                     } catch (error) {
                         this.loggingService?.error(`Failed to create agent from template ${templateId}:`, error);
@@ -289,14 +290,25 @@ export class ConductorCommands implements ICommandHandler {
                         template
                     });
                     createdCount++;
+                    // Small delay between agent creation to prevent terminal panel issues
+                    await new Promise(resolve => setTimeout(resolve, 1500)); // Increased from 300ms to 1500ms
                 } catch (error) {
                     this.loggingService?.error(`Failed to create agent from template ${templateId}:`, error);
                 }
             }
         }
 
+        // Small delay before opening conductor to ensure all agent terminals are settled
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Increased from 500ms to 2000ms
+        
         // Open conductor terminal automatically
         await this.openConductorTerminal();
+        
+        // Don't force terminal focus - let agents settle first
+        // Focus manipulation can interfere with agent initialization
+        // vscode.commands.executeCommand('workbench.action.terminal.focus');
+        // await new Promise(resolve => setTimeout(resolve, 200));
+        // vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
 
         const assemblyMessage =
             createdCount === projectConfig.agents.length
@@ -332,14 +344,15 @@ export class ConductorCommands implements ICommandHandler {
             return;
         }
 
-        // Select conductor based on team complexity
+        // Select conductor based on team complexity and configuration
         let conductorType: 'basic' | 'intelligent' | 'supersmart' = 'basic';
+        const enableSupersmart = this.configService.get<boolean>('nofx.enableSuperSmartConductor', false);
 
-        if (agentCount >= 5) {
-            // Large team - use SuperSmartConductor
+        if (enableSupersmart && agentCount >= 4) {
+            // Large team with SuperSmartConductor enabled - use SuperSmartConductor
             conductorType = 'supersmart';
         } else if (agentCount >= 3) {
-            // Medium team - use IntelligentConductor
+            // Large/medium team - use IntelligentConductor
             conductorType = 'intelligent';
         } else {
             // Small team - use ConductorTerminal
@@ -362,13 +375,24 @@ export class ConductorCommands implements ICommandHandler {
     public createConductor(
         type: 'basic' | 'intelligent' | 'supersmart'
     ): ConductorTerminal | IntelligentConductor | SuperSmartConductor {
+        // Get optional services for enhanced conductor
+        const eventBus = this.container.resolveOptional(SERVICE_TOKENS.EventBus);
+        const agentNotificationService = this.container.resolveOptional(SERVICE_TOKENS.AgentNotificationService);
+        
         switch (type) {
             case 'supersmart':
                 return new SuperSmartConductor(this.agentManager, this.taskQueue);
             case 'intelligent':
                 return new IntelligentConductor(this.agentManager, this.taskQueue);
             default:
-                return new ConductorTerminal(this.agentManager, this.taskQueue, this.taskToolBridge);
+                return new ConductorTerminal(
+                    this.agentManager, 
+                    this.taskQueue, 
+                    this.taskToolBridge,
+                    this.loggingService,
+                    eventBus as IEventBus | undefined,
+                    agentNotificationService as any
+                );
         }
     }
 

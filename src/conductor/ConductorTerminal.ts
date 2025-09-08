@@ -2,6 +2,11 @@ import * as vscode from 'vscode';
 import { AgentManager } from '../agents/AgentManager';
 import { TaskQueue } from '../tasks/TaskQueue';
 import { TaskToolBridge, SubAgentType } from '../services/TaskToolBridge';
+import { Container } from '../services/Container';
+import { SERVICE_TOKENS, IConfigurationService, ILoggingService, IEventBus } from '../services/interfaces';
+import { NaturalLanguageService } from '../services/NaturalLanguageService';
+import { TerminalCommandRouter } from '../services/TerminalCommandRouter';
+import { AgentNotificationService } from '../services/AgentNotificationService';
 
 /**
  * Simple terminal-based conductor that works like regular agents
@@ -12,12 +17,35 @@ export class ConductorTerminal {
     private taskQueue: TaskQueue;
     private taskToolBridge?: TaskToolBridge;
     private aiPath: string;
+    private naturalLanguageService?: NaturalLanguageService;
+    private commandRouter?: TerminalCommandRouter;
+    private notificationService?: AgentNotificationService;
+    private inputListener?: vscode.Disposable;
 
-    constructor(agentManager: AgentManager, taskQueue: TaskQueue, taskToolBridge?: TaskToolBridge) {
+    constructor(
+        agentManager: AgentManager, 
+        taskQueue: TaskQueue, 
+        taskToolBridge?: TaskToolBridge,
+        loggingService?: ILoggingService,
+        eventBus?: IEventBus,
+        notificationService?: AgentNotificationService
+    ) {
         this.agentManager = agentManager;
         this.taskQueue = taskQueue;
         this.taskToolBridge = taskToolBridge;
         this.aiPath = vscode.workspace.getConfiguration('nofx').get<string>('aiPath') || 'claude';
+        this.notificationService = notificationService;
+        
+        // Initialize natural language service
+        this.naturalLanguageService = new NaturalLanguageService(loggingService);
+        
+        // Initialize command router
+        this.commandRouter = new TerminalCommandRouter(
+            agentManager,
+            taskQueue,
+            loggingService,
+            eventBus
+        );
     }
 
     async start() {
@@ -52,6 +80,51 @@ export class ConductorTerminal {
 
         // Execute the actual command
         this.terminal.sendText(command);
+
+        // Wait for AI to initialize using configurable delay
+        const container = Container.getInstance();
+        const configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
+        const initDelay = configService.getClaudeInitializationDelay() * 1000; // Convert to milliseconds
+        await new Promise(resolve => setTimeout(resolve, initDelay));
+
+        // Send initial greeting after AI is ready
+        const greeting = `Welcome! I am the NofX Conductor. I can orchestrate your AI agents to build software collaboratively.
+
+Tell me what you want to build, and I'll coordinate the team to make it happen.`;
+        // Send the greeting text first
+        this.terminal.sendText(greeting, false); // false = no newline yet
+        
+        // Small delay to ensure the text is in the terminal
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Now send Enter to submit it
+        this.terminal.sendText('', true); // Send empty string with Enter to submit
+        
+        // Start monitoring terminal output for commands
+        if (this.commandRouter && this.terminal) {
+            this.commandRouter.startMonitoring(this.terminal);
+        }
+        
+        // Show natural language help
+        setTimeout(() => {
+            if (this.terminal) {
+                this.terminal.sendText('\n# Quick tip: You can use natural language commands like:');
+                this.terminal.sendText('# • "add a frontend dev"');
+                this.terminal.sendText('# • "what\'s everyone doing?"');
+                this.terminal.sendText('# • "assign login form to agent-1"');
+                this.terminal.sendText('# Or use JSON: {"type": "spawn", "role": "frontend-specialist"}\n');
+            }
+        }, 2000);
+        
+        // Update system status bar
+        if (this.notificationService) {
+            this.notificationService.updateSystemStatus(
+                this.agentManager.getActiveAgents().length,
+                this.taskQueue.getAllTasks().length,
+                0,
+                'healthy'
+            );
+        }
     }
 
     private getSystemPrompt(): string {
@@ -118,9 +191,26 @@ Total system limit: 10 concurrent sub-agents`;
     }
 
     stop() {
+        // Stop monitoring
+        if (this.commandRouter) {
+            this.commandRouter.stopMonitoring();
+        }
+        
+        // Dispose input listener
+        if (this.inputListener) {
+            this.inputListener.dispose();
+            this.inputListener = undefined;
+        }
+        
+        // Dispose terminal
         if (this.terminal) {
             this.terminal.dispose();
             this.terminal = undefined;
+        }
+        
+        // Reset status bar
+        if (this.notificationService) {
+            this.notificationService.resetSystemMetrics();
         }
     }
 }

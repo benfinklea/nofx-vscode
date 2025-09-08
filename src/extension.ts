@@ -19,6 +19,7 @@ import {
     IMetricsService,
     ICommandService,
     ITreeStateManager,
+    ISessionPersistenceService,
     ValidationError
 } from './services/interfaces';
 import { DOMAIN_EVENTS } from './services/EventConstants';
@@ -32,6 +33,7 @@ import { ErrorHandler } from './services/ErrorHandler';
 import { CommandService } from './services/CommandService';
 import { TerminalManager } from './services/TerminalManager';
 import { WorktreeService } from './services/WorktreeService';
+import { AutoWorktreeManager } from './services/AutoWorktreeManager';
 import { AgentLifecycleManager } from './services/AgentLifecycleManager';
 
 // Business logic
@@ -53,12 +55,14 @@ import { MessageType, OrchestratorMessage } from './orchestration/MessageProtoco
 import { AgentPersistence } from './persistence/AgentPersistence';
 import { WorktreeManager } from './worktrees/WorktreeManager';
 import { TaskToolBridge } from './services/TaskToolBridge';
+import { SessionPersistenceService } from './services/SessionPersistenceService';
 
 // Views
 import { AgentTreeProvider } from './views/AgentTreeProvider';
 import { TaskTreeProvider } from './views/TaskTreeProvider';
 import { NofxDevTreeProvider } from './views/NofxDevTreeProvider';
 import { NofxTerminalProvider } from './views/NofxTerminalProvider';
+import { ModernNofXPanel } from './views/ModernNofXPanel';
 
 // UI Services
 import { UIStateManager } from './services/UIStateManager';
@@ -77,6 +81,7 @@ import { TemplateCommands } from './commands/TemplateCommands';
 import { WorktreeCommands } from './commands/WorktreeCommands';
 import { UtilityCommands } from './commands/UtilityCommands';
 import { MetricsCommands } from './commands/MetricsCommands';
+import { SessionCommands } from './commands/SessionCommands';
 
 // Global container for dependency injection
 let container: IContainer;
@@ -108,38 +113,109 @@ export async function activate(context: vscode.ExtensionContext) {
         // Register foundational services (in dependency order)
         container.register(
             SERVICE_TOKENS.EventBus,
-            container => new EventBus(container.resolveOptional(SERVICE_TOKENS.LoggingService)),
+            container => {
+                console.log('[NofX Debug] Creating EventBus...');
+                try {
+                    const loggingService = container.resolveOptional<ILoggingService>(SERVICE_TOKENS.LoggingService);
+                    console.log('[NofX Debug] LoggingService resolved for EventBus (optional):', !!loggingService);
+                    
+                    const eventBus = new EventBus(loggingService);
+                    console.log('[NofX Debug] EventBus created successfully');
+                    return eventBus;
+                } catch (error) {
+                    console.error('[NofX Debug] Failed to create EventBus:', error);
+                    throw error;
+                }
+            },
             'singleton'
         );
-        container.register(SERVICE_TOKENS.NotificationService, () => new NotificationService(), 'singleton');
+        container.register(
+            SERVICE_TOKENS.NotificationService, 
+            () => {
+                console.log('[NofX Debug] Creating NotificationService...');
+                try {
+                    const notificationService = new NotificationService();
+                    console.log('[NofX Debug] NotificationService created successfully');
+                    return notificationService;
+                } catch (error) {
+                    console.error('[NofX Debug] Failed to create NotificationService:', error);
+                    throw error;
+                }
+            }, 
+            'singleton'
+        );
 
         // Register validation service (uses optional LoggingService)
         container.register(
             SERVICE_TOKENS.ConfigurationValidator,
-            container =>
-                new ConfigurationValidator(
-                    container.resolveOptional(SERVICE_TOKENS.LoggingService),
-                    container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService)
-                ),
+            container => {
+                console.log('[NofX Debug] Creating ConfigurationValidator...');
+                try {
+                    const loggingService = container.resolveOptional<ILoggingService>(SERVICE_TOKENS.LoggingService);
+                    console.log('[NofX Debug] LoggingService resolved (optional):', !!loggingService);
+                    
+                    const notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
+                    console.log('[NofX Debug] NotificationService resolved for validator');
+                    
+                    const validator = new ConfigurationValidator(loggingService, notificationService);
+                    console.log('[NofX Debug] ConfigurationValidator created successfully');
+                    return validator;
+                } catch (error) {
+                    console.error('[NofX Debug] Failed to create ConfigurationValidator:', error);
+                    throw error;
+                }
+            },
             'singleton'
         );
 
         // Register configuration service (depends on ConfigurationValidator and EventBus)
         container.register(
             SERVICE_TOKENS.ConfigurationService,
-            container =>
-                new ConfigurationService(
-                    container.resolve(SERVICE_TOKENS.ConfigurationValidator),
-                    container.resolve<IEventBus>(SERVICE_TOKENS.EventBus)
-                ),
+            container => {
+                try {
+                    console.log('[NofX Debug] Creating ConfigurationService...');
+                    
+                    // Check dependencies exist before resolving
+                    console.log('[NofX Debug] Resolving ConfigurationValidator...');
+                    const validator = container.resolve(SERVICE_TOKENS.ConfigurationValidator) as ConfigurationValidator;
+                    console.log('[NofX Debug] ConfigurationValidator resolved successfully');
+                    
+                    console.log('[NofX Debug] Resolving EventBus...');
+                    const eventBus = container.resolve<IEventBus>(SERVICE_TOKENS.EventBus);
+                    console.log('[NofX Debug] EventBus resolved successfully');
+                    
+                    console.log('[NofX Debug] Creating ConfigurationService instance...');
+                    const configService = new ConfigurationService(validator, eventBus);
+                    console.log('[NofX Debug] ConfigurationService created successfully');
+                    
+                    return configService;
+                } catch (error) {
+                    console.error('[NofX Debug] Failed to create ConfigurationService:', error);
+                    console.error('[NofX Debug] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+                    
+                    // Try to create without dependencies as fallback
+                    console.log('[NofX Debug] Attempting to create ConfigurationService without dependencies...');
+                    try {
+                        return new ConfigurationService();
+                    } catch (fallbackError) {
+                        console.error('[NofX Debug] Fallback ConfigurationService creation failed:', fallbackError);
+                        throw error; // Throw original error
+                    }
+                }
+            },
             'singleton'
         );
 
         // Now connect LoggingService to ConfigurationService
-        const loggingSvc = container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
-        const configSvc = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
-        if (loggingSvc.setConfigurationService) {
-            loggingSvc.setConfigurationService(configSvc);
+        try {
+            const loggingSvc = container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService) as any;
+            const configSvc = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
+            if (loggingSvc && typeof loggingSvc.setConfigurationService === 'function') {
+                loggingSvc.setConfigurationService(configSvc);
+            }
+        } catch (error) {
+            console.error('[NofX Debug] Failed to connect LoggingService to ConfigurationService:', error);
+            // Continue without configuration-aware logging
         }
 
         // Register metrics service (depends on ConfigurationService, LoggingService, EventBus)
@@ -173,6 +249,19 @@ export async function activate(context: vscode.ExtensionContext) {
             'singleton'
         );
 
+        // Register AgentNotificationService for agent-specific and system-wide notifications
+        container.register(
+            SERVICE_TOKENS.AgentNotificationService,
+            container => {
+                const AgentNotificationService = require('./services/AgentNotificationService').AgentNotificationService;
+                return new AgentNotificationService(
+                    container.resolve<vscode.ExtensionContext>(SERVICE_TOKENS.ExtensionContext),
+                    container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService)
+                );
+            },
+            'singleton'
+        );
+
         // Get logging service for use in activation
         const loggingService = container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
         const errorHandler = container.resolve<IErrorHandler>(SERVICE_TOKENS.ErrorHandler);
@@ -201,6 +290,14 @@ export async function activate(context: vscode.ExtensionContext) {
             // Register AgentPersistence
             const agentPersistence = new AgentPersistence(workspaceFolder.uri.fsPath, loggingService);
             container.registerInstance(SERVICE_TOKENS.AgentPersistence, agentPersistence);
+
+            // Register SessionPersistenceService
+            const sessionPersistenceService = new SessionPersistenceService(
+                context,
+                container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
+                container.resolve<IEventBus>(SERVICE_TOKENS.EventBus)
+            );
+            container.registerInstance(SERVICE_TOKENS.SessionPersistenceService, sessionPersistenceService);
         }
 
         // Register new services
@@ -262,7 +359,22 @@ export async function activate(context: vscode.ExtensionContext) {
             container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
             container.resolve<IEventBus>(SERVICE_TOKENS.EventBus),
             container.resolve<IErrorHandler>(SERVICE_TOKENS.ErrorHandler),
-            container.resolve<IMetricsService>(SERVICE_TOKENS.MetricsService)
+            container.resolve<IMetricsService>(SERVICE_TOKENS.MetricsService),
+            container.resolveOptional<ISessionPersistenceService>(SERVICE_TOKENS.SessionPersistenceService)
+        );
+
+        // Register AutoWorktreeManager for automatic worktree management
+        container.register(
+            SERVICE_TOKENS.AutoWorktreeManager,
+            container =>
+                new AutoWorktreeManager(
+                    container.resolve(SERVICE_TOKENS.AgentManager),
+                    container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService),
+                    container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService),
+                    container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService),
+                    container.resolveOptional<IEventBus>(SERVICE_TOKENS.EventBus)
+                ),
+            'singleton'
         );
 
         // Register new task management services
@@ -610,6 +722,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(agentTreeView);
 
+        // Register modern NofX control panel
+        const modernPanelProvider = new ModernNofXPanel(container);
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider(ModernNofXPanel.viewType, modernPanelProvider, {
+                webviewOptions: {
+                    retainContextWhenHidden: true
+                }
+            })
+        );
+
         // Register NofX terminal panel provider
         const terminalProvider = new NofxTerminalProvider(context.extensionUri, agentManager);
         context.subscriptions.push(
@@ -669,6 +791,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // Ensure MetricsCommands are disposed on deactivation
         context.subscriptions.push({ dispose: () => metricsCommands.dispose() });
+
+        // Register session commands
+        const sessionCommands = new SessionCommands(container);
+        if (workspaceFolder && container.resolveOptional(SERVICE_TOKENS.SessionPersistenceService)) {
+            sessionCommands.setSessionService(container.resolve(SERVICE_TOKENS.SessionPersistenceService));
+        }
+        sessionCommands.register();
+        context.subscriptions.push({ dispose: () => sessionCommands.dispose() });
 
         // Add a simple test command to verify command registration works
         const testCommand = vscode.commands.registerCommand('nofx.testCommand', () => {
