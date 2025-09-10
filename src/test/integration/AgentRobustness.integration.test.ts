@@ -15,10 +15,12 @@ import {
     INotificationService,
     IErrorHandler,
     IMetricsService,
-    ISessionPersistenceService
+    IPersistenceService
 } from '../../services/interfaces';
 import * as vscode from 'vscode';
-
+import { getAppStateStore } from '../../state/AppStateStore';
+import * as selectors from '../../state/selectors';
+import * as actions from '../../state/actions';
 // Mock VS Code
 jest.mock('vscode');
 
@@ -39,7 +41,7 @@ describe('Agent Robustness Integration Tests', () => {
     let mockNotificationService: jest.Mocked<INotificationService>;
     let mockErrorHandler: jest.Mocked<IErrorHandler>;
     let mockMetricsService: jest.Mocked<IMetricsService>;
-    let mockSessionService: jest.Mocked<ISessionPersistenceService>;
+    let mockSessionService: jest.Mocked<IPersistenceService>;
 
     const mockAgent = {
         id: 'integration-test-agent',

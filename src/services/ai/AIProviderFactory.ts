@@ -1,6 +1,6 @@
 import { IAIProvider, IAIProviderFactory } from './IAIProvider';
 import { ClaudeAIProvider } from './ClaudeAIProvider';
-import { ILoggingService } from '../interfaces';
+import { ILogger } from '../interfaces';
 
 /**
  * Factory for creating AI provider instances based on configuration
@@ -9,7 +9,7 @@ import { ILoggingService } from '../interfaces';
 export class AIProviderFactory implements IAIProviderFactory {
     private providers: Map<string, () => IAIProvider> = new Map();
 
-    constructor(private loggingService?: ILoggingService) {
+    constructor(private loggingService?: ILogger) {
         // Register default providers
         this.registerDefaultProviders();
     }
@@ -116,7 +116,7 @@ export class AIProviderFactory implements IAIProviderFactory {
  */
 let factoryInstance: AIProviderFactory | null = null;
 
-export function getAIProviderFactory(loggingService?: ILoggingService): AIProviderFactory {
+export function getAIProviderFactory(loggingService?: ILogger): AIProviderFactory {
     if (!factoryInstance) {
         factoryInstance = new AIProviderFactory(loggingService);
     }

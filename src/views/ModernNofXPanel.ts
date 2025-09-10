@@ -2,13 +2,8 @@ import * as vscode from 'vscode';
 import { AgentManager } from '../agents/AgentManager';
 import { TaskQueue } from '../tasks/TaskQueue';
 import { AgentConfig, TaskConfig } from '../agents/types';
-import {
-    ILoggingService,
-    INotificationService,
-    IContainer,
-    SERVICE_TOKENS,
-    ICommandService
-} from '../services/interfaces';
+import { ILogger, INotificationService, ICommandService } from '../services/interfaces';
+import { ServiceLocator } from '../services/ServiceLocator';
 
 export class ModernNofXPanel implements vscode.WebviewViewProvider {
     public static readonly viewType = 'nofx.modernPanel';
@@ -16,18 +11,18 @@ export class ModernNofXPanel implements vscode.WebviewViewProvider {
 
     private readonly agentManager: AgentManager;
     private readonly taskQueue: TaskQueue;
-    private readonly loggingService: ILoggingService;
+    private readonly loggingService: ILogger;
     private readonly notificationService: INotificationService;
     private readonly commandService: ICommandService;
     private readonly context: vscode.ExtensionContext;
 
-    constructor(private readonly container: IContainer) {
-        this.context = container.resolve<vscode.ExtensionContext>(SERVICE_TOKENS.ExtensionContext);
-        this.agentManager = container.resolve<AgentManager>(SERVICE_TOKENS.AgentManager);
-        this.taskQueue = container.resolve<TaskQueue>(SERVICE_TOKENS.TaskQueue);
-        this.loggingService = container.resolve<ILoggingService>(SERVICE_TOKENS.LoggingService);
-        this.notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
-        this.commandService = container.resolve<ICommandService>(SERVICE_TOKENS.CommandService);
+    constructor(private readonly serviceLocator: typeof ServiceLocator) {
+        this.context = ServiceLocator.get<vscode.ExtensionContext>('ExtensionContext');
+        this.agentManager = ServiceLocator.get<AgentManager>('AgentManager');
+        this.taskQueue = ServiceLocator.get<TaskQueue>('TaskQueue');
+        this.loggingService = ServiceLocator.get<ILogger>('LoggingService');
+        this.notificationService = ServiceLocator.get<INotificationService>('NotificationService');
+        this.commandService = ServiceLocator.get<ICommandService>('CommandService');
     }
 
     public resolveWebviewView(

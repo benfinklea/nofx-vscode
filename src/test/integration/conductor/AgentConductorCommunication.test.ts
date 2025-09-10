@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { AgentManager } from '../../../agents/AgentManager';
-import { ConductorTerminal } from '../../../conductor/ConductorTerminal';
-import { OrchestrationServer } from '../../../orchestration/OrchestrationServer';
+import { SmartConductor } from '../../../conductor/SmartConductor';
+import { DirectCommunicationService } from '../../../services/DirectCommunicationService';
 import { MessageType, OrchestratorMessage } from '../../../orchestration/MessageProtocol';
 import { Container } from '../../../services/Container';
 import { EventBus } from '../../../services/EventBus';
@@ -20,7 +20,7 @@ describe('Agent-Conductor Communication Integration', () => {
     let container: Container;
     let agentManager: AgentManager;
     let conductor: ConductorTerminal;
-    let orchestrationServer: OrchestrationServer;
+    let directCommunicationService: DirectCommunicationService;
     let eventBus: EventBus;
     let mockContext: vscode.ExtensionContext;
     let mockChannel: vscode.OutputChannel;
@@ -156,16 +156,15 @@ describe('Agent-Conductor Communication Integration', () => {
             'singleton'
         );
 
-        // Create orchestration server
-        orchestrationServer = new OrchestrationServer(
-            container.resolve(Symbol.for('IMessageRouter')),
+        // Create DirectCommunicationService
+        directCommunicationService = new DirectCommunicationService(
             container.resolve(Symbol.for('IEventBus')),
             container.resolve(Symbol.for('ILoggingService')),
-            container.resolve(Symbol.for('IMetricsService')),
-            null // No persistence for tests
+            null, // NotificationService - not needed for tests
+            container.resolve(Symbol.for('IMetricsService'))
         );
 
-        await orchestrationServer.start(TEST_PORT);
+        await directCommunicationService.start();
 
         // Create agent manager
         agentManager = new AgentManager(mockContext);
@@ -182,7 +181,7 @@ describe('Agent-Conductor Communication Integration', () => {
     });
 
     afterAll(async () => {
-        await orchestrationServer.stop();
+        await directCommunicationService.stop();
         await agentManager.dispose();
         conductor.dispose();
         await container.dispose();

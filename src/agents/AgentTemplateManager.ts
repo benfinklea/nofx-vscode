@@ -1,10 +1,19 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Container } from '../services/Container';
-import { SERVICE_TOKENS } from '../services/interfaces';
 import type { AgentManager } from './AgentManager';
+import { ServiceLocator } from '../services/ServiceLocator';
+import {
+    SmartTemplateFactory,
+    SmartAgentTemplate,
+    AgentConfig,
+    DeveloperConfig,
+    ArchitectConfig,
+    QualityConfig,
+    ProcessConfig
+} from './SmartTemplateSystem';
 
+// Legacy interface for backward compatibility
 export interface AgentTemplate {
     id: string;
     name: string;
@@ -13,12 +22,12 @@ export interface AgentTemplate {
     color?: string;
     description: string;
     version?: string;
-    types?: string[]; // New field for type matching
+    types?: string[];
     tags?: string[];
-    capabilities?: any; // Allow flexible structure to match JSON files
+    capabilities?: any;
     systemPrompt: string;
-    detailedPrompt?: string; // NEW: Detailed prompt to inject after launch
-    subAgentCapabilities?: any; // Allow flexible structure
+    detailedPrompt?: string;
+    subAgentCapabilities?: any;
     taskPreferences?: {
         preferred: string[];
         avoid: string[];
@@ -29,51 +38,48 @@ export interface AgentTemplate {
         watch: string[];
         ignore: string[];
     };
-    commands?: any; // Allow flexible structure
-    workflow?: any; // Allow flexible structure
-    bestPractices?: any; // Allow flexible structure
-    riskMitigation?: any; // Allow flexible structure
-    metrics?: any; // Allow flexible structure
-    documentation?: any; // Allow flexible structure
-    orchestrationPatterns?: any; // Allow flexible structure
-    aiSystemIntegration?: any; // Allow flexible structure
-    vscodeExtensionPatterns?: any; // Allow flexible structure
-    codeTemplates?: any; // Allow flexible structure
+    commands?: any;
+    workflow?: any;
+    bestPractices?: any;
+    riskMitigation?: any;
+    metrics?: any;
+    documentation?: any;
+    orchestrationPatterns?: any;
+    aiSystemIntegration?: any;
+    vscodeExtensionPatterns?: any;
+    codeTemplates?: any;
     snippets?: Record<string, string>;
     author?: string;
 }
+
+// Type alias for compatibility
+export type ModernAgentTemplate = SmartAgentTemplate | AgentTemplate;
 
 export class AgentTemplateManager {
     private builtInTemplatesDir: string;
     private templatesDir: string;
     private customTemplatesDir: string;
-    private templates: Map<string, AgentTemplate> = new Map();
+    private templates: Map<string, ModernAgentTemplate> = new Map();
+    private smartTemplates: Map<string, SmartAgentTemplate> = new Map();
     private fileWatcher: vscode.FileSystemWatcher | undefined;
     private _onTemplateChange = new vscode.EventEmitter<void>();
     public readonly onTemplateChange = this._onTemplateChange.event;
+    private useSmartTemplates: boolean = true;
 
     constructor(workspaceRoot: string) {
         // Built-in templates packaged with the extension
-        // AgentTemplateManager.js is in out/agents/, templates are copied to out/agents/templates/
         this.builtInTemplatesDir = path.join(__dirname, 'templates');
 
-        // Use multiple logging methods to ensure visibility
-        console.log(`[NofX Debug] Built-in templates directory: ${this.builtInTemplatesDir}`);
-        console.error(`[NofX Debug] Built-in templates directory: ${this.builtInTemplatesDir}`);
-        console.log(`[NofX Debug] Current __dirname: ${__dirname}`);
-        console.log(`[NofX Debug] Templates directory exists:`, fs.existsSync(this.builtInTemplatesDir));
-
-        // Also show VS Code notification immediately
-        vscode.window.showInformationMessage(
-            `[NofX] AgentTemplateManager created. Templates dir: ${this.builtInTemplatesDir}`
-        );
+        console.log(`[NofX] Smart Template System initialized`);
+        console.log(`[NofX] Legacy templates directory: ${this.builtInTemplatesDir}`);
 
         // Runtime templates directory (for user customization)
         this.templatesDir = path.join(workspaceRoot, '.nofx', 'templates');
         this.customTemplatesDir = path.join(this.templatesDir, 'custom');
 
         this.ensureDirectories();
-        this.loadTemplates();
+        this.initializeSmartTemplates();
+        this.loadLegacyTemplates(); // Load any remaining legacy templates
         this.watchTemplates();
     }
 
@@ -166,62 +172,47 @@ export class AgentTemplateManager {
         ];
     }
 
-    private loadTemplates() {
-        this.templates.clear();
+    private initializeSmartTemplates() {
+        console.log('[NofX] Initializing Smart Template System...');
 
-        console.log('[NofX] Starting to load templates...');
-        console.error('[NofX] Loading templates (using console.error to ensure visibility)');
+        // Load preset smart templates
+        const presetTemplates = SmartTemplateFactory.createPresetTemplates();
+        for (const template of presetTemplates) {
+            this.smartTemplates.set(template.id, template);
+            this.templates.set(template.id, template);
+        }
 
-        // Show VS Code notification for template loading
-        vscode.window.showInformationMessage('[NofX] Starting to load templates...');
+        console.log(`[NofX] Loaded ${presetTemplates.length} smart templates`);
+    }
 
-        // First, load built-in templates from the extension
+    private loadLegacyTemplates() {
+        // Only load legacy templates if they exist and aren't replaced by smart templates
         if (fs.existsSync(this.builtInTemplatesDir)) {
-            console.log(`[NofX Debug] Built-in templates directory exists, loading templates...`);
             const builtInFiles = fs.readdirSync(this.builtInTemplatesDir).filter(file => file.endsWith('.json'));
-            console.log(`[NofX Debug] Found built-in template files:`, builtInFiles);
 
             for (const file of builtInFiles) {
                 try {
                     const content = fs.readFileSync(path.join(this.builtInTemplatesDir, file), 'utf-8');
-                    console.log(`[NofX Debug] Read template file ${file}, content length: ${content.length}`);
-
                     const template = JSON.parse(content) as AgentTemplate;
-                    console.log(`[NofX Debug] Parsed template ${template.id}, keys:`, Object.keys(template));
 
-                    // Debug: Log what we're loading
-                    if (template.id === 'frontend-specialist' || template.id === 'backend-specialist') {
-                        console.log(`[NofX Debug] Loading ${template.id} template:`);
-                        console.log('  - systemPrompt length:', template.systemPrompt?.length);
-                        console.log('  - systemPrompt preview:', template.systemPrompt?.substring(0, 100) + '...');
-                        console.log('  - detailedPrompt exists?', !!template.detailedPrompt);
-                        console.log('  - detailedPrompt length:', template.detailedPrompt?.length);
-                        console.log('  - Full template keys:', Object.keys(template));
-
-                        // Also show in VS Code output
-                        vscode.window.showInformationMessage(
-                            `Loaded ${template.id}: systemPrompt=${template.systemPrompt?.length} chars, detailedPrompt=${template.detailedPrompt?.length || 0} chars`
-                        );
+                    // Only load if not already replaced by smart template
+                    if (!this.templates.has(template.id)) {
+                        this.templates.set(template.id, template);
+                        console.log(`[NofX] Loaded legacy template: ${template.id}`);
                     }
-
-                    this.templates.set(template.id, template);
                 } catch (error) {
-                    console.error(`Failed to load built-in template ${file}:`, error);
+                    console.error(`Failed to load legacy template ${file}:`, error);
                 }
             }
-        } else {
-            console.error(`[NofX Debug] Built-in templates directory does not exist: ${this.builtInTemplatesDir}`);
         }
 
-        // Then load user templates from .nofx/templates (these can override built-in)
+        // Load user custom templates
         if (fs.existsSync(this.templatesDir)) {
             const templateFiles = fs.readdirSync(this.templatesDir).filter(file => file.endsWith('.json'));
-
             for (const file of templateFiles) {
                 try {
                     const content = fs.readFileSync(path.join(this.templatesDir, file), 'utf-8');
                     const template = JSON.parse(content) as AgentTemplate;
-                    // User templates override built-in templates with same ID
                     this.templates.set(template.id, template);
                 } catch (error) {
                     console.error(`Failed to load user template ${file}:`, error);
@@ -229,23 +220,7 @@ export class AgentTemplateManager {
             }
         }
 
-        // Finally, load custom templates (with custom- prefix)
-        if (fs.existsSync(this.customTemplatesDir)) {
-            const customFiles = fs.readdirSync(this.customTemplatesDir).filter(file => file.endsWith('.json'));
-
-            for (const file of customFiles) {
-                try {
-                    const content = fs.readFileSync(path.join(this.customTemplatesDir, file), 'utf-8');
-                    const template = JSON.parse(content) as AgentTemplate;
-                    template.id = `custom-${template.id}`;
-                    this.templates.set(template.id, template);
-                } catch (error) {
-                    console.error(`Failed to load custom template ${file}:`, error);
-                }
-            }
-        }
-
-        console.log(`[NofX] Loaded ${this.templates.size} agent templates`);
+        console.log(`[NofX] Total templates loaded: ${this.templates.size}`);
     }
 
     private watchTemplates() {
@@ -253,43 +228,50 @@ export class AgentTemplateManager {
         this.fileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
 
         this.fileWatcher.onDidCreate(() => {
-            this.loadTemplates();
+            this.loadLegacyTemplates();
             this._onTemplateChange.fire();
         });
 
         this.fileWatcher.onDidChange(() => {
-            this.loadTemplates();
+            this.loadLegacyTemplates();
             this._onTemplateChange.fire();
         });
 
         this.fileWatcher.onDidDelete(() => {
-            this.loadTemplates();
+            this.loadLegacyTemplates();
             this._onTemplateChange.fire();
         });
     }
 
-    public getTemplates(): AgentTemplate[] {
+    public getTemplates(): ModernAgentTemplate[] {
         return Array.from(this.templates.values());
     }
 
-    public getTemplate(id: string): AgentTemplate | undefined {
-        const template = this.templates.get(id);
+    public getSmartTemplates(): SmartAgentTemplate[] {
+        return Array.from(this.smartTemplates.values());
+    }
 
-        if (id === 'backend-specialist') {
-            console.log(`[NofX Debug] AgentTemplateManager.getTemplate(${id}) returning:`, {
-                found: !!template,
-                hasSystemPrompt: !!template?.systemPrompt,
-                hasDetailedPrompt: !!template?.detailedPrompt,
-                systemPromptLength: template?.systemPrompt?.length || 0,
-                detailedPromptLength: template?.detailedPrompt?.length || 0,
-                templateKeys: template ? Object.keys(template) : []
-            });
-        }
+    public getTemplate(id: string): ModernAgentTemplate | undefined {
+        return this.templates.get(id);
+    }
+
+    public getSmartTemplate(id: string): SmartAgentTemplate | undefined {
+        return this.smartTemplates.get(id);
+    }
+
+    public createDynamicTemplate(config: AgentConfig): SmartAgentTemplate {
+        const template = SmartTemplateFactory.createTemplate(config);
+
+        // Store dynamically created template
+        const dynamicId = `dynamic-${Date.now()}`;
+        template.id = dynamicId;
+        this.smartTemplates.set(dynamicId, template);
+        this.templates.set(dynamicId, template);
 
         return template;
     }
 
-    public async createTemplate(template: AgentTemplate, isCustom: boolean = true) {
+    public async createTemplate(template: ModernAgentTemplate, isCustom: boolean = true) {
         const dir = isCustom ? this.customTemplatesDir : this.templatesDir;
         const filePath = path.join(dir, `${template.id}.json`);
 
@@ -303,12 +285,30 @@ export class AgentTemplateManager {
         }
 
         fs.writeFileSync(filePath, JSON.stringify(template, null, 2));
-        this.loadTemplates();
+        this.loadLegacyTemplates();
         return true;
     }
 
+    public async createSmartTemplate(config: AgentConfig, save: boolean = false): Promise<SmartAgentTemplate> {
+        const template = SmartTemplateFactory.createTemplate(config);
+
+        this.smartTemplates.set(template.id, template);
+        this.templates.set(template.id, template);
+
+        if (save) {
+            await this.saveSmartTemplate(template);
+        }
+
+        return template;
+    }
+
+    private async saveSmartTemplate(template: SmartAgentTemplate) {
+        const configPath = path.join(this.customTemplatesDir, `${template.id}.config.json`);
+        fs.writeFileSync(configPath, JSON.stringify(template.config, null, 2));
+    }
+
     // Alias for createTemplate to match command expectations
-    public async saveTemplate(template: AgentTemplate, isCustom: boolean = true) {
+    public async saveTemplate(template: ModernAgentTemplate, isCustom: boolean = true) {
         return this.createTemplate(template, isCustom);
     }
 
@@ -316,7 +316,7 @@ export class AgentTemplateManager {
      * Saves a template to the built-in templates directory (for development/testing)
      * WARNING: This writes to the extension's source directory and may be lost on updates
      */
-    public async saveBuiltInLikeTemplate(template: AgentTemplate): Promise<boolean> {
+    public async saveBuiltInLikeTemplate(template: ModernAgentTemplate): Promise<boolean> {
         const filePath = path.join(this.builtInTemplatesDir, `${template.id}.json`);
 
         if (fs.existsSync(filePath)) {
@@ -330,7 +330,7 @@ export class AgentTemplateManager {
 
         try {
             fs.writeFileSync(filePath, JSON.stringify(template, null, 2));
-            this.loadTemplates();
+            this.loadLegacyTemplates();
             return true;
         } catch (error) {
             console.error(`Failed to save built-in template: ${error}`);
@@ -399,48 +399,14 @@ export class AgentTemplateManager {
         }
     }
 
-    public findBestTemplate(task: any): AgentTemplate | undefined {
-        let bestTemplate: AgentTemplate | undefined;
+    public findBestTemplate(task: any): ModernAgentTemplate | undefined {
+        let bestTemplate: ModernAgentTemplate | undefined;
         let bestScore = 0;
 
         const taskText = `${task.title} ${task.description}`.toLowerCase();
 
         for (const template of this.templates.values()) {
-            let score = 0;
-
-            // Check preferred tasks
-            if (template.taskPreferences?.preferred) {
-                for (const preferred of template.taskPreferences.preferred) {
-                    if (taskText.includes(preferred)) {
-                        score += 10;
-                    }
-                }
-            }
-
-            // Check avoided tasks (negative score)
-            if (template.taskPreferences?.avoid) {
-                for (const avoid of template.taskPreferences.avoid) {
-                    if (taskText.includes(avoid)) {
-                        score -= 5;
-                    }
-                }
-            }
-
-            // Check tags
-            if (template.tags) {
-                for (const tag of template.tags) {
-                    if (taskText.includes(tag)) {
-                        score += 3;
-                    }
-                }
-            }
-
-            // Check capabilities
-            for (const lang of template.capabilities.languages) {
-                if (taskText.includes(lang)) {
-                    score += 2;
-                }
-            }
+            const score = this.scoreTemplate(template, taskText);
 
             if (score > bestScore) {
                 bestScore = score;
@@ -451,11 +417,82 @@ export class AgentTemplateManager {
         return bestTemplate;
     }
 
+    private scoreTemplate(template: ModernAgentTemplate, taskText: string): number {
+        let score = 0;
+
+        // Check preferred tasks
+        if (template.taskPreferences?.preferred) {
+            for (const preferred of template.taskPreferences.preferred) {
+                if (taskText.includes(preferred.toLowerCase())) {
+                    score += 10;
+                }
+            }
+        }
+
+        // Check avoided tasks (negative score)
+        if (template.taskPreferences?.avoid) {
+            for (const avoid of template.taskPreferences.avoid) {
+                if (taskText.includes(avoid.toLowerCase())) {
+                    score -= 5;
+                }
+            }
+        }
+
+        // Check tags
+        if ('tags' in template && (template as any).tags) {
+            for (const tag of (template as any).tags) {
+                if (taskText.includes(tag.toLowerCase())) {
+                    score += 3;
+                }
+            }
+        }
+
+        // Smart template scoring
+        if ('config' in template && template.config) {
+            if (template.config.category === 'developer') {
+                const config = template.config as DeveloperConfig;
+                if (taskText.includes(config.primaryDomain)) score += 8;
+                for (const lang of config.languages) {
+                    if (taskText.includes(lang.toLowerCase())) score += 2;
+                }
+                for (const spec of config.specializations) {
+                    if (taskText.includes(spec.toLowerCase().replace('-', ' '))) score += 5;
+                }
+            }
+        }
+
+        return score;
+    }
+
+    public suggestTemplateForTask(taskDescription: string): SmartAgentTemplate | null {
+        const taskLower = taskDescription.toLowerCase();
+
+        // Analyze task to suggest template configuration
+        if (taskLower.includes('frontend') || taskLower.includes('ui') || taskLower.includes('react')) {
+            return this.getSmartTemplate('frontend-developer') || null;
+        }
+        if (taskLower.includes('backend') || taskLower.includes('api') || taskLower.includes('server')) {
+            return this.getSmartTemplate('backend-developer') || null;
+        }
+        if (taskLower.includes('fullstack') || taskLower.includes('full-stack') || taskLower.includes('end-to-end')) {
+            return this.getSmartTemplate('fullstack-developer') || null;
+        }
+        if (taskLower.includes('test') || taskLower.includes('quality') || taskLower.includes('qa')) {
+            return this.getSmartTemplate('testing-specialist') || null;
+        }
+        if (taskLower.includes('architect') || taskLower.includes('design') || taskLower.includes('system')) {
+            return this.getSmartTemplate('software-architect') || null;
+        }
+
+        // Default to fullstack if uncertain
+        return this.getSmartTemplate('fullstack-developer') || null;
+    }
+
     /**
      * Find the best matching template for a given agent type
      * Uses multiple strategies: exact ID match, types array, name/tag matching
      */
-    public findTemplateByType(agentType: string): AgentTemplate | null {
+    public findTemplateByType(agentType: string): ModernAgentTemplate | null {
         const normalizedType = agentType.toLowerCase().trim();
 
         // Strategy 1: Exact ID match
@@ -473,9 +510,9 @@ export class AgentTemplateManager {
 
         // Strategy 2: Check types array (if we've added it)
         for (const template of this.templates.values()) {
-            if (template.types && Array.isArray(template.types)) {
+            if ('type' in template && Array.isArray((template as any).type)) {
                 if (
-                    template.types.some(
+                    (template as any).type.some(
                         (t: string) =>
                             t.toLowerCase() === normalizedType ||
                             normalizedType.includes(t.toLowerCase()) ||
@@ -489,9 +526,9 @@ export class AgentTemplateManager {
 
         // Strategy 3: Check tags array (already exists in templates)
         for (const template of this.templates.values()) {
-            if (template.tags && Array.isArray(template.tags)) {
+            if ('keywords' in template && Array.isArray((template as any).keywords)) {
                 if (
-                    template.tags.some(
+                    (template as any).keywords.some(
                         (tag: string) =>
                             tag.toLowerCase() === normalizedType ||
                             normalizedType.includes(tag.toLowerCase()) ||
@@ -531,21 +568,18 @@ export class AgentTemplateManager {
         const activeTypes = new Set<string>();
 
         try {
-            // Try to get AgentManager from Container
-            const container = Container.getInstance();
-            if (container) {
-                const agentManager = container.resolve<AgentManager>(SERVICE_TOKENS.AgentManager);
-                if (agentManager && typeof agentManager.getAllAgents === 'function') {
-                    const agents = agentManager.getAllAgents();
-                    for (const agent of agents) {
-                        // Add the agent type
-                        if (agent.type) {
-                            activeTypes.add(agent.type.toLowerCase());
-                        }
-                        // Also add template ID if available
-                        if (agent.template?.id) {
-                            activeTypes.add(agent.template.id.toLowerCase());
-                        }
+            // Try to get AgentManager from ServiceLocator
+            const agentManager = ServiceLocator.get<AgentManager>('AgentManager');
+            if (agentManager && typeof agentManager.getAllAgents === 'function') {
+                const agents = agentManager.getAllAgents();
+                for (const agent of agents) {
+                    // Add the agent type
+                    if (agent.type) {
+                        activeTypes.add(agent.type.toLowerCase());
+                    }
+                    // Also add template ID if available
+                    if (agent.template?.id) {
+                        activeTypes.add(agent.template.id.toLowerCase());
                     }
                 }
             }
@@ -560,8 +594,44 @@ export class AgentTemplateManager {
     /**
      * Get all available templates (alias for getTemplates)
      */
-    public getAllTemplates(): AgentTemplate[] {
+    public getAllTemplates(): ModernAgentTemplate[] {
         return this.getTemplates();
+    }
+
+    /**
+     * Get available template categories for UI
+     */
+    public getTemplateCategories(): string[] {
+        const categories = new Set<string>();
+        for (const template of this.smartTemplates.values()) {
+            categories.add(template.config.category);
+        }
+        return Array.from(categories);
+    }
+
+    /**
+     * Get templates by category
+     */
+    public getTemplatesByCategory(category: string): SmartAgentTemplate[] {
+        return Array.from(this.smartTemplates.values()).filter(template => template.config.category === category);
+    }
+
+    /**
+     * Enable/disable smart template system
+     */
+    public setUseSmartTemplates(use: boolean) {
+        this.useSmartTemplates = use;
+        if (use) {
+            this.initializeSmartTemplates();
+        }
+        this._onTemplateChange.fire();
+    }
+
+    /**
+     * Check if smart templates are enabled
+     */
+    public isUsingSmartTemplates(): boolean {
+        return this.useSmartTemplates;
     }
 
     dispose() {

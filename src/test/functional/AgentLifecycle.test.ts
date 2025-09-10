@@ -9,11 +9,13 @@ import { DOMAIN_EVENTS } from '../../services/EventConstants';
 import { ConfigurationService } from '../../services/ConfigurationService';
 import { LoggingService } from '../../services/LoggingService';
 import { Agent, AgentTemplate } from '../../types/agent';
-import { AgentPersistence } from '../../persistence/AgentPersistence';
+import { PersistenceService } from '../../services/PersistenceService';
 import { setupMockWorkspace, clearMockWorkspace } from './setup';
 import { TestHarness } from './testHarness';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../state/AppStateStore';
+import * as selectors from '../../state/selectors';
+import * as actions from '../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,
@@ -35,7 +37,7 @@ describe('Agent Lifecycle', () => {
     let agentManager: AgentManager;
     let templateManager: AgentTemplateManager;
     let eventBus: EventBus;
-    let agentPersistence: AgentPersistence;
+    let agentPersistence: PersistenceService;
     let loggingService: LoggingService;
 
     const mockTemplates: any[] = [
@@ -146,11 +148,11 @@ describe('Agent Lifecycle', () => {
 
         // Initialize agent-related services
         templateManager = new AgentTemplateManager('/test/workspace');
-        agentPersistence = new AgentPersistence(context.globalStorageUri.fsPath);
+        agentPersistence = new PersistenceService(context.globalStorageUri.fsPath);
         agentManager = new AgentManager(context);
 
         container.registerInstance(SERVICE_TOKENS.AgentTemplateManager, templateManager);
-        container.registerInstance(SERVICE_TOKENS.AgentPersistence, agentPersistence);
+        container.registerInstance(SERVICE_TOKENS.PersistenceService, agentPersistence);
         container.registerInstance(SERVICE_TOKENS.AgentManager, agentManager);
 
         // Mock template manager

@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
-import { 
-    WorktreeConfigurationManager, 
-    WorktreeConfig, 
-    PerformanceProfile 
+import {
+    WorktreeConfigurationManager,
+    WorktreeConfig,
+    PerformanceProfile
 } from '../../../worktrees/WorktreeConfiguration';
 import { setupVSCodeMocks } from '../../helpers/mockFactories';
 
@@ -21,24 +21,24 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         setupVSCodeMocks();
-        
+
         // Reset singleton
         (WorktreeConfigurationManager as any).instance = undefined;
-        
+
         // Setup mock workspace configuration
         mockWorkspaceConfig = {
             get: jest.fn((key: string, defaultValue?: any) => {
                 const configMap: any = {
-                    'performanceProfile': 'balanced'
+                    performanceProfile: 'balanced'
                 };
                 return configMap[key] ?? defaultValue;
             }),
             has: jest.fn((key: string) => false),
             update: jest.fn()
         };
-        
+
         mockConfigChangeEvent = { dispose: jest.fn() };
-        
+
         (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue(mockWorkspaceConfig);
         (vscode.workspace.onDidChangeConfiguration as jest.Mock).mockReturnValue(mockConfigChangeEvent);
     });
@@ -51,13 +51,13 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
         it('should return same instance', () => {
             const instance1 = WorktreeConfigurationManager.getInstance();
             const instance2 = WorktreeConfigurationManager.getInstance();
-            
+
             expect(instance1).toBe(instance2);
         });
 
         it('should initialize on first getInstance', () => {
             configManager = WorktreeConfigurationManager.getInstance();
-            
+
             expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith('nofx.worktree');
             expect(vscode.workspace.onDidChangeConfiguration).toHaveBeenCalled();
         });
@@ -69,10 +69,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'performanceProfile') return 'conservative';
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.performance.profile).toBe('conservative');
             expect(config.performance.maxParallelOperations).toBeLessThanOrEqual(2);
             expect(config.pool.enabled).toBe(false);
@@ -85,10 +85,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'performanceProfile') return 'balanced';
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.performance.profile).toBe('balanced');
             expect(config.performance.maxParallelOperations).toBeGreaterThanOrEqual(2);
             expect(config.pool.enabled).toBe(true);
@@ -101,10 +101,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'performanceProfile') return 'aggressive';
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.performance.profile).toBe('aggressive');
             expect(config.performance.maxParallelOperations).toBeGreaterThanOrEqual(3);
             expect(config.pool.size).toBe(10);
@@ -117,10 +117,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'performanceProfile') return 'extreme';
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.performance.profile).toBe('extreme');
             expect(config.performance.maxParallelOperations).toBe(4); // CPU count
             expect(config.pool.size).toBe(20);
@@ -133,10 +133,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'performanceProfile') return 'custom';
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.performance.profile).toBe('balanced'); // Falls back to balanced
         });
     });
@@ -151,10 +151,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'performance.maxParallelOperations') return 8;
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.performance.maxParallelOperations).toBe(8);
         });
 
@@ -167,10 +167,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'cache.ttlMs') return 120000;
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.cache.enabled).toBe(false);
             expect(config.cache.ttlMs).toBe(120000);
         });
@@ -184,10 +184,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'pool.size') return 15;
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.pool.enabled).toBe(true);
             expect(config.pool.size).toBe(15);
         });
@@ -200,10 +200,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'health.autoRecoveryEnabled') return false;
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.health.autoRecoveryEnabled).toBe(false);
         });
 
@@ -215,10 +215,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'advanced.experimentalFeatures') return true;
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.advanced.experimentalFeatures).toBe(true);
         });
     });
@@ -226,7 +226,7 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
     describe('Configuration Updates', () => {
         it('should update configuration', async () => {
             configManager = WorktreeConfigurationManager.getInstance();
-            
+
             await configManager.updateConfig({
                 performance: {
                     profile: 'aggressive',
@@ -237,17 +237,13 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                     queueSize: 200
                 }
             });
-            
-            expect(mockWorkspaceConfig.update).toHaveBeenCalledWith(
-                'performanceProfile',
-                'aggressive',
-                true
-            );
+
+            expect(mockWorkspaceConfig.update).toHaveBeenCalledWith('performanceProfile', 'aggressive', true);
         });
 
         it('should save key settings to VS Code', async () => {
             configManager = WorktreeConfigurationManager.getInstance();
-            
+
             const updates: Partial<WorktreeConfig> = {
                 performance: {
                     profile: 'extreme',
@@ -265,9 +261,9 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                     compressionEnabled: true
                 }
             };
-            
+
             await configManager.updateConfig(updates);
-            
+
             expect(mockWorkspaceConfig.update).toHaveBeenCalledWith('performanceProfile', 'extreme', true);
             expect(mockWorkspaceConfig.update).toHaveBeenCalledWith('performance.maxParallelOperations', 16, true);
             expect(mockWorkspaceConfig.update).toHaveBeenCalledWith('cache.enabled', true, true);
@@ -277,36 +273,34 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
     describe('Configuration Change Handling', () => {
         it('should reload configuration on change', () => {
             configManager = WorktreeConfigurationManager.getInstance();
-            
+
             const changeHandler = (vscode.workspace.onDidChangeConfiguration as jest.Mock).mock.calls[0][0];
-            
+
             const mockEvent = {
                 affectsConfiguration: (section: string) => section === 'nofx.worktree'
             };
-            
+
             const showInfoSpy = jest.spyOn(vscode.window, 'showInformationMessage');
-            
+
             changeHandler(mockEvent);
-            
+
             expect(vscode.workspace.getConfiguration).toHaveBeenCalledTimes(2); // Initial + reload
-            expect(showInfoSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Worktree configuration updated')
-            );
+            expect(showInfoSpy).toHaveBeenCalledWith(expect.stringContaining('Worktree configuration updated'));
         });
 
         it('should ignore unrelated configuration changes', () => {
             configManager = WorktreeConfigurationManager.getInstance();
-            
+
             const changeHandler = (vscode.workspace.onDidChangeConfiguration as jest.Mock).mock.calls[0][0];
-            
+
             const mockEvent = {
                 affectsConfiguration: (section: string) => section === 'editor.fontSize'
             };
-            
+
             const initialCallCount = (vscode.workspace.getConfiguration as jest.Mock).mock.calls.length;
-            
+
             changeHandler(mockEvent);
-            
+
             expect(vscode.workspace.getConfiguration).toHaveBeenCalledTimes(initialCallCount);
         });
     });
@@ -315,55 +309,55 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
         it('should recommend conservative profile for low resources', () => {
             (os.cpus as jest.Mock).mockReturnValue(Array(2).fill({}));
             (os.totalmem as jest.Mock).mockReturnValue(4 * 1024 * 1024 * 1024); // 4GB
-            
+
             const profile = WorktreeConfigurationManager.getRecommendedProfile();
-            
+
             expect(profile).toBe('conservative');
         });
 
         it('should recommend balanced profile for medium resources', () => {
             (os.cpus as jest.Mock).mockReturnValue(Array(4).fill({}));
             (os.totalmem as jest.Mock).mockReturnValue(8 * 1024 * 1024 * 1024); // 8GB
-            
+
             const profile = WorktreeConfigurationManager.getRecommendedProfile();
-            
+
             expect(profile).toBe('balanced');
         });
 
         it('should recommend aggressive profile for high resources', () => {
             (os.cpus as jest.Mock).mockReturnValue(Array(8).fill({}));
             (os.totalmem as jest.Mock).mockReturnValue(16 * 1024 * 1024 * 1024); // 16GB
-            
+
             const profile = WorktreeConfigurationManager.getRecommendedProfile();
-            
+
             expect(profile).toBe('aggressive');
         });
 
         it('should adjust config based on CPU count', () => {
             (os.cpus as jest.Mock).mockReturnValue(Array(16).fill({}));
-            
+
             mockWorkspaceConfig.get.mockImplementation((key: string, defaultValue?: any) => {
                 if (key === 'performanceProfile') return 'aggressive';
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.performance.maxParallelOperations).toBeLessThanOrEqual(15); // cpus - 1
         });
 
         it('should adjust memory limits based on system memory', () => {
             (os.totalmem as jest.Mock).mockReturnValue(32 * 1024 * 1024 * 1024); // 32GB
-            
+
             mockWorkspaceConfig.get.mockImplementation((key: string, defaultValue?: any) => {
                 if (key === 'performanceProfile') return 'aggressive';
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.resources.maxMemoryMB).toBeLessThanOrEqual(32 * 1024 * 0.3); // 30% of total
         });
     });
@@ -384,7 +378,7 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                     queueSize: 50
                 }
             });
-            
+
             expect(errors).toContain('maxParallelOperations must be at least 1');
         });
 
@@ -399,7 +393,7 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                     queueSize: 50
                 }
             });
-            
+
             expect(errors).toContain('operationTimeoutMs must be at least 1000ms');
         });
 
@@ -413,7 +407,7 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                     compressionEnabled: false
                 }
             });
-            
+
             expect(errors).toContain('cache.maxEntries must be at least 10');
         });
 
@@ -427,7 +421,7 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                     maxPoolSize: 200
                 }
             });
-            
+
             expect(errors).toContain('pool.size should not exceed 100');
         });
 
@@ -442,7 +436,7 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                     queueSize: 50
                 }
             });
-            
+
             expect(errors).toEqual([]);
         });
     });
@@ -455,7 +449,7 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
         it('should export configuration as JSON', () => {
             const exported = configManager.exportConfig();
             const parsed = JSON.parse(exported);
-            
+
             expect(parsed).toHaveProperty('performance');
             expect(parsed).toHaveProperty('cache');
             expect(parsed).toHaveProperty('pool');
@@ -529,11 +523,11 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                     intelligentCaching: true
                 }
             };
-            
+
             await configManager.importConfig(JSON.stringify(config));
-            
+
             expect(mockWorkspaceConfig.update).toHaveBeenCalled();
-            
+
             const currentConfig = configManager.getConfig();
             expect(currentConfig.performance.maxParallelOperations).toBe(6);
         });
@@ -544,14 +538,16 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                     maxParallelOperations: -1 // Invalid
                 }
             };
-            
-            await expect(configManager.importConfig(JSON.stringify(invalidConfig)))
-                .rejects.toThrow('Invalid configuration');
+
+            await expect(configManager.importConfig(JSON.stringify(invalidConfig))).rejects.toThrow(
+                'Invalid configuration'
+            );
         });
 
         it('should handle malformed JSON import', async () => {
-            await expect(configManager.importConfig('{ invalid json'))
-                .rejects.toThrow('Failed to import configuration');
+            await expect(configManager.importConfig('{ invalid json')).rejects.toThrow(
+                'Failed to import configuration'
+            );
         });
     });
 
@@ -561,10 +557,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'performanceProfile') return 'conservative';
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             // Conservative specific checks
             expect(config.performance.retryAttempts).toBe(2);
             expect(config.pool.enabled).toBe(false);
@@ -578,10 +574,10 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 if (key === 'performanceProfile') return 'extreme';
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             // Extreme specific checks
             expect(config.performance.retryAttempts).toBe(10);
             expect(config.pool.size).toBe(20);
@@ -594,18 +590,18 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
     describe('Disposal', () => {
         it('should dispose configuration watcher', () => {
             configManager = WorktreeConfigurationManager.getInstance();
-            
+
             configManager.dispose();
-            
+
             expect(mockConfigChangeEvent.dispose).toHaveBeenCalled();
         });
 
         it('should handle multiple dispose calls', () => {
             configManager = WorktreeConfigurationManager.getInstance();
-            
+
             configManager.dispose();
             configManager.dispose(); // Second call
-            
+
             expect(mockConfigChangeEvent.dispose).toHaveBeenCalledTimes(1);
         });
     });
@@ -617,39 +613,39 @@ describe('WorktreeConfiguration - 100% Coverage', () => {
                 has: jest.fn(() => false),
                 update: jest.fn()
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             // Should use defaults
             expect(config.performance.profile).toBe('balanced');
         });
 
         it('should handle zero CPUs edge case', () => {
             (os.cpus as jest.Mock).mockReturnValue([]);
-            
+
             mockWorkspaceConfig.get.mockImplementation((key: string, defaultValue?: any) => {
                 if (key === 'performanceProfile') return 'balanced';
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.performance.maxParallelOperations).toBeGreaterThan(0);
         });
 
         it('should handle very low memory systems', () => {
             (os.totalmem as jest.Mock).mockReturnValue(1024 * 1024 * 1024); // 1GB
-            
+
             mockWorkspaceConfig.get.mockImplementation((key: string, defaultValue?: any) => {
                 if (key === 'performanceProfile') return 'balanced';
                 return defaultValue;
             });
-            
+
             configManager = WorktreeConfigurationManager.getInstance();
             const config = configManager.getConfig();
-            
+
             expect(config.resources.maxMemoryMB).toBeLessThanOrEqual(512);
         });
     });

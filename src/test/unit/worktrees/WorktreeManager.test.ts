@@ -26,11 +26,25 @@ jest.mock('fs', () => ({
     readdir: jest.fn()
 }));
 jest.mock('child_process', () => ({
-    execSync: jest.fn()
+    execSync: jest.fn(),
+    exec: jest.fn().mockImplementation((cmd, options, callback) => {
+        if (typeof options === 'function') {
+            options(null, '', '');
+        } else if (callback) {
+            callback(null, '', '');
+        }
+        return {};
+    })
+}));
+jest.mock('util', () => ({
+    promisify: jest.fn(fn => fn)
 }));
 jest.mock('path', () => ({
-    join: jest.fn(),
-    dirname: jest.fn()
+    join: jest.fn().mockImplementation((...args) => args.join('/')),
+    dirname: jest.fn().mockImplementation(p => {
+        const parts = p.split('/');
+        return parts.slice(0, -1).join('/');
+    })
 }));
 
 describe('WorktreeManager', () => {
@@ -85,12 +99,7 @@ describe('WorktreeManager', () => {
         // Mock execSync
         mockExecSync.mockReturnValue('mock output' as any);
 
-        // Mock path methods
-        mockPath.join = jest.fn().mockImplementation((...args) => args.join('/'));
-        mockPath.dirname = jest.fn().mockImplementation(p => {
-            const parts = p.split('/');
-            return parts.slice(0, -1).join('/');
-        });
+        // Path methods are already mocked globally
 
         jest.clearAllMocks();
 

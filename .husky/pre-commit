@@ -66,4 +66,19 @@ if grep -R --include='*.ts' --exclude-dir='test' -l "console\.log" src/ >/dev/nu
     echo "   Consider using the LoggingService instead"
 fi
 
+# Run critical tests for entrepreneur readiness
+echo "🚨 Running critical tests for entrepreneur readiness..."
+echo "   These tests ensure basic functionality works for business users"
+if command -v node >/dev/null 2>&1; then
+    node scripts/run-critical-tests.js || {
+        echo "❌ CRITICAL TESTS FAILED!"
+        echo "   These failures would block entrepreneurs - fix before committing"
+        echo "   Run 'npm run test:critical' to see details"
+        exit 1
+    }
+else
+    echo "⚠️  Node.js not found - skipping critical tests"
+    echo "   Please run 'npm run test:critical' manually before release"
+fi
+
 echo "✅ Pre-commit validation passed!"

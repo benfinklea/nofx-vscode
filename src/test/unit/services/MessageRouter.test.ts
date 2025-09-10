@@ -9,7 +9,9 @@ import { MetricsService } from '../../../services/MetricsService';
 import { MessageType, Message, MessagePriority } from '../../../types/Message';
 import { EventBus } from '../../../services/EventBus';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,

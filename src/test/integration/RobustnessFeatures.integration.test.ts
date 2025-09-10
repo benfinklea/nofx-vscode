@@ -70,7 +70,7 @@ describe('Robustness Features Integration', () => {
         // Create agent manager and task queue
         agentManager = {} as any; // Mock implementation
         taskQueue = {} as any; // Mock implementation
-        
+
         container.register(SERVICE_TOKENS.AgentManager, agentManager);
         container.register(SERVICE_TOKENS.TaskQueue, taskQueue);
 
@@ -108,7 +108,7 @@ describe('Robustness Features Integration', () => {
 
             // Force health check
             await systemHealthMonitor.forceHealthCheck();
-            
+
             const systemHealth = systemHealthMonitor.getSystemHealth();
             const nlComponent = systemHealth.components.find(c => c.name === 'NaturalLanguageService');
             expect(nlComponent?.isHealthy).toBe(true);
@@ -126,7 +126,7 @@ describe('Robustness Features Integration', () => {
 
             // System health monitor should detect this
             await systemHealthMonitor.forceHealthCheck();
-            
+
             const systemHealth = systemHealthMonitor.getSystemHealth();
             expect(systemHealth.isHealthy).toBe(false);
 
@@ -172,9 +172,9 @@ describe('Robustness Features Integration', () => {
     describe('System Health Monitor Integration', () => {
         it('should monitor all registered services', async () => {
             await systemHealthMonitor.forceHealthCheck();
-            
+
             const health = systemHealthMonitor.getSystemHealth();
-            
+
             // Should have all registered components
             const componentNames = health.components.map(c => c.name);
             expect(componentNames).toContain('NaturalLanguageService');
@@ -240,11 +240,11 @@ describe('Robustness Features Integration', () => {
 
         it('should cache successful results for improved performance', () => {
             const input = 'spawn backend specialist called API Expert';
-            
+
             // First call
             const result1 = naturalLanguageService.parseNaturalLanguage(input);
             expect(result1.isFromCache).toBeUndefined();
-            
+
             // Second call should be cached
             const result2 = naturalLanguageService.parseNaturalLanguage(input);
             expect(result2.isFromCache).toBe(true);
@@ -343,7 +343,7 @@ describe('Robustness Features Integration', () => {
                 'add a frontend dev',
                 'add a backend specialist',
                 'assign login form to agent-1',
-                'what\'s everyone doing?',
+                "what's everyone doing?",
                 'terminate agent-2'
             ];
 

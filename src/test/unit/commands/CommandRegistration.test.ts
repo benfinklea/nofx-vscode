@@ -9,7 +9,9 @@ import { ConfigurationService } from '../../../services/ConfigurationService';
 import { AgentManager } from '../../../agents/AgentManager';
 import { CommandService } from '../../../services/CommandService';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,

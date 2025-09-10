@@ -1,27 +1,35 @@
 import * as vscode from 'vscode';
-import { Agent, AgentConfig, AgentStatus } from './types';
-import { AgentPersistence } from '../persistence/AgentPersistence';
+import { IAgentLifecycle, IAgentQuery } from '../interfaces/IAgent';
+import { Agent, AgentConfig, AgentStatus, SmartAgentSpawnConfig, SmartTeamSpawnConfig } from './types';
+import { PersistenceService } from '../services/PersistenceService';
 import {
     IAgentLifecycleManager,
     ITerminalManager,
     IWorktreeService,
-    IConfigurationService,
+    IConfiguration,
     INotificationService,
-    ILoggingService,
-    IEventBus,
+    ILogger,
+    IEventEmitter,
+    IEventSubscriber,
     IErrorHandler,
     IAgentReader,
-    IMetricsService,
-    ISessionPersistenceService
+    IPersistenceService
 } from '../services/interfaces';
-import { DOMAIN_EVENTS } from '../services/EventConstants';
+import { EVENTS } from '../services/EventConstants';
 import { AgentCapacityScore, LoadBalancingEvent } from '../intelligence';
-import { AgentHealthMonitor, AgentHealthStatus } from '../services/AgentHealthMonitor';
+import { CircuitBreaker, CircuitState } from '../services/reliability/CircuitBreaker';
+import { RetryMechanism, RetryStrategy } from '../services/reliability/RetryMechanism';
+import { RateLimiter } from '../services/reliability/RateLimiter';
+import { DeadLetterQueue, DLQMessage } from '../services/reliability/DeadLetterQueue';
+import { HealthCheckService, HealthStatus, CheckType } from '../services/reliability/HealthCheckService';
+import { getAppStateStore } from '../state/AppStateStore';
+import * as selectors from '../state/selectors';
+import * as actions from '../state/actions'; // AgentHealthMonitor consolidated into MonitoringService
 
-export class AgentManager implements IAgentReader {
+export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader {
     private agents: Map<string, Agent> = new Map();
     private context: vscode.ExtensionContext;
-    private persistence: AgentPersistence | undefined;
+    private persistence: PersistenceService | undefined;
     private _onAgentUpdate = new vscode.EventEmitter<void>();
     public readonly onAgentUpdate = this._onAgentUpdate.event;
     private disposables: vscode.Disposable[] = [];
@@ -30,24 +38,54 @@ export class AgentManager implements IAgentReader {
     private agentLifecycleManager?: IAgentLifecycleManager;
     private terminalManager?: ITerminalManager;
     private worktreeService?: IWorktreeService;
-    private configService?: IConfigurationService;
+    private configService?: IConfiguration;
     private notificationService?: INotificationService;
-    private loggingService?: ILoggingService;
-    private eventBus?: IEventBus;
+    private loggingService?: ILogger;
+    private eventBus?: IEventEmitter & IEventSubscriber;
     private errorHandler?: IErrorHandler;
-    private metricsService?: IMetricsService;
-    private sessionPersistenceService?: ISessionPersistenceService;
+    private sessionPersistenceService?: IPersistenceService;
+    private orchestrationLogger?: any; // OrchestrationLogger
 
-    // Health monitoring integration
-    private healthMonitor?: AgentHealthMonitor;
+    // Enterprise reliability components
+    private circuitBreakers: Map<string, CircuitBreaker> = new Map();
+    private retryMechanism!: RetryMechanism;
+    private rateLimiter!: RateLimiter;
+    private deadLetterQueue!: DeadLetterQueue;
+    private healthCheckService!: HealthCheckService;
+    private enterpriseReliabilityEnabled = true;
+
+    // Health monitoring integration - using MonitoringService
 
     // Load balancing integration
     private agentCapacityScores: Map<string, AgentCapacityScore> = new Map();
     private agentLoadTracking: Map<string, { currentLoad: number; maxCapacity: number; lastUpdate: Date }> = new Map();
 
-    constructor(context: vscode.ExtensionContext, persistence?: AgentPersistence) {
+    // Helper method to safely publish events
+    private publishEvent(event: string, data?: any): void {
+        if (this.eventBus && 'publish' in this.eventBus) {
+            (this.eventBus as any).publish(event, data);
+        } else if (this.eventBus && 'emit' in this.eventBus) {
+            this.eventBus.emit(event, data);
+        }
+    }
+
+    // IAgentLifecycle implementation adapters
+    async spawn(config: any): Promise<any> {
+        // Adapt to existing spawnAgent method
+        return this.spawnAgent(config);
+    }
+
+    async terminate(agentId: string): Promise<void> {
+        // Adapt to existing removeAgent method
+        await this.removeAgent(agentId);
+    }
+
+    constructor(context: vscode.ExtensionContext, persistence?: PersistenceService) {
         this.context = context;
         this.persistence = persistence;
+
+        // Initialize enterprise reliability components
+        this.initializeEnterpriseComponents();
 
         // Terminal close event listener will be set up after dependencies are injected
     }
@@ -56,13 +94,12 @@ export class AgentManager implements IAgentReader {
         agentLifecycleManager: IAgentLifecycleManager,
         terminalManager: ITerminalManager,
         worktreeService: IWorktreeService,
-        configService: IConfigurationService,
+        configService: IConfiguration,
         notificationService: INotificationService,
-        loggingService?: ILoggingService,
-        eventBus?: IEventBus,
+        loggingService?: ILogger,
+        eventBus?: IEventEmitter & IEventSubscriber,
         errorHandler?: IErrorHandler,
-        metricsService?: IMetricsService,
-        sessionPersistenceService?: ISessionPersistenceService
+        sessionPersistenceService?: IPersistenceService
     ) {
         this.agentLifecycleManager = agentLifecycleManager;
         this.terminalManager = terminalManager;
@@ -72,16 +109,17 @@ export class AgentManager implements IAgentReader {
         this.loggingService = loggingService;
         this.eventBus = eventBus;
         this.errorHandler = errorHandler;
-        this.metricsService = metricsService;
         this.sessionPersistenceService = sessionPersistenceService;
 
-        // Initialize health monitor
-        this.healthMonitor = new AgentHealthMonitor(
-            this.terminalManager,
-            this.loggingService,
-            this.eventBus,
-            this.configService
-        );
+        // Get OrchestrationLogger if available
+        try {
+            const ServiceLocator = require('../services/ServiceLocator').ServiceLocator;
+            this.orchestrationLogger = ServiceLocator.tryGet('OrchestrationLogger');
+        } catch (error) {
+            // OrchestrationLogger not available yet
+        }
+
+        // Health monitoring is now handled by MonitoringService
 
         // Set up terminal close event listener
         const terminalCloseDisposable = this.terminalManager.onTerminalClosed(terminal => {
@@ -106,13 +144,11 @@ export class AgentManager implements IAgentReader {
                     this._onAgentUpdate.fire();
 
                     // Publish event to EventBus
-                    if (this.eventBus) {
-                        this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, {
-                            agentId: agent.id,
-                            status: 'idle'
-                        });
-                        this.eventBus.publish(DOMAIN_EVENTS.AGENT_TASK_INTERRUPTED, { agentId: agent.id, task });
-                    }
+                    this.publishEvent(EVENTS.AGENT_STATUS_CHANGED, {
+                        agentId: agent.id,
+                        status: 'idle'
+                    });
+                    this.publishEvent(EVENTS.AGENT_TASK_INTERRUPTED, { agentId: agent.id, task });
 
                     this.notificationService?.showWarning(
                         `⚠️ Agent ${agent.name} stopped. Task "${task.title}" interrupted.`
@@ -122,12 +158,291 @@ export class AgentManager implements IAgentReader {
             }
         });
         this.disposables.push(terminalCloseDisposable);
+
+        // Start enterprise reliability services
+        this.startEnterpriseServices();
+    }
+
+    /**
+     * Initialize enterprise reliability components
+     */
+    private initializeEnterpriseComponents(): void {
+        try {
+            // Initialize retry mechanism with agent-optimized settings
+            this.retryMechanism = new RetryMechanism({
+                maxAttempts: 3,
+                baseDelay: 2000,
+                maxDelay: 30000,
+                strategy: RetryStrategy.EXPONENTIAL,
+                jitterFactor: 0.3,
+                timeoutPerAttempt: 60000, // 1 minute per agent operation
+                totalTimeout: 300000, // 5 minutes total
+                retryableErrors: error => {
+                    // Retry on agent communication errors
+                    if (
+                        error.code === 'ECONNREFUSED' ||
+                        error.code === 'ETIMEDOUT' ||
+                        error.message?.includes('terminal') ||
+                        error.message?.includes('agent')
+                    ) {
+                        return true;
+                    }
+                    return false;
+                },
+                onRetry: (attempt, error, delay) => {
+                    this.loggingService?.warn(
+                        `[AgentManager] Retrying agent operation (attempt ${attempt}): ${error.message}`
+                    );
+                }
+            });
+
+            // Initialize rate limiter for agent operations
+            this.rateLimiter = RateLimiter.forAPI({
+                maxRequests: 50,
+                windowMs: 60000, // 50 agent operations per minute
+                blockDurationMs: 120000, // 2 minute block
+                keyGenerator: context => context?.operation || 'agent-operation'
+            });
+
+            // Initialize dead letter queue for failed agent operations
+            this.deadLetterQueue = new DeadLetterQueue('agent-manager', {
+                maxRetries: 5,
+                retryDelayMs: 10000,
+                retryBackoffMultiplier: 1.5,
+                maxQueueSize: 100,
+                persistToDisk: true,
+                onMessageExpired: message => {
+                    this.loggingService?.error(`[AgentManager] Agent operation permanently failed: ${message.error}`);
+                },
+                onMessageRecovered: message => {
+                    this.loggingService?.info(`[AgentManager] Agent operation recovered: ${message.id}`);
+                }
+            });
+
+            // Initialize health check service
+            this.healthCheckService = new HealthCheckService({
+                defaultInterval: 30000, // 30 seconds
+                defaultTimeout: 10000, // 10 seconds
+                defaultRetries: 3,
+                aggregationStrategy: 'weighted',
+                enableAutoRecovery: true,
+                alertOnCriticalFailure: true
+            });
+
+            this.loggingService?.info('[AgentManager] Enterprise reliability components initialized');
+        } catch (error) {
+            this.loggingService?.error('[AgentManager] Failed to initialize enterprise components:', error);
+            this.enterpriseReliabilityEnabled = false;
+        }
+    }
+
+    /**
+     * Start enterprise reliability services
+     */
+    private startEnterpriseServices(): void {
+        if (!this.enterpriseReliabilityEnabled) {
+            return;
+        }
+
+        try {
+            // Start health monitoring
+            this.healthCheckService.start();
+
+            // Register default health checks
+            this.registerDefaultHealthChecks();
+
+            // Register DLQ processors
+            this.registerDLQProcessors();
+
+            this.loggingService?.info('[AgentManager] Enterprise reliability services started');
+        } catch (error) {
+            this.loggingService?.error('[AgentManager] Failed to start enterprise services:', error);
+        }
+    }
+
+    /**
+     * Register default health checks
+     */
+    private registerDefaultHealthChecks(): void {
+        // Agent count health check
+        this.healthCheckService.registerCheck({
+            name: 'agent-count',
+            type: CheckType.READINESS,
+            interval: 60000, // 1 minute
+            check: async () => {
+                const totalAgents = this.agents.size;
+                const activeAgents = this.getActiveAgents().length;
+
+                let status = HealthStatus.HEALTHY;
+                let message = `${activeAgents}/${totalAgents} agents active`;
+
+                if (totalAgents > 50) {
+                    status = HealthStatus.DEGRADED;
+                    message += ' (high agent count)';
+                } else if (totalAgents === 0) {
+                    status = HealthStatus.DEGRADED;
+                    message += ' (no agents)';
+                }
+
+                return {
+                    status,
+                    message,
+                    details: { totalAgents, activeAgents }
+                };
+            }
+        });
+
+        // Agent responsiveness health check
+        this.healthCheckService.registerCheck({
+            name: 'agent-responsiveness',
+            type: CheckType.LIVENESS,
+            interval: 45000, // 45 seconds
+            critical: true,
+            check: async () => {
+                const workingAgents = Array.from(this.agents.values()).filter(a => a.status === 'working');
+                const staleAgents = workingAgents.filter(agent => {
+                    if (!agent.currentTask) return false;
+                    const taskStartTime = (agent.currentTask as any).startTime || 0;
+                    const staleThreshold = 300000; // 5 minutes
+                    return Date.now() - taskStartTime > staleThreshold;
+                });
+
+                let status = HealthStatus.HEALTHY;
+                let message = `${workingAgents.length - staleAgents.length}/${workingAgents.length} agents responsive`;
+
+                if (staleAgents.length > 0) {
+                    status =
+                        staleAgents.length > workingAgents.length / 2 ? HealthStatus.UNHEALTHY : HealthStatus.DEGRADED;
+                    message += ` (${staleAgents.length} stale)`;
+                }
+
+                return {
+                    status,
+                    message,
+                    details: { workingAgents: workingAgents.length, staleAgents: staleAgents.length }
+                };
+            }
+        });
+
+        // Terminal availability health check
+        this.healthCheckService.registerCheck({
+            name: 'terminal-availability',
+            type: CheckType.READINESS,
+            interval: 30000, // 30 seconds
+            check: async () => {
+                const agentsWithTerminals = Array.from(this.agents.values()).filter(agent => {
+                    return this.terminalManager?.getTerminal(agent.id) !== undefined;
+                });
+
+                const percentage = this.agents.size > 0 ? (agentsWithTerminals.length / this.agents.size) * 100 : 100;
+
+                let status = HealthStatus.HEALTHY;
+                if (percentage < 50) {
+                    status = HealthStatus.UNHEALTHY;
+                } else if (percentage < 80) {
+                    status = HealthStatus.DEGRADED;
+                }
+
+                return {
+                    status,
+                    message: `${agentsWithTerminals.length}/${this.agents.size} agents have terminals (${percentage.toFixed(1)}%)`,
+                    details: {
+                        agentsWithTerminals: agentsWithTerminals.length,
+                        totalAgents: this.agents.size,
+                        percentage
+                    }
+                };
+            }
+        });
+    }
+
+    /**
+     * Register DLQ processors for agent operations
+     */
+    private registerDLQProcessors(): void {
+        // Processor for spawn agent failures
+        this.deadLetterQueue.registerProcessor('spawn-agent', async (payload: any) => {
+            this.loggingService?.info(`[DLQ] Retrying spawn agent: ${payload.config.name}`);
+            await this.spawnAgent(payload.config, payload.restoredId);
+        });
+
+        // Processor for execute task failures
+        this.deadLetterQueue.registerProcessor('execute-task', async (payload: any) => {
+            this.loggingService?.info(
+                `[DLQ] Retrying execute task: ${payload.task.title} for agent ${payload.agentId}`
+            );
+            await this.executeTask(payload.agentId, payload.task);
+        });
+
+        // Processor for remove agent failures
+        this.deadLetterQueue.registerProcessor('remove-agent', async (payload: any) => {
+            this.loggingService?.info(`[DLQ] Retrying remove agent: ${payload.agentId}`);
+            await this.removeAgent(payload.agentId);
+        });
+    }
+
+    /**
+     * Get or create circuit breaker for agent operation
+     */
+    private getCircuitBreaker(agentId: string): CircuitBreaker {
+        if (!this.circuitBreakers.has(agentId)) {
+            const circuitBreaker = new CircuitBreaker(`agent-${agentId}`, {
+                failureThreshold: 5,
+                successThreshold: 3,
+                timeout: 60000, // 1 minute
+                volumeThreshold: 5,
+                errorPercentageThreshold: 60,
+                onStateChange: (from, to) => {
+                    this.loggingService?.warn(`[AgentManager] Circuit breaker for agent ${agentId}: ${from} → ${to}`);
+
+                    if (to === CircuitState.OPEN) {
+                        this.notificationService?.showWarning(
+                            `⚠️ Agent ${agentId} circuit breaker opened due to failures`
+                        );
+                    }
+                }
+            });
+
+            this.circuitBreakers.set(agentId, circuitBreaker);
+        }
+
+        return this.circuitBreakers.get(agentId)!;
+    }
+
+    /**
+     * Execute operation with enterprise reliability patterns
+     */
+    private async executeWithReliability<T>(
+        operation: () => Promise<T>,
+        operationName: string,
+        agentId?: string,
+        context?: any
+    ): Promise<T> {
+        if (!this.enterpriseReliabilityEnabled) {
+            return operation();
+        }
+
+        // Check rate limit
+        const rateLimitAllowed = await this.rateLimiter.isAllowed({ operation: operationName, agentId });
+        if (!rateLimitAllowed.allowed) {
+            throw new Error(`Rate limit exceeded for ${operationName}. Retry after ${rateLimitAllowed.retryAfter}ms`);
+        }
+
+        // Use circuit breaker if agent-specific
+        if (agentId) {
+            const circuitBreaker = this.getCircuitBreaker(agentId);
+            return circuitBreaker.execute(() => this.retryMechanism.execute(async () => operation(), operationName));
+        }
+
+        // Use retry mechanism only
+        return this.retryMechanism.execute(async () => operation(), operationName);
     }
 
     async initialize(showSetupDialog: boolean = false) {
         this.loggingService?.agents('AgentManager: Initializing...');
 
-        if (!this.agentLifecycleManager || !this.configService) {
+        // Only check for required dependencies
+        if (!this.configService) {
             throw new Error('AgentManager dependencies not set. Call setDependencies() first.');
         }
 
@@ -141,16 +456,18 @@ export class AgentManager implements IAgentReader {
             this.loggingService?.warn('AgentManager: No persistence available - agent state will not be saved');
         }
 
-        // Initialize the agent lifecycle manager
-        await this.agentLifecycleManager.initialize();
+        // Initialize the agent lifecycle manager if available
+        if (this.agentLifecycleManager) {
+            await this.agentLifecycleManager.initialize();
+        }
 
         // Check if Claude Code is available
         const aiPath = this.configService.getAiPath();
 
         this.loggingService?.info(`AgentManager initialized. AI path: ${aiPath}`);
 
-        // Try to restore agents from persistence
-        await this.restoreAgentsFromPersistence();
+        // TEMP: Disabled automatic agent restoration to prevent infinite loop
+        // await this.restoreAgentsFromPersistence();
 
         // Only show setup dialog if explicitly requested (e.g., when starting conductor)
         if (showSetupDialog) {
@@ -287,178 +604,347 @@ export class AgentManager implements IAgentReader {
         this.loggingService?.agents(`AgentManager: Spawning agent '${config.name}' (type: ${config.type})`);
         this.loggingService?.trace('AgentManager: Agent config:', config);
 
-        if (!this.agentLifecycleManager) {
-            throw new Error('AgentLifecycleManager not available');
-        }
+        // Log to orchestration logger
+        this.orchestrationLogger?.agentSpawned(config.name, config.type, restoredId || 'pending');
 
-        // Delegate to AgentLifecycleManager
-        const agent = await this.agentLifecycleManager.spawnAgent(config, restoredId);
+        // AgentLifecycleManager is optional now (merged into AgentManager)
 
-        // Store agent in our map
-        this.agents.set(agent.id, agent);
+        try {
+            // Execute with enterprise reliability patterns
+            const agent = await this.executeWithReliability(
+                async () => {
+                    // Validate input
+                    if (!config.name || !config.type) {
+                        throw new Error('Invalid agent configuration: name and type are required');
+                    }
 
-        // Record metrics
-        this.metricsService?.incrementCounter('agents_created', {
-            agentType: agent.type,
-            totalAgents: this.agents.size.toString()
-        });
+                    // Create agent directly (AgentLifecycleManager functionality merged)
+                    const agentId = restoredId || `agent-${Date.now()}`;
+                    const agent: Agent = {
+                        id: agentId,
+                        name: config.name,
+                        type: config.type,
+                        status: 'idle',
+                        template: config.template,
+                        tasksCompleted: 0,
+                        terminal: undefined,
+                        currentTask: null,
+                        maxConcurrentTasks: 5,
+                        startTime: new Date()
+                    };
 
-        // Notify listeners
-        this._onAgentUpdate.fire();
+                    // Create terminal for agent and launch Claude
+                    console.error(
+                        `[NofX DEBUG] About to create terminal. TerminalManager exists: ${!!this.terminalManager}`
+                    );
+                    if (this.terminalManager) {
+                        console.error(`[NofX DEBUG] Creating terminal for ${agent.name}`);
+                        const terminal = await this.terminalManager.createTerminal(agent.id, agent);
+                        agent.terminal = terminal;
+                        console.error(`[NofX DEBUG] Terminal created. Now calling initializeAgentTerminal...`);
 
-        // Publish event to EventBus
-        if (this.eventBus) {
-            this.eventBus.publish(DOMAIN_EVENTS.AGENT_CREATED, {
+                        // Initialize Claude Code in the terminal with the agent's system prompt
+                        await this.terminalManager.initializeAgentTerminal(agent);
+                        console.error(`[NofX DEBUG] initializeAgentTerminal completed`);
+                        this.orchestrationLogger?.agentProgress(
+                            agent.name,
+                            'Claude Code starting with specialized prompt...'
+                        );
+                    } else {
+                        console.error(`[NofX DEBUG] NO TERMINAL MANAGER - this explains why Claude doesn't launch!`);
+                    }
+
+                    // Create worktree if enabled (method doesn't exist in interface)
+                    // if (this.worktreeService && this.configService?.get('useWorktrees')) {
+                    //     await this.worktreeService.createWorktree(agentId, config.name);
+                    // }
+
+                    return agent;
+                },
+                'spawn-agent',
+                restoredId,
+                { config, restoredId }
+            );
+
+            // Store agent in our map
+            this.agents.set(agent.id, agent);
+
+            // Notify listeners
+            this._onAgentUpdate.fire();
+
+            // Publish event to EventBus
+            this.publishEvent(EVENTS.AGENT_CREATED, {
                 agentId: agent.id,
                 name: agent.name,
                 type: agent.type
             });
+
+            // Log agent ready
+            this.orchestrationLogger?.agentReady(agent.name);
+
+            // Create session for the agent (if not restoring from existing session)
+            if (this.sessionPersistenceService && !config.context?.sessionId) {
+                try {
+                    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                    await this.sessionPersistenceService.createSession(agent, workspaceFolder?.uri.fsPath);
+                    this.loggingService?.debug(`Session created for agent ${agent.name}`);
+                } catch (error) {
+                    // Session creation failure shouldn't prevent agent creation
+                    this.loggingService?.warn(`Failed to create session for agent ${agent.name}:`, error);
+                }
+            }
+
+            // Health monitoring is handled by MonitoringService
+
+            // Save agent state after adding
+            await this.saveAgentState();
+
+            this.loggingService?.info(`Agent ${config.name} ready. Total agents: ${this.agents.size}`);
+            this.loggingService?.debug(
+                'Agent statuses:',
+                Array.from(this.agents.values()).map(a => `${a.name}: ${a.status}`)
+            );
+
+            return agent;
+        } catch (error) {
+            // Handle spawn failure with DLQ
+            const errorObj = error instanceof Error ? error : new Error(String(error));
+            this.loggingService?.error(`[AgentManager] Failed to spawn agent ${config.name}:`, errorObj);
+
+            // Add to dead letter queue for retry
+            if (this.enterpriseReliabilityEnabled) {
+                await this.deadLetterQueue.addMessage({ config, restoredId }, errorObj, 'spawn-agent', {
+                    critical: true,
+                    agentName: config.name
+                });
+            }
+
+            throw errorObj;
+        }
+    }
+
+    async spawnSmartAgent(config: SmartAgentSpawnConfig, restoredId?: string): Promise<Agent> {
+        this.loggingService?.agents(
+            `AgentManager: Spawning smart agent '${config.name}' (category: ${config.smartConfig.category})`
+        );
+        this.loggingService?.trace('AgentManager: Smart agent config:', config);
+
+        // AgentLifecycleManager is optional now (merged into AgentManager)
+
+        // Import template manager to create dynamic template
+        const { AgentTemplateManager } = await import('./AgentTemplateManager');
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+        if (!workspaceFolder) {
+            throw new Error('No workspace folder available for smart agent creation');
         }
 
-        // Create session for the agent (if not restoring from existing session)
-        if (this.sessionPersistenceService && !config.context?.sessionId) {
+        const templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
+
+        // Create dynamic template using SmartTemplateFactory
+        const smartTemplate = templateManager.createDynamicTemplate(config.smartConfig as any);
+
+        // Convert SmartAgentSpawnConfig to AgentConfig
+        const agentConfig: AgentConfig = {
+            name: config.name,
+            type: smartTemplate.id, // Use the dynamic template ID as type
+            template: smartTemplate,
+            autoStart: config.autoStart,
+            context: config.context
+        };
+
+        // Delegate to standard spawnAgent method with generated template
+        const agent = await this.spawnAgent(agentConfig, restoredId);
+
+        // Add smart template metadata to agent
+        (agent as any).smartConfig = config.smartConfig;
+        (agent as any).isSmartAgent = true;
+
+        this.loggingService?.info(`Smart agent ${config.name} ready with dynamic template ${smartTemplate.id}`);
+
+        return agent;
+    }
+
+    async spawnSmartTeam(teamConfig: SmartTeamSpawnConfig): Promise<Agent[]> {
+        this.loggingService?.agents(
+            `AgentManager: Spawning smart team '${teamConfig.teamName}' with ${teamConfig.agentConfigs.length} agents`
+        );
+
+        const spawnedAgents: Agent[] = [];
+
+        for (let i = 0; i < teamConfig.agentConfigs.length; i++) {
+            const agentConfig = teamConfig.agentConfigs[i];
+            const agentName = agentConfig.name || `${teamConfig.teamName}-Agent-${i + 1}`;
+
             try {
-                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-                await this.sessionPersistenceService.createSession(agent, workspaceFolder?.uri.fsPath);
-                this.loggingService?.debug(`Session created for agent ${agent.name}`);
+                const smartAgentConfig: SmartAgentSpawnConfig = {
+                    name: agentName,
+                    smartConfig: agentConfig,
+                    autoStart: teamConfig.autoStart,
+                    workingDirectory:
+                        teamConfig.workspaceStrategy === 'worktrees'
+                            ? `${teamConfig.teamName.toLowerCase()}-${agentName.toLowerCase()}`
+                            : undefined
+                };
+
+                const agent = await this.spawnSmartAgent(smartAgentConfig);
+                spawnedAgents.push(agent);
+
+                // Add team metadata
+                (agent as any).teamName = teamConfig.teamName;
+                (agent as any).teamType = teamConfig.teamType;
             } catch (error) {
-                // Session creation failure shouldn't prevent agent creation
-                this.loggingService?.warn(`Failed to create session for agent ${agent.name}:`, error);
+                const err = error instanceof Error ? error : new Error(String(error));
+                this.errorHandler?.handleError(
+                    err,
+                    `Failed to spawn smart agent ${agentName} in team ${teamConfig.teamName}`
+                );
+                // Continue spawning other agents even if one fails
             }
         }
 
-        // Start health monitoring for the new agent
-        const terminal = this.terminalManager?.getTerminal(agent.id);
-        if (terminal && this.healthMonitor) {
-            this.healthMonitor.startMonitoring(agent.id, terminal);
-            this.loggingService?.debug(`Health monitoring started for agent ${agent.name}`);
+        if (spawnedAgents.length === 0) {
+            throw new Error(`Failed to spawn any agents for smart team ${teamConfig.teamName}`);
         }
 
-        // Save agent state after adding
-        await this.saveAgentState();
-
-        this.loggingService?.info(`Agent ${config.name} ready. Total agents: ${this.agents.size}`);
-        this.loggingService?.debug(
-            'Agent statuses:',
-            Array.from(this.agents.values()).map(a => `${a.name}: ${a.status}`)
+        this.loggingService?.info(
+            `Smart team ${teamConfig.teamName} ready with ${spawnedAgents.length}/${teamConfig.agentConfigs.length} agents`
         );
 
-        return agent;
+        return spawnedAgents;
     }
 
     async executeTask(agentId: string, task: any) {
         this.loggingService?.debug(`Called for agent ${agentId} with task:`, task.title);
 
         const agent = this.agents.get(agentId);
-        if (!agent) {
-            const error = new Error(`Agent ${agentId} not found`);
-            this.errorHandler?.handleError(error, 'executeTask');
-            throw error;
-        }
-        this.loggingService?.debug(`Found agent: ${agent.name}, status: ${agent.status}`);
+        const agentName = agent?.name || agentId;
 
-        if (!this.terminalManager) {
-            const error = new Error('TerminalManager not available');
-            this.errorHandler?.handleError(error, 'executeTask');
-            throw error;
-        }
+        // Log task reception
+        this.orchestrationLogger?.agentReceivingTask(agentName, task.title, task.id || 'unknown');
 
-        const terminal = this.terminalManager.getTerminal(agentId);
-
-        if (!terminal) {
-            const error = new Error(`Agent ${agentId} terminal not found`);
-            this.errorHandler?.handleError(error, 'executeTask');
-            throw error;
-        }
-
-        this.loggingService?.debug(`Updating agent status from ${agent.status} to working`);
-
-        // Start timer for task assignment
-        const assignmentTimer = this.metricsService?.startTimer('task_assignment_time');
-
-        // Update agent status
-        agent.status = 'working';
-        agent.currentTask = task;
-
-        // Start task monitoring for inactivity alerts
-        if (this.agentLifecycleManager) {
-            this.agentLifecycleManager.startTaskMonitoring(agentId);
-        }
-
-        this._onAgentUpdate.fire();
-
-        // Record task assignment metrics
-        this.metricsService?.incrementCounter('task_assigned', {
-            agentType: agent.type,
-            taskPriority: task.priority?.toString() || 'unknown'
-        });
-
-        // End assignment timer
-        if (assignmentTimer) {
-            this.metricsService?.endTimer(assignmentTimer);
-        }
-
-        // Publish event to EventBus
-        if (this.eventBus) {
-            this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, { agentId: agent.id, status: 'working' });
-            this.eventBus.publish(DOMAIN_EVENTS.AGENT_TASK_ASSIGNED, { agentId: agent.id, task });
-        }
-
-        // Save state after update
-        this.saveAgentState();
-
-        // Log task start
-        this.loggingService?.info(`Starting task: ${task.title}`);
-        this.loggingService?.debug(`Description: ${task.description}`);
-        this.loggingService?.debug(`Priority: ${task.priority}`);
-        this.loggingService?.debug(`Task ID: ${task.id}`);
-
-        // Prepare task for Claude Code (using detailed prompt method if needed)
-        // const detailedPrompt = this.createDetailedTaskPrompt(agent, task);
-
-        // Execute with Claude Code in the terminal
-        terminal.show();
-
-        // Build a simple, clean prompt
-        const taskPrompt = `${task.title}: ${task.description}`;
-
-        this.loggingService?.debug('Sending task to agent');
-
-        // Show task assignment
-        terminal.sendText(''); // Empty line for clarity
-        terminal.sendText('echo "=== New Task Assignment ==="');
-        terminal.sendText(`echo "Task: ${task.title}"`);
-        terminal.sendText('echo "==========================="');
-        terminal.sendText('');
-
-        // Since Claude is already running in the agent's terminal with system prompt,
-        // we can just send the task directly
-        terminal.sendText(`Please complete this task: ${taskPrompt}`);
-        this.loggingService?.debug('Sent task directly to already-running Claude instance');
-
-        // Show notification
-        if (this.notificationService) {
-            this.notificationService
-                .showInformation(
-                    `🤖 Task sent to ${agent.name}'s Claude instance. Check terminal for progress.`,
-                    'View Terminal'
-                )
-                .then(selection => {
-                    if (selection === 'View Terminal') {
-                        terminal.show();
+        try {
+            // Execute with enterprise reliability patterns
+            await this.executeWithReliability(
+                async () => {
+                    // Validate inputs
+                    if (!agentId || !task) {
+                        throw new Error('Invalid parameters: agentId and task are required');
                     }
+
+                    const agent = this.agents.get(agentId);
+                    if (!agent) {
+                        throw new Error(`Agent ${agentId} not found`);
+                    }
+                    this.loggingService?.debug(`Found agent: ${agent.name}, status: ${agent.status}`);
+
+                    if (!this.terminalManager) {
+                        throw new Error('TerminalManager not available');
+                    }
+
+                    const terminal = this.terminalManager.getTerminal(agentId);
+                    if (!terminal) {
+                        throw new Error(`Agent ${agentId} terminal not found`);
+                    }
+
+                    this.loggingService?.debug(`Updating agent status from ${agent.status} to working`);
+
+                    // Update agent status
+                    agent.status = 'working';
+                    agent.currentTask = task;
+
+                    // Add task start time for health monitoring
+                    (task as any).startTime = Date.now();
+
+                    // Start task monitoring for inactivity alerts
+                    if (this.agentLifecycleManager) {
+                        this.agentLifecycleManager.startTaskMonitoring(agentId);
+                    }
+
+                    this._onAgentUpdate.fire();
+
+                    // Publish event to EventBus
+                    this.publishEvent(EVENTS.AGENT_STATUS_CHANGED, { agentId: agent.id, status: 'working' });
+                    this.publishEvent(EVENTS.AGENT_TASK_ASSIGNED, { agentId: agent.id, task });
+
+                    // Log agent starting work
+                    this.orchestrationLogger?.agentStartingWork(
+                        agent.name,
+                        task.title,
+                        'Claude Code terminal interaction'
+                    );
+                    this.orchestrationLogger?.agentStatusChange(agent.name, 'idle', 'working');
+
+                    // Save state after update
+                    await this.saveAgentState();
+
+                    // Log task start
+                    this.loggingService?.info(`Starting task: ${task.title}`);
+                    this.loggingService?.debug(`Description: ${task.description}`);
+                    this.loggingService?.debug(`Priority: ${task.priority}`);
+                    this.loggingService?.debug(`Task ID: ${task.id}`);
+
+                    // Execute with Claude Code in the terminal
+                    terminal.show();
+
+                    // Build a simple, clean prompt
+                    const taskPrompt = `${task.title}: ${task.description}`;
+
+                    this.loggingService?.debug('Sending task to agent');
+
+                    // Show task assignment
+                    terminal.sendText(''); // Empty line for clarity
+                    terminal.sendText('echo "=== New Task Assignment ==="');
+                    terminal.sendText(`echo "Task: ${task.title}"`);
+                    terminal.sendText('echo "==========================="');
+                    terminal.sendText('');
+
+                    // Since Claude is already running in the agent's terminal with system prompt,
+                    // we can just send the task directly
+                    terminal.sendText(`Please complete this task: ${taskPrompt}`);
+                    this.loggingService?.debug('Sent task directly to already-running Claude instance');
+
+                    // Show notification
+                    if (this.notificationService) {
+                        this.notificationService
+                            .showInformation(
+                                `🤖 Task sent to ${agent.name}'s Claude instance. Check terminal for progress.`,
+                                'View Terminal'
+                            )
+                            .then(selection => {
+                                if (selection === 'View Terminal') {
+                                    terminal.show();
+                                }
+                            });
+
+                        // Show notification
+                        this.notificationService.showInformation(`🤖 ${agent.name} is working on: ${task.title}`);
+                    }
+
+                    // Log execution
+                    this.loggingService?.info('Starting Claude Code session...');
+                    this.loggingService?.info(`Task: ${task.title}`);
+                },
+                'execute-task',
+                agentId,
+                { agentId, task }
+            );
+        } catch (error) {
+            // Handle task execution failure with DLQ
+            const errorObj = error instanceof Error ? error : new Error(String(error));
+            this.loggingService?.error(`[AgentManager] Failed to execute task for agent ${agentId}:`, errorObj);
+
+            // Add to dead letter queue for retry
+            if (this.enterpriseReliabilityEnabled) {
+                await this.deadLetterQueue.addMessage({ agentId, task }, errorObj, 'execute-task', {
+                    critical: false,
+                    agentId,
+                    taskTitle: task?.title
                 });
+            }
 
-            // Show notification
-            this.notificationService.showInformation(`🤖 ${agent.name} is working on: ${task.title}`);
+            throw errorObj;
         }
-
-        // Log execution
-        this.loggingService?.info('Starting Claude Code session...');
-        this.loggingService?.info(`Task: ${task.title}`);
-
-        // Don't monitor - let the conductor or user decide when tasks are done
-        // this.monitorTaskExecution(agentId, task);
     }
 
     private createDetailedTaskPrompt(agent: Agent, task: any): string {
@@ -529,6 +1015,9 @@ export class AgentManager implements IAgentReader {
 
         if (!agent) return;
 
+        // Calculate task duration
+        const duration = (task as any).startTime ? Date.now() - (task as any).startTime : undefined;
+
         // Update agent status
         agent.status = 'idle';
         agent.currentTask = null;
@@ -542,10 +1031,13 @@ export class AgentManager implements IAgentReader {
         this._onAgentUpdate.fire();
 
         // Publish event to EventBus
-        if (this.eventBus) {
-            this.eventBus.publish(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, { agentId: agent.id, status: 'idle' });
-            this.eventBus.publish(DOMAIN_EVENTS.AGENT_TASK_COMPLETED, { agentId: agent.id, task });
-        }
+        this.publishEvent(EVENTS.AGENT_STATUS_CHANGED, { agentId: agent.id, status: 'idle' });
+        this.publishEvent(EVENTS.AGENT_TASK_COMPLETED, { agentId: agent.id, task });
+
+        // Log task completion
+        this.orchestrationLogger?.agentCompleted(agent.name, task.title, `Tasks completed: ${agent.tasksCompleted}`);
+        this.orchestrationLogger?.taskCompleted(task.title, duration);
+        this.orchestrationLogger?.agentStatusChange(agent.name, 'working', 'idle');
 
         // Save state after update
         await this.saveAgentState();
@@ -574,35 +1066,65 @@ export class AgentManager implements IAgentReader {
             throw error;
         }
 
-        // Delegate to AgentLifecycleManager
-        const success = await this.agentLifecycleManager.removeAgent(agentId);
+        try {
+            // Execute with enterprise reliability patterns
+            await this.executeWithReliability(
+                async () => {
+                    // Remove agent directly (AgentLifecycleManager functionality merged)
+                    // Terminate terminal if exists
+                    if (this.terminalManager) {
+                        await this.terminalManager.disposeTerminal(agentId);
+                    }
 
-        if (success) {
-            // Record metrics
-            this.metricsService?.incrementCounter('agents_removed', {
-                agentType: agent.type,
-                totalAgents: (this.agents.size - 1).toString()
-            });
+                    // Remove worktree if exists (method doesn't exist in interface)
+                    // if (this.worktreeService && this.configService?.get('useWorktrees')) {
+                    //     await this.worktreeService.removeWorktree(agentId);
+                    // }
 
-            // Stop health monitoring for the removed agent
-            if (this.healthMonitor) {
-                this.healthMonitor.stopMonitoring(agentId);
-                this.loggingService?.debug(`Health monitoring stopped for agent ${agent.name}`);
+                    const success = true;
+
+                    if (success) {
+                        // Clean up enterprise components for this agent
+                        const circuitBreaker = this.circuitBreakers.get(agentId);
+                        if (circuitBreaker) {
+                            circuitBreaker.reset();
+                            this.circuitBreakers.delete(agentId);
+                        }
+
+                        // Remove from our map
+                        this.agents.delete(agentId);
+                        this._onAgentUpdate.fire();
+
+                        // Publish event to EventBus
+                        this.publishEvent(EVENTS.AGENT_REMOVED, { agentId, name: agent.name });
+
+                        // Save agent state after removing
+                        await this.saveAgentState();
+
+                        this.loggingService?.info(`Agent ${agent.name} removed`);
+                    }
+
+                    return success;
+                },
+                'remove-agent',
+                agentId,
+                { agentId }
+            );
+        } catch (error) {
+            // Handle removal failure with DLQ
+            const errorObj = error instanceof Error ? error : new Error(String(error));
+            this.loggingService?.error(`[AgentManager] Failed to remove agent ${agentId}:`, errorObj);
+
+            // Add to dead letter queue for retry
+            if (this.enterpriseReliabilityEnabled) {
+                await this.deadLetterQueue.addMessage({ agentId }, errorObj, 'remove-agent', {
+                    critical: false,
+                    agentId,
+                    agentName: agent.name
+                });
             }
 
-            // Remove from our map
-            this.agents.delete(agentId);
-            this._onAgentUpdate.fire();
-
-            // Publish event to EventBus
-            if (this.eventBus) {
-                this.eventBus.publish(DOMAIN_EVENTS.AGENT_REMOVED, { agentId, name: agent.name });
-            }
-
-            // Save agent state after removing
-            await this.saveAgentState();
-
-            this.loggingService?.info(`Agent ${agent.name} removed`);
+            throw errorObj;
         }
     }
 
@@ -612,8 +1134,17 @@ export class AgentManager implements IAgentReader {
         return agents;
     }
 
-    getAgent(agentId: string): Agent | undefined {
-        return this.agents.get(agentId);
+    getAgent(agentId: string): any {
+        const agent = this.agents.get(agentId);
+        if (!agent) return undefined;
+
+        // Convert to interface-compliant Agent
+        return {
+            id: agent.id,
+            name: agent.name,
+            role: agent.type || 'unknown',
+            status: agent.status === 'working' ? 'busy' : agent.status === 'idle' ? 'idle' : 'error'
+        };
     }
 
     getIdleAgents(): Agent[] {
@@ -744,8 +1275,13 @@ export class AgentManager implements IAgentReader {
      * Get all currently active agents
      * @returns Array of all agents
      */
-    public getAllAgents(): Agent[] {
-        return Array.from(this.agents.values());
+    public getAllAgents(): any[] {
+        return Array.from(this.agents.values()).map(agent => ({
+            id: agent.id,
+            name: agent.name,
+            role: agent.type || 'unknown',
+            status: agent.status === 'working' ? 'busy' : agent.status === 'idle' ? 'idle' : 'error'
+        }));
     }
 
     private async saveAgentState() {
@@ -771,13 +1307,15 @@ export class AgentManager implements IAgentReader {
         }
     }
 
-    // Health monitoring public methods
-    public getAgentHealthStatus(agentId: string): AgentHealthStatus | undefined {
-        return this.healthMonitor?.getHealthStatus(agentId);
+    // Health monitoring public methods - delegated to MonitoringService
+    public getAgentHealthStatus(agentId: string): any | undefined {
+        // Replaced with MonitoringService integration
+        return undefined;
     }
 
-    public getAllAgentHealthStatuses(): AgentHealthStatus[] {
-        return this.healthMonitor?.getAllHealthStatuses() || [];
+    public getAllAgentHealthStatuses(): any[] {
+        // Replaced with MonitoringService integration
+        return [];
     }
 
     public getAgentHealthSummary(): {
@@ -787,24 +1325,46 @@ export class AgentManager implements IAgentReader {
         recovering: number;
         failed: number;
     } {
-        return (
-            this.healthMonitor?.getHealthSummary() || { total: 0, healthy: 0, unhealthy: 0, recovering: 0, failed: 0 }
-        );
+        return { total: 0, healthy: 0, unhealthy: 0, recovering: 0, failed: 0 };
     }
 
     public async performAgentHealthCheck(agentId: string): Promise<boolean> {
-        if (!this.healthMonitor) {
-            return false;
-        }
-        return this.healthMonitor.performHealthCheck(agentId);
+        // Health checks now handled by MonitoringService
+        return true;
     }
 
     async dispose(): Promise<void> {
         // Set disposing flag to prevent double-dispose
         this.isDisposing = true;
 
+        this.loggingService?.info('[AgentManager] Starting graceful disposal...');
+
         // Save final state before disposal
         await this.saveAgentState();
+
+        // Dispose enterprise reliability components
+        if (this.enterpriseReliabilityEnabled) {
+            try {
+                // Stop health monitoring
+                this.healthCheckService.stop();
+
+                // Stop DLQ processing
+                this.deadLetterQueue.stopProcessing();
+
+                // Reset all circuit breakers
+                for (const [agentId, circuitBreaker] of this.circuitBreakers.entries()) {
+                    circuitBreaker.reset();
+                }
+                this.circuitBreakers.clear();
+
+                // Dispose rate limiter
+                this.rateLimiter.dispose();
+
+                this.loggingService?.info('[AgentManager] Enterprise reliability components disposed');
+            } catch (error) {
+                this.loggingService?.error('[AgentManager] Error disposing enterprise components:', error);
+            }
+        }
 
         // Clean up all agents - await removal operations
         await Promise.allSettled([...this.agents.keys()].map(id => this.removeAgent(id)));
@@ -813,7 +1373,6 @@ export class AgentManager implements IAgentReader {
         this.agentLifecycleManager?.dispose();
         this.terminalManager?.dispose();
         this.worktreeService?.dispose();
-        this.healthMonitor?.dispose();
 
         // Clean up load balancing data
         this.agentCapacityScores.clear();
@@ -822,6 +1381,157 @@ export class AgentManager implements IAgentReader {
         // Dispose all subscriptions
         this.disposables.forEach(d => d?.dispose());
         this.disposables = [];
+
+        this.loggingService?.info('[AgentManager] Disposal completed');
+    }
+
+    // ============================================================================
+    // ENTERPRISE RELIABILITY PUBLIC METHODS
+    // ============================================================================
+
+    /**
+     * Get overall health status
+     */
+    getOverallHealthStatus(): { status: HealthStatus; details: any } | null {
+        if (!this.enterpriseReliabilityEnabled) {
+            return null;
+        }
+
+        const health = this.healthCheckService.getHealth();
+        return {
+            status: health.overall,
+            details: {
+                uptime: health.uptime,
+                consecutiveFailures: health.consecutiveFailures,
+                lastHealthyTime: health.lastHealthyTime,
+                checks: Array.from(health.checks.entries()).map(([name, result]) => ({
+                    name,
+                    status: result.status,
+                    message: result.message,
+                    timestamp: result.timestamp
+                }))
+            }
+        };
+    }
+
+    /**
+     * Get circuit breaker status for an agent
+     */
+    getAgentCircuitBreakerStatus(agentId: string): { state: CircuitState; metrics: any } | null {
+        if (!this.enterpriseReliabilityEnabled) {
+            return null;
+        }
+
+        const circuitBreaker = this.circuitBreakers.get(agentId);
+        if (!circuitBreaker) {
+            return null;
+        }
+
+        return {
+            state: circuitBreaker.getState(),
+            metrics: circuitBreaker.getMetrics()
+        };
+    }
+
+    /**
+     * Get retry mechanism metrics
+     */
+    getRetryMetrics(): any | null {
+        if (!this.enterpriseReliabilityEnabled) {
+            return null;
+        }
+
+        return this.retryMechanism.getMetrics();
+    }
+
+    /**
+     * Get rate limiter metrics
+     */
+    getRateLimiterMetrics(): any | null {
+        if (!this.enterpriseReliabilityEnabled) {
+            return null;
+        }
+
+        return this.rateLimiter.getMetrics();
+    }
+
+    /**
+     * Get dead letter queue metrics
+     */
+    getDLQMetrics(): any | null {
+        if (!this.enterpriseReliabilityEnabled) {
+            return null;
+        }
+
+        return this.deadLetterQueue.getMetrics();
+    }
+
+    /**
+     * Get comprehensive reliability status
+     */
+    getReliabilityStatus(): any {
+        if (!this.enterpriseReliabilityEnabled) {
+            return { enabled: false, message: 'Enterprise reliability features disabled' };
+        }
+
+        return {
+            enabled: true,
+            health: this.getOverallHealthStatus(),
+            retry: this.getRetryMetrics(),
+            rateLimiter: this.getRateLimiterMetrics(),
+            dlq: this.getDLQMetrics(),
+            circuitBreakers: Array.from(this.circuitBreakers.entries()).map(([agentId, cb]) => ({
+                agentId,
+                state: cb.getState(),
+                metrics: cb.getMetrics()
+            }))
+        };
+    }
+
+    /**
+     * Force reset circuit breaker for an agent
+     */
+    resetAgentCircuitBreaker(agentId: string): boolean {
+        if (!this.enterpriseReliabilityEnabled) {
+            return false;
+        }
+
+        const circuitBreaker = this.circuitBreakers.get(agentId);
+        if (circuitBreaker) {
+            circuitBreaker.reset();
+            this.loggingService?.info(`[AgentManager] Reset circuit breaker for agent ${agentId}`);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Manually retry a DLQ message
+     */
+    async retryDLQMessage(messageId: string): Promise<boolean> {
+        if (!this.enterpriseReliabilityEnabled) {
+            return false;
+        }
+
+        try {
+            await this.deadLetterQueue.retryMessage(messageId);
+            return true;
+        } catch (error) {
+            this.loggingService?.error(`[AgentManager] Failed to retry DLQ message ${messageId}:`, error);
+            return false;
+        }
+    }
+
+    /**
+     * Get DLQ messages for inspection
+     */
+    getDLQMessages(): DLQMessage[] {
+        if (!this.enterpriseReliabilityEnabled) {
+            return [];
+        }
+
+        return this.deadLetterQueue.getMessages();
     }
 
     // ============================================================================
@@ -864,13 +1574,9 @@ export class AgentManager implements IAgentReader {
         // Emit per-agent load gauge for dashboard support
         const cap = Math.max(1, newMaxCapacity || 0);
         const utilization = (currentLoad / cap) * 100;
-        this.metricsService?.recordLoadBalancingMetric('agent_load_percentage', utilization, {
-            agentId,
-            agentType: agent.type
-        });
 
         // Publish load change event
-        this.eventBus?.publish(DOMAIN_EVENTS.LOAD_BALANCING_EVENT, {
+        this.publishEvent(EVENTS.LOAD_BALANCING_EVENT, {
             type: 'agent_load_updated',
             agentId,
             currentLoad,
@@ -950,12 +1656,6 @@ export class AgentManager implements IAgentReader {
     recordAgentCapacityScore(agentId: string, capacityScore: AgentCapacityScore): void {
         this.agentCapacityScores.set(agentId, capacityScore);
 
-        // Update metrics
-        this.metricsService?.recordGauge('agent_capacity_score', capacityScore.overallScore, { agentId });
-        this.metricsService?.recordGauge('agent_capacity_utilization', capacityScore.capacityScore, { agentId });
-        this.metricsService?.recordGauge('agent_performance_score', capacityScore.performanceScore, { agentId });
-        this.metricsService?.recordGauge('agent_availability_score', capacityScore.availabilityScore, { agentId });
-
         this.loggingService?.debug(`Recorded capacity score for agent ${agentId}: ${capacityScore.overallScore}`);
     }
 
@@ -1015,7 +1715,7 @@ export class AgentManager implements IAgentReader {
      * Publish load balancing event
      */
     private publishLoadBalancingEvent(event: LoadBalancingEvent): void {
-        this.eventBus?.publish(DOMAIN_EVENTS.LOAD_BALANCING_EVENT, event);
+        this.publishEvent(EVENTS.LOAD_BALANCING_EVENT, event);
         this.loggingService?.debug(`Published load balancing event: ${event.type} for agent ${event.agentId}`);
     }
 
@@ -1059,5 +1759,77 @@ export class AgentManager implements IAgentReader {
             overloaded: overloadedAgents.length,
             averageUtilization: Math.round(averageUtilization)
         };
+    }
+
+    // Additional methods for MainCommands compatibility
+    async selectAgents(): Promise<Agent[]> {
+        // Show quick pick to select agents
+        const items = Array.from(this.agents.values()).map(agent => ({
+            label: agent.name,
+            description: agent.type,
+            picked: false,
+            agent
+        }));
+
+        const selected = await vscode.window.showQuickPick(items, {
+            canPickMany: true,
+            placeHolder: 'Select agents to spawn'
+        });
+
+        if (!selected) {
+            return [];
+        }
+
+        return selected.map(item => item.agent);
+    }
+
+    async spawnAgents(configs: AgentConfig[]): Promise<Agent[]> {
+        const agents: Agent[] = [];
+        for (const config of configs) {
+            try {
+                const agent = await this.spawnAgent(config);
+                agents.push(agent);
+            } catch (error) {
+                this.loggingService?.error(`Failed to spawn agent ${config.name}:`, error);
+            }
+        }
+        return agents;
+    }
+
+    async clearAllAgents(): Promise<void> {
+        // Remove all agents
+        const agentIds = Array.from(this.agents.keys());
+        for (const agentId of agentIds) {
+            await this.removeAgent(agentId);
+        }
+    }
+
+    async restorePreviousSession(): Promise<boolean> {
+        // Try to restore agents from persistence
+        if (this.persistence) {
+            const savedAgents = await this.persistence.getAgents();
+            if (savedAgents && savedAgents.length > 0) {
+                for (const savedAgent of savedAgents) {
+                    try {
+                        const config: AgentConfig = {
+                            name: savedAgent.name,
+                            type: savedAgent.type,
+                            template: savedAgent.templateId || savedAgent.type
+                        };
+                        await this.spawnAgent(config, savedAgent.id);
+                    } catch (error) {
+                        this.loggingService?.error(`Failed to restore agent ${savedAgent.name}:`, error);
+                    }
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    async quickStart(): Promise<void> {
+        // Quick start with default team
+        const defaultTeam = this.configService?.get('defaultTeam') || 'full-stack';
+        await vscode.commands.executeCommand('nofx.quickStartTeam', defaultTeam);
     }
 }

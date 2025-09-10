@@ -1,7 +1,9 @@
 import { Task } from '../agents/types';
-import { ILoggingService, IPriorityTaskQueue, ITaskDependencyManager, ITaskStateMachine } from '../services/interfaces';
+import { ILogger, IPriorityTaskQueue, ITaskDependencyManager, ITaskStateMachine } from '../services/interfaces';
 import { priorityToNumeric } from './priority';
-
+import { getAppStateStore } from '../state/AppStateStore';
+import * as selectors from '../state/selectors';
+import * as actions from '../state/actions';
 interface QueueItem {
     task: Task;
     priority: number;
@@ -19,7 +21,7 @@ interface QueueItem {
  * - Provides efficient insertion, removal, and priority updates
  */
 export class PriorityTaskQueue implements IPriorityTaskQueue {
-    private readonly logger: ILoggingService;
+    private readonly logger: ILogger;
     private readyHeap: QueueItem[] = [];
     private validatedHeap: QueueItem[] = [];
     private taskIndexReady: Map<string, number> = new Map(); // Maps task ID to readyHeap index
@@ -29,7 +31,7 @@ export class PriorityTaskQueue implements IPriorityTaskQueue {
     private depthHistory: number[] = []; // Ring buffer of recent queue sizes
 
     constructor(
-        loggingService: ILoggingService,
+        loggingService: ILogger,
         dependencyManager?: ITaskDependencyManager,
         taskStateMachine?: ITaskStateMachine
     ) {

@@ -1,27 +1,41 @@
 import * as vscode from 'vscode';
-import { ITerminalManager, IConfigurationService, ILoggingService, IEventBus, IErrorHandler } from './interfaces';
-import { DOMAIN_EVENTS } from './EventConstants';
-import { AIProviderResolver } from './AIProviderResolver';
+import {
+    ITerminalManager,
+    IConfiguration,
+    ILogger,
+    IEventEmitter,
+    IEventSubscriber,
+    IErrorHandler
+} from './interfaces';
+import { EVENTS } from './EventConstants';
+// AIProviderResolver removed - simple logic, inline it
 
 export class TerminalManager implements ITerminalManager {
     private terminals = new Map<string, vscode.Terminal>();
     private _onTerminalClosed: vscode.EventEmitter<vscode.Terminal>;
     private disposables: vscode.Disposable[] = [];
-    private loggingService?: ILoggingService;
-    private eventBus?: IEventBus;
+    private loggingService?: ILogger;
+    private eventBus?: IEventEmitter & IEventSubscriber;
     private errorHandler?: IErrorHandler;
-    private aiResolver: AIProviderResolver;
+
+    // Helper to publish events
+    private publishEvent(event: string, data?: any): void {
+        if (this.eventBus && 'publish' in this.eventBus) {
+            (this.eventBus as any).publish(event, data);
+        } else if (this.eventBus && 'emit' in this.eventBus) {
+            this.eventBus.emit(event, data);
+        }
+    }
 
     constructor(
-        private configService: IConfigurationService,
-        loggingService?: ILoggingService,
-        eventBus?: IEventBus,
+        private configService: IConfiguration,
+        loggingService?: ILogger,
+        eventBus?: IEventEmitter & IEventSubscriber,
         errorHandler?: IErrorHandler
     ) {
         this.loggingService = loggingService;
         this.eventBus = eventBus;
         this.errorHandler = errorHandler;
-        this.aiResolver = new AIProviderResolver(configService);
         this._onTerminalClosed = new vscode.EventEmitter<vscode.Terminal>();
 
         // Listen for terminal close events
@@ -35,7 +49,7 @@ export class TerminalManager implements ITerminalManager {
 
                         // Publish event to EventBus
                         if (this.eventBus) {
-                            this.eventBus.publish(DOMAIN_EVENTS.TERMINAL_CLOSED, { agentId, terminal });
+                            this.publishEvent(EVENTS.TERMINAL_CLOSED, { agentId, terminal });
                         }
 
                         this.loggingService?.debug(`Terminal closed for agent ${agentId}`);
@@ -62,7 +76,7 @@ export class TerminalManager implements ITerminalManager {
 
         // Create a dedicated terminal for this agent with explicit shell
         const terminal = vscode.window.createTerminal({
-            name: agentConfig.name, // Just use the agent name, icon is shown separately
+            name: `🤖 ${agentConfig.name}`, // Add robot emoji prefix to show dual indication
             iconPath: new vscode.ThemeIcon(terminalIcon),
             shellPath: shellPath,
             shellArgs: [], // Empty array for default shell args
@@ -77,7 +91,7 @@ export class TerminalManager implements ITerminalManager {
 
         // Publish event to EventBus
         if (this.eventBus) {
-            this.eventBus.publish(DOMAIN_EVENTS.TERMINAL_CREATED, { agentId, terminal, agentConfig });
+            this.publishEvent(EVENTS.TERMINAL_CREATED, { agentId, terminal, agentConfig });
         }
 
         this.loggingService?.debug(`Terminal created for agent ${agentId}`);
@@ -96,7 +110,7 @@ export class TerminalManager implements ITerminalManager {
 
             // Publish event to EventBus
             if (this.eventBus) {
-                this.eventBus.publish(DOMAIN_EVENTS.TERMINAL_DISPOSED, { agentId, terminal });
+                this.publishEvent(EVENTS.TERMINAL_DISPOSED, { agentId, terminal });
             }
 
             this.loggingService?.debug(`Terminal disposed for agent ${agentId}`);
@@ -138,12 +152,15 @@ export class TerminalManager implements ITerminalManager {
                 );
                 await this.performAgentInitialization(agent, workingDirectory, attempt);
 
-                // Verify initialization success
+                // Re-enable verification to see what's actually happening
+                console.error(`[NofX DEBUG] About to verify agent initialization...`);
                 const success = await this.verifyAgentInitialization(agent);
+                console.error(`[NofX DEBUG] Verification result: ${success}`);
                 if (success) {
                     this.loggingService?.info(`Agent ${agent.name} initialized successfully on attempt ${attempt}`);
                     return;
                 }
+                console.error(`[NofX DEBUG] Verification failed, will retry...`);
                 throw new Error('Agent initialization verification failed');
             } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
@@ -174,6 +191,7 @@ export class TerminalManager implements ITerminalManager {
         workingDirectory: string | undefined,
         attempt: number
     ): Promise<void> {
+        console.error(`[NofX DEBUG] performAgentInitialization called for ${agent.name}, attempt ${attempt}`);
         this.loggingService?.agents(
             `TerminalManager: Performing initialization for agent '${agent.name}' (${agent.type}) - attempt ${attempt}`
         );
@@ -191,160 +209,163 @@ export class TerminalManager implements ITerminalManager {
         if (agent.template) {
             console.error(`[NofX] Template systemPrompt length: ${agent.template.systemPrompt?.length}`);
             console.error(`[NofX] Template detailedPrompt exists: ${!!agent.template.detailedPrompt}`);
+            console.error(`[NofX] Template systemPrompt content: "${agent.template.systemPrompt}"`);
+        } else {
+            console.error(`[NofX] NO TEMPLATE FOUND - this explains why Claude doesn't launch!`);
         }
 
+        console.error(`[NofX DEBUG] Looking for terminal with agent.id: ${agent.id}`);
+        console.error(`[NofX DEBUG] Available terminal keys:`, Array.from(this.terminals.keys()));
         const terminal = this.terminals.get(agent.id);
         if (!terminal) {
+            console.error(`[NofX DEBUG] TERMINAL NOT FOUND! This is why Claude doesn't launch!`);
             this.loggingService?.error(`No terminal found for agent ${agent.id}`);
             return;
         }
+        console.error(`[NofX DEBUG] Terminal found! Proceeding with Claude launch...`);
 
-        // Show the terminal without stealing focus from other terminals
-        terminal.show(false); // false = don't steal focus
+        try {
+            console.error(`[NofX DEBUG] About to show terminal and start initialization...`);
 
-        // IMPORTANT: Wait for terminal shell to be ready before sending commands
-        // This prevents the blank terminal issue
-        await new Promise(resolve => setTimeout(resolve, 1500));
+            // Show the terminal without stealing focus from other terminals
+            terminal.show(false); // false = don't steal focus
 
-        // Ensure terminal is ready for input
-        terminal.show(false); // Show without stealing focus
-        await new Promise(resolve => setTimeout(resolve, 300));
+            // IMPORTANT: Wait for terminal shell to be ready before sending commands
+            // This prevents the blank terminal issue
+            await new Promise(resolve => setTimeout(resolve, 1500));
 
-        // Send an initial newline to ensure the shell is responsive
-        terminal.sendText('');
+            // Ensure terminal is ready for input
+            terminal.show(false); // Show without stealing focus
+            await new Promise(resolve => setTimeout(resolve, 300));
 
-        // Small additional delay
-        await new Promise(resolve => setTimeout(resolve, 200));
+            // Send an initial newline to ensure the shell is responsive
+            terminal.sendText('');
 
-        // Set up the agent's working environment
-        if (workingDirectory) {
-            terminal.sendText(`cd "${workingDirectory}"`);
-            await new Promise(resolve => setTimeout(resolve, 100));
-        }
+            // Small additional delay
+            await new Promise(resolve => setTimeout(resolve, 200));
 
-        // Show agent info
-        terminal.sendText(`echo "🤖 Initializing ${agent.name} (${agent.type})"`);
-        terminal.sendText(`echo "Agent ID: ${agent.id}"`);
-        terminal.sendText(`echo "Starting ${this.aiResolver.getCurrentProviderDescription()}..."`);
-        terminal.sendText('echo ""');
-
-        // Start AI with provider-specific command
-        const currentProvider = this.configService.getAiProvider();
-        const supportsSystemPrompt = this.aiResolver.supportsSystemPrompt();
-
-        // Check if we should add the --dangerously-skip-permissions flag (Claude-specific)
-        const skipPermissions = this.configService.isClaudeSkipPermissions();
-        const permissionsFlag =
-            skipPermissions && currentProvider === 'claude' ? '--dangerously-skip-permissions ' : '';
-
-        if (agent.template && agent.template.systemPrompt) {
-            this.loggingService?.agents(
-                `TerminalManager: Agent ${agent.name} has template '${agent.template.id}' with systemPrompt`
-            );
-            this.loggingService?.debug(
-                `Starting ${agent.name} with template's abbreviated systemPrompt, then injecting detailedPrompt`
-            );
-
-            // Debug: Log what we're seeing in the template
-            console.log('[DEBUG] Agent template systemPrompt:', agent.template.systemPrompt?.substring(0, 100) + '...');
-            console.log('[DEBUG] Agent template detailedPrompt exists?', !!agent.template.detailedPrompt);
-            this.loggingService?.agents(
-                `TerminalManager: Template info - systemPrompt: ${agent.template.systemPrompt?.length || 0} chars, detailedPrompt: ${agent.template.detailedPrompt?.length || 0} chars`
-            );
-
-            // Use ONLY the short systemPrompt to launch Claude (not the detailed one)
-            const simplePrompt = agent.template.systemPrompt;
-
-            // Log the launch strategy
-            this.loggingService?.info(`Starting agent: ${agent.name} (${agent.type})`);
-            this.loggingService?.debug(`Using SHORT system prompt to launch, will inject detailed prompt after`);
-
-            // Show what we're about to execute
-            if (supportsSystemPrompt) {
-                // Provider supports system prompts - use ONLY the short prompt
-                const command = this.aiResolver.getSystemPromptCommand(simplePrompt);
-                console.log('[DEBUG] Launching with SHORT prompt, length:', simplePrompt.length);
-                terminal.sendText(`echo "Starting ${agent.name} with specialized prompt..."`);
-                terminal.sendText(command);
-            } else {
-                // Provider doesn't support system prompts, launch normally and show prompt
-                const command = this.aiResolver.getFullCommand();
-                terminal.sendText(`echo "Executing: ${command}"`);
-                terminal.sendText(
-                    `echo "Note: ${currentProvider} doesn't support system prompts. Please paste this prompt:"`
-                );
-                // Clean the prompt for display - replace newlines with spaces
-                const displayPrompt = simplePrompt.replace(/\n+/g, ' ').replace(/"/g, '\\"');
-                terminal.sendText(`echo "${displayPrompt}"`);
-                terminal.sendText(command);
+            // Set up the agent's working environment
+            if (workingDirectory) {
+                terminal.sendText(`cd "${workingDirectory}"`);
+                await new Promise(resolve => setTimeout(resolve, 100));
             }
 
-            // ALWAYS inject the detailed prompt after Claude starts (if it exists)
-            if (agent.template.detailedPrompt) {
-                // Use the user-configured delay (default 15 seconds)
-                const initDelay = this.configService.get<number>('nofx.claudeInitializationDelay', 15) * 1000; // Convert to ms
-                this.loggingService?.info(
-                    `Waiting ${initDelay / 1000}s for Claude to initialize before injecting detailed prompt...`
+            // Agent initialization - no echo commands
+
+            // Start AI with provider-specific command
+            const currentProvider = this.configService.getAiProvider();
+            const supportsSystemPrompt = currentProvider === 'claude' || currentProvider === 'aider';
+
+            // Check if we should add the --dangerously-skip-permissions flag (Claude-specific)
+            const skipPermissions = this.configService.isClaudeSkipPermissions();
+            const permissionsFlag =
+                skipPermissions && currentProvider === 'claude' ? '--dangerously-skip-permissions ' : '';
+
+            if (agent.template && agent.template.systemPrompt) {
+                console.error(`[NofX] FOUND TEMPLATE - proceeding with Claude launch`);
+                this.loggingService?.agents(
+                    `TerminalManager: Agent ${agent.name} has template '${agent.template.id}' with systemPrompt`
                 );
-                await new Promise(resolve => setTimeout(resolve, initDelay));
-
-                this.loggingService?.info(`Injecting detailed prompt for ${agent.name}`);
-                console.log('[NofX Debug] Injecting detailed prompt, length:', agent.template.detailedPrompt.length);
-
-                // Send the detailed prompt without execute flag first (just types it)
-                terminal.sendText(agent.template.detailedPrompt, false);
-
-                // Wait for text to be fully typed (longer for long prompts)
-                await new Promise(resolve => setTimeout(resolve, 1500));
-
-                // Now send just an Enter key press to submit the prompt
-                terminal.sendText('', true);
-
-                // Confirmation message
-                await new Promise(resolve => setTimeout(resolve, 500));
-                terminal.sendText(`echo "✅ Detailed prompt injected for ${agent.name}"`);
-
-                this.loggingService?.agents(`Agent ${agent.name} started with detailed template injected`);
-            } else {
-                this.loggingService?.agents(`Agent ${agent.name} started with basic template (no detailed prompt)`);
-            }
-        } else {
-            // No template, just basic prompt
-            this.loggingService?.agents(`TerminalManager: Agent ${agent.name} has NO template, using basic prompt`);
-            console.log(`[DEBUG] Agent ${agent.name} - template missing:`, {
-                hasTemplate: !!agent.template,
-                templateId: agent.template?.id,
-                hasSystemPrompt: !!agent.template?.systemPrompt
-            });
-
-            const basicPrompt =
-                'You are a general purpose agent, part of a NofX.dev coding team. Please wait for instructions.';
-
-            if (supportsSystemPrompt) {
-                // Provider supports system prompts
-                const command = this.aiResolver.getSystemPromptCommand(basicPrompt);
-                terminal.sendText(command);
-            } else {
-                // Provider doesn't support system prompts, launch normally and show prompt
-                const command = this.aiResolver.getFullCommand();
-                terminal.sendText(
-                    `echo "Note: ${currentProvider} doesn't support system prompts. Please paste this prompt:"`
+                this.loggingService?.debug(
+                    `Starting ${agent.name} with template's abbreviated systemPrompt, then injecting detailedPrompt`
                 );
-                terminal.sendText(`echo "${basicPrompt}"`);
-                terminal.sendText(command);
+
+                // Debug: Log what we're seeing in the template
+                console.log(
+                    '[DEBUG] Agent template systemPrompt:',
+                    agent.template.systemPrompt?.substring(0, 100) + '...'
+                );
+                console.log('[DEBUG] Agent template detailedPrompt exists?', !!agent.template.detailedPrompt);
+                this.loggingService?.agents(
+                    `TerminalManager: Template info - systemPrompt: ${agent.template.systemPrompt?.length || 0} chars, detailedPrompt: ${agent.template.detailedPrompt?.length || 0} chars`
+                );
+
+                // Use ONLY the short systemPrompt to launch Claude (not the detailed one)
+                const simplePrompt = agent.template.systemPrompt;
+
+                // Log the launch strategy
+                this.loggingService?.info(`Starting agent: ${agent.name} (${agent.type})`);
+                this.loggingService?.debug(`Using SHORT system prompt to launch, will inject detailed prompt after`);
+
+                // Show what we're about to execute
+                if (supportsSystemPrompt) {
+                    // Provider supports system prompts - use ONLY the short prompt
+                    const aiPath = this.configService.getAiPath() || currentProvider;
+                    // Use double quotes which handle multiline strings better than single quotes
+                    // Only need to escape double quotes, dollar signs, and backticks
+                    const escapedPrompt = simplePrompt
+                        .replace(/\\/g, '\\\\')     // Escape backslashes first
+                        .replace(/"/g, '\\"')        // Escape double quotes
+                        .replace(/\$/g, '\\$')       // Escape dollar signs
+                        .replace(/`/g, '\\`');       // Escape backticks
+                    
+                    // Use double quotes directly - they handle multiline strings properly
+                    const command = `${aiPath} ${permissionsFlag}--append-system-prompt "${escapedPrompt}"`.trim();
+                    console.log('[DEBUG] Launching with prompt, length:', simplePrompt.length);
+                    console.log('[DEBUG] Full Claude command:', command.substring(0, 200) + '...');
+                    // Send the Claude command with the actual agent's system prompt
+                    terminal.sendText(command);
+                } else {
+                    // Provider doesn't support system prompts, launch normally and show prompt
+                    const aiPath = this.configService.getAiPath() || currentProvider;
+                    const command = aiPath;
+                    terminal.sendText(`echo "Executing: ${command}"`);
+                    terminal.sendText(
+                        `echo "Note: ${currentProvider} doesn't support system prompts. Please paste this prompt:"`
+                    );
+                    // Clean the prompt for display - replace newlines with spaces
+                    const displayPrompt = simplePrompt.replace(/\n+/g, ' ').replace(/"/g, '\\"');
+                    terminal.sendText(`echo "${displayPrompt}"`);
+                    terminal.sendText(command);
+                }
+
+                // The comprehensive system prompt now contains all necessary context
+                this.loggingService?.agents(`Agent ${agent.name} started with comprehensive system prompt`);
+            } else {
+                // No template, just basic prompt
+                this.loggingService?.agents(`TerminalManager: Agent ${agent.name} has NO template, using basic prompt`);
+                console.log(`[DEBUG] Agent ${agent.name} - template missing:`, {
+                    hasTemplate: !!agent.template,
+                    templateId: agent.template?.id,
+                    hasSystemPrompt: !!agent.template?.systemPrompt
+                });
+
+                const basicPrompt =
+                    'You are a general purpose agent, part of a NofX.dev coding team. Please wait for instructions.';
+
+                if (supportsSystemPrompt) {
+                    // Provider supports system prompts
+                    const aiPath = this.configService.getAiPath() || currentProvider;
+                    const command =
+                        `${aiPath} --system-prompt '${basicPrompt.replace(/'/g, "'\\''")}' ${permissionsFlag}`.trim();
+                    terminal.sendText(command);
+                } else {
+                    // Provider doesn't support system prompts, launch normally and show prompt
+                    const aiPath = this.configService.getAiPath() || currentProvider;
+                    const command = aiPath;
+                    terminal.sendText(
+                        `echo "Note: ${currentProvider} doesn't support system prompts. Please paste this prompt:"`
+                    );
+                    terminal.sendText(`echo "${basicPrompt}"`);
+                    terminal.sendText(command);
+                }
             }
-        }
 
-        // Show terminal if configured to do so (already shown above, but may need to focus)
-        if (this.configService.isShowAgentTerminalOnSpawn()) {
-            terminal.show();
-        }
+            // Show terminal if configured to do so (already shown above, but may need to focus)
+            if (this.configService.isShowAgentTerminalOnSpawn()) {
+                terminal.show();
+            }
 
-        // Log successful initialization
-        this.loggingService?.info(`Terminal initialization completed for agent ${agent.name} (${agent.id})`);
+            // Log successful initialization
+            console.error(`[NofX DEBUG] Reached end of initialization successfully!`);
+            this.loggingService?.info(`Terminal initialization completed for agent ${agent.name} (${agent.id})`);
+        } catch (error) {
+            console.error(`[NofX DEBUG] EXCEPTION in performAgentInitialization:`, error);
+            throw error; // Re-throw to trigger retry
+        }
     }
 
-    private async verifyAgentInitialization(agent: any, timeoutMs: number = 30000): Promise<boolean> {
+    private async verifyAgentInitialization(agent: any, timeoutMs: number = 10000): Promise<boolean> {
         const terminal = this.terminals.get(agent.id);
         if (!terminal) {
             this.loggingService?.error(`Verification failed: No terminal found for agent ${agent.id}`);
@@ -353,25 +374,25 @@ export class TerminalManager implements ITerminalManager {
 
         this.loggingService?.debug(`Verifying agent ${agent.name} initialization...`);
 
-        // Create a promise that resolves when we detect Claude is ready
+        // Simplified verification - just wait a bit and check if terminal is still running
+        // This is more forgiving during development
         return new Promise<boolean>(resolve => {
-            const timeout = setTimeout(() => {
-                this.loggingService?.warn(`Verification timeout for agent ${agent.name} after ${timeoutMs}ms`);
-                resolve(false);
-            }, timeoutMs);
-
-            // Send a simple test command and monitor for response
-            const testMessage = 'echo "NofX-Agent-Ready-Check"';
-            terminal.sendText(testMessage);
-
-            // Check for Claude-specific ready indicators
-            const checkInterval = setInterval(() => {
-                // Look for signs that Claude is responding
-                // This is a simplified check - in reality we'd monitor terminal output
-                clearTimeout(timeout);
-                clearInterval(checkInterval);
-                resolve(true);
-            }, 2000);
+            setTimeout(() => {
+                try {
+                    const isStillRunning = terminal.exitStatus === undefined;
+                    if (isStillRunning) {
+                        this.loggingService?.debug(`Agent ${agent.name} terminal is running - considering initialized`);
+                        resolve(true);
+                    } else {
+                        this.loggingService?.warn(`Agent ${agent.name} terminal exited during initialization`);
+                        resolve(false);
+                    }
+                } catch (error) {
+                    this.loggingService?.warn(`Agent ${agent.name} verification failed with error: ${error}`);
+                    // Be forgiving - assume success if we can't verify
+                    resolve(true);
+                }
+            }, 3000); // Much shorter timeout
         });
     }
 
@@ -407,11 +428,18 @@ export class TerminalManager implements ITerminalManager {
 
         // Check if terminal is still active
         try {
-            // Send a non-disruptive command to test responsiveness
-            terminal.sendText('echo "health-check"');
+            // Non-intrusive health check - just verify terminal exists and is accessible
+            // We avoid sending visible commands to prevent cluttering the Claude interface
 
-            // Check for various health indicators
-            // (This would be enhanced with actual terminal output monitoring)
+            // Check terminal state without sending commands
+            const isTerminalActive = terminal.exitStatus === undefined; // undefined means still running
+
+            if (!isTerminalActive) {
+                issues.push('Terminal has exited');
+            }
+
+            // Additional non-visible checks can be added here
+            // such as checking terminal process state, memory usage, etc.
 
             return { healthy: issues.length === 0, issues };
         } catch (error) {

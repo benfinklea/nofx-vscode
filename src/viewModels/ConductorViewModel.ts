@@ -2,19 +2,23 @@ import * as vscode from 'vscode';
 import {
     IUIStateManager,
     ICommandService,
-    IEventBus,
-    ILoggingService,
+    IEventEmitter,
+    IEventSubscriber,
+    ILogger,
     INotificationService,
     IConductorViewModel
 } from '../services/interfaces';
 import { ConductorViewState, WebviewCommand, WEBVIEW_COMMANDS } from '../types/ui';
 import { DOMAIN_EVENTS } from '../services/EventConstants';
-
+import { getAppStateStore } from '../state/AppStateStore';
+import * as selectors from '../state/selectors';
+import * as actions from '../state/actions';
 export class ConductorViewModel implements IConductorViewModel {
     private uiStateManager: IUIStateManager;
+    private store: IUIStateManager; // Alias for compatibility
     private commandService: ICommandService;
-    private eventBus: IEventBus;
-    private loggingService: ILoggingService;
+    private eventBus: IEventEmitter & IEventSubscriber;
+    private loggingService: ILogger;
     private notificationService: INotificationService;
 
     // View-specific state
@@ -27,11 +31,11 @@ export class ConductorViewModel implements IConductorViewModel {
     constructor(
         uiStateManager: IUIStateManager,
         commandService: ICommandService,
-        eventBus: IEventBus,
-        loggingService: ILoggingService,
+        eventBus: IEventEmitter & IEventSubscriber,
+        loggingService: ILogger,
         notificationService: INotificationService
     ) {
-        this.uiStateManager = uiStateManager;
+        this.store = uiStateManager;
         this.commandService = commandService;
         this.eventBus = eventBus;
         this.loggingService = loggingService;
@@ -40,19 +44,27 @@ export class ConductorViewModel implements IConductorViewModel {
         this.initialize();
     }
 
+    private publishEvent(event: string, data?: any): void {
+        if (this.eventBus && 'publish' in this.eventBus) {
+            (this.eventBus as any).publish(event, data);
+        } else if (this.eventBus && 'emit' in this.eventBus) {
+            this.eventBus.emit(event, data);
+        }
+    }
+
     private initialize(): void {
         this.loggingService.info('ConductorViewModel: Initializing');
 
         // Subscribe to UI state changes
         this.subscriptions.push(
-            this.uiStateManager.subscribe(state => {
+            this.store.subscribe(state => {
                 this.publishViewStateChange();
             })
         );
     }
 
     getViewState(): ConductorViewState {
-        return this.uiStateManager.getState();
+        return this.store.getState();
     }
 
     async handleCommand(command: string, data?: any): Promise<void> {
@@ -144,7 +156,7 @@ export class ConductorViewModel implements IConductorViewModel {
     async toggleTheme(theme: string): Promise<void> {
         try {
             this.loggingService.info('ConductorViewModel: Toggling theme', { theme });
-            this.eventBus.publish(DOMAIN_EVENTS.THEME_CHANGED, theme);
+            this.publishEvent(DOMAIN_EVENTS.THEME_CHANGED, theme);
             await this.notificationService.showInformation(`Theme changed to ${theme}`);
         } catch (error) {
             this.loggingService.error('ConductorViewModel: Error toggling theme', error);

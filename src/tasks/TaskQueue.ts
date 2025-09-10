@@ -1,20 +1,21 @@
 import * as vscode from 'vscode';
+import { ITaskManager, Task as ITask, TaskConfig as ITaskConfig } from '../interfaces/ITask';
 import { Task, TaskConfig, TaskStatus, TaskValidationError } from '../agents/types';
 import { AgentManager } from '../agents/AgentManager';
 import {
-    ILoggingService,
-    IEventBus,
+    ILogger,
+    IEventEmitter,
+    IEventSubscriber,
     IErrorHandler,
     INotificationService,
     ITaskReader,
-    IConfigurationService,
+    IConfiguration,
     ITaskStateMachine,
     IPriorityTaskQueue,
     ICapabilityMatcher,
-    ITaskDependencyManager,
-    IMetricsService
+    ITaskDependencyManager
 } from '../services/interfaces';
-import { DOMAIN_EVENTS } from '../services/EventConstants';
+import { EVENTS } from '../services/EventConstants';
 import { LoadBalancingStrategy, AgentCapacityScore, TaskReassignmentReason } from '../intelligence';
 
 // Utility function to safely publish events
@@ -22,13 +23,13 @@ function safePublish(eventBus: any, logger: any, event: string, data: any) {
     try {
         eventBus?.publish(event, data);
     } catch (error) {
-        logger?.warn(`Failed to publish event ${event}`, {
-            error: error instanceof Error ? error.message : String(error)
-        });
+        logger?.warn(`Failed to publish event ${event}`, { error });
     }
 }
 import { priorityToNumeric } from './priority';
-
+import { getAppStateStore } from '../state/AppStateStore';
+import * as selectors from '../state/selectors';
+import * as actions from '../state/actions';
 /**
  * TaskQueue manages task lifecycle and assignment.
  *
@@ -38,21 +39,40 @@ import { priorityToNumeric } from './priority';
  * - When 'validated' tasks transition to 'ready', they are re-enqueued to maintain priority order
  * - The assignNextTask() method prefers 'ready' tasks over 'validated' tasks to avoid churn
  */
-export class TaskQueue implements ITaskReader {
+export class TaskQueue implements ITaskManager, ITaskReader {
+    // Helper to adapt between subscribe and on
+    private subscribeToEvent(event: string, handler: (data?: any) => void): any {
+        if (this.eventBus && 'subscribe' in this.eventBus) {
+            return (this.eventBus as any).subscribe(event, handler);
+        } else if (this.eventBus && 'on' in this.eventBus) {
+            this.eventBus.on(event, handler);
+            return { dispose: () => this.eventBus?.off?.(event, handler) };
+        }
+        return { dispose: () => {} };
+    }
+
+    // Helper to publish events
+    private publishEvent(event: string, data?: any): void {
+        if (this.eventBus && 'publish' in this.eventBus) {
+            (this.eventBus as any).publish(event, data);
+        } else if (this.eventBus && 'emit' in this.eventBus) {
+            this.eventBus.emit(event, data);
+        }
+    }
+
     private tasks: Map<string, Task> = new Map();
     private agentManager: AgentManager;
     private _onTaskUpdate = new vscode.EventEmitter<void>();
     public readonly onTaskUpdate = this._onTaskUpdate.event;
-    private loggingService?: ILoggingService;
-    private eventBus?: IEventBus;
+    private loggingService?: ILogger;
+    private eventBus?: IEventEmitter & IEventSubscriber;
     private errorHandler?: IErrorHandler;
     private notificationService?: INotificationService;
-    private configService?: IConfigurationService;
+    private configService?: IConfiguration;
     private taskStateMachine?: ITaskStateMachine;
     private priorityQueue?: IPriorityTaskQueue;
     private capabilityMatcher?: ICapabilityMatcher;
     private dependencyManager?: ITaskDependencyManager;
-    private metricsService?: IMetricsService;
     private subscriptions: vscode.Disposable[] = [];
 
     // Load balancing integration
@@ -63,16 +83,15 @@ export class TaskQueue implements ITaskReader {
 
     constructor(
         agentManager: AgentManager,
-        loggingService?: ILoggingService,
-        eventBus?: IEventBus,
+        loggingService?: ILogger,
+        eventBus?: IEventEmitter & IEventSubscriber,
         errorHandler?: IErrorHandler,
         notificationService?: INotificationService,
-        configService?: IConfigurationService,
+        configService?: IConfiguration,
         taskStateMachine?: ITaskStateMachine,
         priorityQueue?: IPriorityTaskQueue,
         capabilityMatcher?: ICapabilityMatcher,
-        dependencyManager?: ITaskDependencyManager,
-        metricsService?: IMetricsService
+        dependencyManager?: ITaskDependencyManager
     ) {
         this.agentManager = agentManager;
         this.loggingService = loggingService;
@@ -89,7 +108,6 @@ export class TaskQueue implements ITaskReader {
         }
         this.capabilityMatcher = capabilityMatcher;
         this.dependencyManager = dependencyManager;
-        this.metricsService = metricsService;
 
         // Set TaskQueue as the task reader for TaskStateMachine dependency validation
         if (this.taskStateMachine && 'setTaskReader' in this.taskStateMachine) {
@@ -118,19 +136,19 @@ export class TaskQueue implements ITaskReader {
         // Subscribe to agent events from EventBus
         if (this.eventBus) {
             this.subscriptions.push(
-                this.eventBus.subscribe(DOMAIN_EVENTS.AGENT_CREATED, () => {
+                this.subscribeToEvent(EVENTS.AGENT_CREATED, () => {
                     this.tryAssignTasks();
                 })
             );
             this.subscriptions.push(
-                this.eventBus.subscribe(DOMAIN_EVENTS.AGENT_STATUS_CHANGED, data => {
+                this.subscribeToEvent(EVENTS.AGENT_STATUS_CHANGED, data => {
                     if (data.status === 'idle') {
                         this.tryAssignTasks();
                     }
                 })
             );
             this.subscriptions.push(
-                this.eventBus.subscribe(DOMAIN_EVENTS.TASK_STATE_CHANGED, ({ taskId, newState }) => {
+                this.subscribeToEvent(EVENTS.TASK_STATE_CHANGED, ({ taskId, newState }) => {
                     if (!this.priorityQueue) return;
                     const removeStates = ['blocked', 'assigned', 'in-progress', 'completed', 'failed'];
                     if (removeStates.includes(newState) && this.priorityQueue.contains(taskId)) {
@@ -146,7 +164,7 @@ export class TaskQueue implements ITaskReader {
                 })
             );
             this.subscriptions.push(
-                this.eventBus.subscribe(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, ({ taskId }) => {
+                this.subscribeToEvent(EVENTS.TASK_CONFLICT_RESOLVED, ({ taskId }) => {
                     const t = this.getTask(taskId);
                     if (t && t.status === 'blocked' && (!t.conflictsWith || t.conflictsWith.length === 0)) {
                         this.taskStateMachine?.transition(t, 'ready');
@@ -156,7 +174,7 @@ export class TaskQueue implements ITaskReader {
                 })
             );
             this.subscriptions.push(
-                this.eventBus.subscribe(DOMAIN_EVENTS.TASK_CREATED, ({ taskId }) => {
+                this.subscribeToEvent(EVENTS.TASK_CREATED, ({ taskId }) => {
                     // Check if any blocked tasks are waiting for this newly created task
                     if (this.dependencyManager) {
                         const allTasks = this.getTasks();
@@ -182,17 +200,26 @@ export class TaskQueue implements ITaskReader {
         }
     }
 
+    // Alias for ITaskManager interface compatibility
+    createTask(task: ITaskConfig): ITask {
+        const result = this.addTask(task as TaskConfig);
+        // Map to interface-compatible type
+        return {
+            id: result.id,
+            title: result.title,
+            description: result.description,
+            status: result.status === 'completed' ? 'complete' : (result.status as any),
+            priority: result.priority,
+            assignedTo: result.assignedTo,
+            createdAt: result.createdAt
+        } as ITask;
+    }
+
     addTask(config: TaskConfig): Task {
         const taskId = `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
         this.loggingService?.debug(`Creating task ${taskId}`);
         this.loggingService?.debug('Config:', config);
-
-        // Record task creation metrics
-        this.metricsService?.incrementCounter('tasks_created', {
-            priority: config.priority || 'medium',
-            hasDependencies: config.dependsOn && config.dependsOn.length > 0 ? 'true' : 'false'
-        });
 
         const task: Task = {
             id: taskId,
@@ -256,7 +283,7 @@ export class TaskQueue implements ITaskReader {
 
                     // Publish task.created event before early return
                     if (this.eventBus) {
-                        safePublish(this.eventBus, this.loggingService, DOMAIN_EVENTS.TASK_CREATED, { taskId, task });
+                        safePublish(this.eventBus, this.loggingService, EVENTS.TASK_CREATED, { taskId, task });
                     }
 
                     this._onTaskUpdate.fire();
@@ -309,7 +336,7 @@ export class TaskQueue implements ITaskReader {
                             this.taskStateMachine.transition(task, 'blocked');
                         }
                         // Publish waiting event for observability
-                        safePublish(this.eventBus, this.loggingService, DOMAIN_EVENTS.TASK_WAITING, {
+                        safePublish(this.eventBus, this.loggingService, EVENTS.TASK_WAITING, {
                             taskId: task.id,
                             task,
                             reasons: readinessErrors
@@ -328,7 +355,7 @@ export class TaskQueue implements ITaskReader {
                         this.taskStateMachine.transition(task, 'blocked');
                     }
                     // Publish waiting event for observability
-                    this.eventBus?.publish(DOMAIN_EVENTS.TASK_WAITING, {
+                    this.publishEvent(EVENTS.TASK_WAITING, {
                         taskId: task.id,
                         task,
                         reasons: readinessErrors
@@ -350,7 +377,7 @@ export class TaskQueue implements ITaskReader {
 
         // Publish task.created event (not handled by state machine)
         if (this.eventBus) {
-            this.eventBus.publish(DOMAIN_EVENTS.TASK_CREATED, { taskId, task });
+            this.publishEvent(EVENTS.TASK_CREATED, { taskId, task });
         }
         // Note: task.ready and task.blocked events are already published by TaskStateMachine.transition()
 
@@ -406,16 +433,15 @@ export class TaskQueue implements ITaskReader {
             if (scoredAgents.length > 0) {
                 task.agentMatchScore = scoredAgents[0].score;
                 // Publish match score event for UI
-                this.eventBus?.publish(DOMAIN_EVENTS.TASK_MATCH_SCORE, {
+                this.publishEvent(EVENTS.TASK_MATCH_SCORE, {
                     taskId: task.id,
-                    score: scoredAgents[0].score,
-                    agentId: scoredAgents[0].agent.id
+                    score: scoredAgents[0].score
                 });
             }
         }
 
         // Find best agent using capability matcher with load balancing consideration
-        const agent = this.findBestAgentWithLoadBalancing(availableAgents, task);
+        const agent = this.findBestAgent(availableAgents, task);
 
         if (agent) {
             // Set assignedTo and assignedAt before transition to ensure required fields validate
@@ -438,7 +464,7 @@ export class TaskQueue implements ITaskReader {
 
             // Publish TASK_ASSIGNED event
             if (this.eventBus) {
-                this.eventBus.publish(DOMAIN_EVENTS.TASK_ASSIGNED, { taskId: task.id, agentId: agent.id, task });
+                this.publishEvent(EVENTS.TASK_ASSIGNED, { taskId: task.id, agentId: agent.id, task });
             }
 
             this.loggingService?.info(`Executing task on agent: ${agent.name}`);
@@ -542,10 +568,14 @@ export class TaskQueue implements ITaskReader {
             const availableCount = this.agentManager.getAvailableAgents().length;
             const queueSize = this.priorityQueue?.size() || 0;
             this.loggingService?.debug(`No assignment made. Queue: ${queueSize}, Available: ${availableCount}`);
-            if (availableCount === 0) {
-                this.notificationService?.showInformation('📋 Task queued. All agents are busy.');
-            } else {
-                this.notificationService?.showWarning('📋 Task added but not assigned. Check agent status.');
+            
+            // Only show notifications if there are actually tasks to assign
+            if (queueSize > 0) {
+                if (availableCount === 0) {
+                    this.notificationService?.showInformation('📋 Task queued. All agents are busy.');
+                } else {
+                    this.notificationService?.showWarning('📋 Task added but not assigned. Check agent status.');
+                }
             }
         }
     }
@@ -554,7 +584,6 @@ export class TaskQueue implements ITaskReader {
         const task = this.tasks.get(taskId);
         if (!task) {
             this.loggingService?.warn(`Task ${taskId} not found`);
-            this.metricsService?.incrementCounter('tasks_completion_failed', { reason: 'task_not_found' });
             return false;
         }
 
@@ -563,7 +592,6 @@ export class TaskQueue implements ITaskReader {
             const transitionErrors = this.taskStateMachine.transition(task, 'completed');
             if (transitionErrors.length > 0) {
                 this.loggingService?.error('State transition failed:', transitionErrors);
-                this.metricsService?.incrementCounter('tasks_completion_failed', { reason: 'transition_error' });
                 return false;
             }
         } else {
@@ -571,17 +599,7 @@ export class TaskQueue implements ITaskReader {
             task.completedAt = new Date();
         }
 
-        // Record successful completion metrics
-        this.metricsService?.incrementCounter('tasks_completed', {
-            priority: task.priority,
-            duration:
-                task.completedAt && task.createdAt ? String(task.completedAt.getTime() - task.createdAt.getTime()) : '0'
-        });
-
         this._onTaskUpdate.fire();
-
-        // Update queue depth metrics
-        this.updateQueueMetrics();
 
         // Check for dependent tasks that become ready
         if (this.dependencyManager) {
@@ -723,12 +741,9 @@ export class TaskQueue implements ITaskReader {
     }
 
     async assignTask(taskId: string, agentId: string): Promise<boolean> {
-        const assignmentTimer = this.metricsService?.startTimer('task_assignment_duration');
-
         const task = this.tasks.get(taskId);
         if (!task) {
             this.loggingService?.warn(`Task ${taskId} not found`);
-            this.metricsService?.incrementCounter('assignments_failed', { reason: 'task_not_found' });
             return false;
         }
 
@@ -773,7 +788,7 @@ export class TaskQueue implements ITaskReader {
 
         // Publish TASK_ASSIGNED event
         if (this.eventBus) {
-            this.eventBus.publish(DOMAIN_EVENTS.TASK_ASSIGNED, { taskId: task.id, agentId: agentId, task });
+            this.publishEvent(EVENTS.TASK_ASSIGNED, { taskId: task.id, agentId: agentId, task });
         }
 
         this.loggingService?.info(`Executing task ${taskId} on agent ${agentId}`);
@@ -803,13 +818,6 @@ export class TaskQueue implements ITaskReader {
                     }
                 });
 
-            // Record successful assignment metrics
-            this.metricsService?.endTimer(assignmentTimer!);
-            this.metricsService?.incrementCounter('assignments_made', {
-                agentId,
-                taskPriority: task.priority
-            });
-
             // Update agent load to keep both sides consistent
             const newLoad = this.getAgentCurrentLoad(agentId);
             const maxCapacity = this.getAgentMaxCapacity(agentId);
@@ -819,13 +827,6 @@ export class TaskQueue implements ITaskReader {
         } catch (error: any) {
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler?.handleError(err, 'assignTask');
-
-            // Record failed assignment metrics
-            this.metricsService?.endTimer(assignmentTimer!);
-            this.metricsService?.incrementCounter('assignments_failed', {
-                reason: 'assignment_error',
-                error: err.message
-            });
 
             // Revert via state machine on failure - assigned can only go to failed, then to ready
             if (this.taskStateMachine) {
@@ -998,7 +999,7 @@ export class TaskQueue implements ITaskReader {
 
             // Publish appropriate events
             this._onTaskUpdate.fire();
-            this.eventBus?.publish(DOMAIN_EVENTS.TASK_DEPENDENCY_ADDED, { taskId, dependsOnTaskId });
+            this.publishEvent(EVENTS.TASK_DEPENDENCY_ADDED, { taskId, dependsOnTaskId });
         }
 
         return success;
@@ -1058,7 +1059,7 @@ export class TaskQueue implements ITaskReader {
 
         // Publish appropriate events
         this._onTaskUpdate.fire();
-        this.eventBus?.publish(DOMAIN_EVENTS.TASK_DEPENDENCY_REMOVED, { taskId, dependsOnTaskId });
+        this.publishEvent(EVENTS.TASK_DEPENDENCY_REMOVED, { taskId, dependsOnTaskId });
 
         return true;
     }
@@ -1133,7 +1134,7 @@ export class TaskQueue implements ITaskReader {
             );
 
             // Publish priority updated event
-            this.eventBus?.publish(DOMAIN_EVENTS.TASK_PRIORITY_UPDATED, {
+            this.publishEvent(EVENTS.TASK_PRIORITY_UPDATED, {
                 taskId: task.id,
                 oldPriority: basePriority,
                 newPriority: newPriority
@@ -1141,7 +1142,7 @@ export class TaskQueue implements ITaskReader {
 
             // Publish event when soft dependencies are satisfied (positive adjustment)
             if (softDepAdjustment > 0) {
-                this.eventBus?.publish(DOMAIN_EVENTS.TASK_SOFT_DEPENDENCY_SATISFIED, {
+                this.publishEvent(EVENTS.TASK_SOFT_DEPENDENCY_SATISFIED, {
                     taskId: task.id,
                     task,
                     satisfiedDependencies: task.prefers || []
@@ -1152,31 +1153,6 @@ export class TaskQueue implements ITaskReader {
 
     /**
      * Updates queue depth and status metrics
-     */
-    private updateQueueMetrics(): void {
-        if (!this.metricsService) return;
-
-        const tasks = this.getTasks();
-        const stats = this.getTaskStats();
-
-        // Update queue depth metrics
-        this.metricsService.setGauge('current_queue_depth', stats.queued + stats.ready);
-        this.metricsService.setGauge('ready_tasks_count', stats.ready);
-        this.metricsService.setGauge('blocked_tasks_count', stats.blocked);
-        this.metricsService.setGauge('active_tasks_count', stats.inProgress);
-        this.metricsService.setGauge('completed_tasks_count', stats.completed);
-        this.metricsService.setGauge('failed_tasks_count', stats.failed);
-    }
-
-    // ============================================================================
-    // LOAD BALANCING INTEGRATION
-    // ============================================================================
-
-    /**
-     * Find best agent for task with load balancing consideration
-     */
-    private findBestAgentWithLoadBalancing(availableAgents: any[], task: Task): any | null {
-        if (!this.loadBalancingEnabled || availableAgents.length === 0) {
             // Fall back to capability matcher if load balancing is disabled
             return this.capabilityMatcher?.findBestAgent(availableAgents, task) || null;
         }
@@ -1209,6 +1185,13 @@ export class TaskQueue implements ITaskReader {
             const agentInfo = this.agentManager.getAgent(agent.id);
             return agentInfo && (agentInfo.status === 'online' || agentInfo.status === 'idle');
         });
+    }
+
+    /**
+     * Find best agent for a task (alias for findBalancedAgent)
+     */
+    private findBestAgent(agents: any[], task: Task): any | null {
+        return this.findBalancedAgent(agents, task);
     }
 
     /**
@@ -1363,7 +1346,7 @@ export class TaskQueue implements ITaskReader {
 
         // Find best agent using load balancing
         const availableAgents = this.agentManager.getAvailableAgents();
-        const bestAgent = this.findBestAgentWithLoadBalancing(availableAgents, task);
+        const bestAgent = this.findBestAgent(availableAgents, task);
 
         if (bestAgent) {
             return this.assignTask(taskId, bestAgent.id);
@@ -1400,7 +1383,7 @@ export class TaskQueue implements ITaskReader {
      */
     async reassignForLoadBalancing(
         taskId: string,
-        reason: TaskReassignmentReason,
+        reason: TaskReassignmentReason = TaskReassignmentReason.LOAD_BALANCING,
         maxReassignmentsPerCycle?: number
     ): Promise<boolean> {
         // Check rate limiting
@@ -1441,7 +1424,7 @@ export class TaskQueue implements ITaskReader {
     async reassignTaskWithCandidates(
         taskId: string,
         candidates: any[],
-        reason: TaskReassignmentReason
+        reason: TaskReassignmentReason = TaskReassignmentReason.LOAD_BALANCING
     ): Promise<boolean> {
         const task = this.tasks.get(taskId);
         if (!task) {
@@ -1466,35 +1449,16 @@ export class TaskQueue implements ITaskReader {
         }
 
         // Pick best agent from filtered candidates
-        const bestAgent = this.findBestAgentWithLoadBalancing(filteredCandidates, task);
+        const bestAgent = this.findBestAgent(filteredCandidates, task);
         if (!bestAgent) {
             this.loggingService?.warn(`No suitable alternative agent found for task ${taskId}`);
             return false;
         }
 
-        // Emit metrics using the correct method
-        this.metricsService?.recordLoadBalancingMetric('task_reassignments', 1, {
-            reason,
-            fromAgent: currentAgentId,
-            toAgent: bestAgent.id
-        });
-
-        // Emit reason-specific counters for monitoring granularity
-        if (reason === TaskReassignmentReason.STUCK) {
-            this.metricsService?.recordLoadBalancingMetric('stuck_agents_detected', 1, {
-                agentId: currentAgentId
-            });
-        } else if (reason === TaskReassignmentReason.OVERLOADED) {
-            this.metricsService?.recordLoadBalancingMetric('overloaded_agents_detected', 1, {
-                agentId: currentAgentId
-            });
-        }
-
         // Publish load balancing event
-        safePublish(this.eventBus, this.loggingService, DOMAIN_EVENTS.LOAD_BALANCING_EVENT, {
+        safePublish(this.eventBus, this.loggingService, EVENTS.LOAD_BALANCING_EVENT, {
             type: 'task_reassigned',
             taskId,
-            agentId: bestAgent.id,
             reason,
             timestamp: new Date()
         });
@@ -1518,34 +1482,6 @@ export class TaskQueue implements ITaskReader {
         }
 
         return success;
-    }
-
-    /**
-     * Update queue metrics with load balancing information (duplicate removed - see line 1124)
-     */
-    private updateQueueMetricsLoadBalancing(): void {
-        if (!this.metricsService) return;
-
-        const totalTasks = this.tasks.size;
-        const readyTasks = Array.from(this.tasks.values()).filter(t => t.status === 'ready').length;
-        const assignedTasks = Array.from(this.tasks.values()).filter(t => t.status === 'assigned').length;
-        const inProgressTasks = Array.from(this.tasks.values()).filter(t => t.status === 'in-progress').length;
-
-        // Record basic queue metrics
-        this.metricsService.recordGauge('queue_total_tasks', totalTasks);
-        this.metricsService.recordGauge('queue_ready_tasks', readyTasks);
-        this.metricsService.recordGauge('queue_assigned_tasks', assignedTasks);
-        this.metricsService.recordGauge('queue_in_progress_tasks', inProgressTasks);
-
-        // Record load balancing metrics
-        if (this.loadBalancingEnabled) {
-            const availableAgents = this.agentManager.getAvailableAgents();
-            const totalAgents = this.agentManager.getAgents().length;
-            const agentUtilization = totalAgents > 0 ? ((totalAgents - availableAgents.length) / totalAgents) * 100 : 0;
-
-            this.metricsService.recordLoadBalancingMetric('agent_load_percentage', agentUtilization);
-            this.metricsService.recordLoadBalancingMetric('available_agents_count', availableAgents.length);
-        }
     }
 
     /**
@@ -1608,19 +1544,12 @@ export class TaskQueue implements ITaskReader {
      * Emit current utilizations for all active agents to keep metrics fresh
      */
     private emitCurrentAgentUtilizations(): void {
-        if (!this.metricsService) return;
-
         const activeAgents = this.agentManager.getActiveAgents();
         for (const agent of activeAgents) {
             const currentLoad = this.getAgentCurrentLoad(agent.id);
             const maxCapacity = this.getAgentMaxCapacity(agent.id);
             const cap = Math.max(1, maxCapacity || 0);
             const utilization = (currentLoad / cap) * 100;
-
-            this.metricsService.recordLoadBalancingMetric('agent_load_percentage', utilization, {
-                agentId: agent.id,
-                agentType: agent.type
-            });
         }
     }
 

@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
-import { ICommandService, ILoggingService, IErrorHandler } from './interfaces';
+import { ICommandService, ILogger, IErrorHandler } from './interfaces';
 
 export class CommandService implements ICommandService {
     private disposables: vscode.Disposable[] = [];
     private registeredCommands = new Set<string>();
     private commandDisposables = new Map<string, vscode.Disposable>();
-    private loggingService?: ILoggingService;
+    private loggingService?: ILogger;
     private errorHandler?: IErrorHandler;
 
-    constructor(loggingService?: ILoggingService, errorHandler?: IErrorHandler) {
+    constructor(loggingService?: ILogger, errorHandler?: IErrorHandler) {
         this.loggingService = loggingService;
         this.errorHandler = errorHandler;
     }

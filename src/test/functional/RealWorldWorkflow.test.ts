@@ -9,7 +9,9 @@ import { TaskQueue } from '../../tasks/TaskQueue';
 import { TaskStateMachine } from '../../tasks/TaskStateMachine';
 import { EventEmitter } from 'events';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../state/AppStateStore';
+import * as selectors from '../../state/selectors';
+import * as actions from '../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,

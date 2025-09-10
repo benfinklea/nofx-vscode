@@ -1,10 +1,12 @@
 import { Task, TaskStatus, TaskValidationError } from '../agents/types';
-import { ILoggingService, IEventBus, ITaskStateMachine, ITaskReader } from '../services/interfaces';
-import { DOMAIN_EVENTS } from '../services/EventConstants';
-
+import { ILogger, IEventEmitter, IEventSubscriber, ITaskStateMachine, ITaskReader } from '../services/interfaces';
+import { EVENTS } from '../services/EventConstants';
+import { getAppStateStore } from '../state/AppStateStore';
+import * as selectors from '../state/selectors';
+import * as actions from '../state/actions';
 export class TaskStateMachine implements ITaskStateMachine {
-    private readonly logger: ILoggingService;
-    private readonly eventBus: IEventBus;
+    private readonly logger: ILogger;
+    private readonly eventBus: IEventEmitter & IEventSubscriber;
     private taskReader?: ITaskReader;
 
     // State transition rules
@@ -26,7 +28,7 @@ export class TaskStateMachine implements ITaskStateMachine {
         // Note: 'completed' removed from requiredFields since completedAt is set during transition
     ]);
 
-    constructor(loggingService: ILoggingService, eventBus: IEventBus, taskReader?: ITaskReader) {
+    constructor(loggingService: ILogger, eventBus: IEventEmitter & IEventSubscriber, taskReader?: ITaskReader) {
         this.logger = loggingService;
         this.eventBus = eventBus;
         this.taskReader = taskReader;
@@ -37,6 +39,14 @@ export class TaskStateMachine implements ITaskStateMachine {
      */
     setTaskReader(taskReader: ITaskReader): void {
         this.taskReader = taskReader;
+    }
+
+    private publishEvent(event: string, data?: any): void {
+        if (this.eventBus && 'publish' in this.eventBus) {
+            (this.eventBus as any).publish(event, data);
+        } else if (this.eventBus && 'emit' in this.eventBus) {
+            this.eventBus.emit(event, data);
+        }
     }
 
     /**
@@ -106,7 +116,7 @@ export class TaskStateMachine implements ITaskStateMachine {
             this.logger.info(`Task ${task.id} transitioned from ${previousState} to ${nextState}`);
 
             // Publish state change event
-            this.eventBus.publish(DOMAIN_EVENTS.TASK_STATE_CHANGED, {
+            this.publishEvent(EVENTS.TASK_STATE_CHANGED, {
                 taskId: task.id,
                 previousState,
                 newState: nextState,
@@ -115,15 +125,15 @@ export class TaskStateMachine implements ITaskStateMachine {
 
             // Publish specific state events
             if (nextState === 'blocked') {
-                this.eventBus.publish(DOMAIN_EVENTS.TASK_BLOCKED, { taskId: task.id, task });
+                this.publishEvent(EVENTS.TASK_BLOCKED, { taskId: task.id, task });
             } else if (nextState === 'ready') {
-                this.eventBus.publish(DOMAIN_EVENTS.TASK_READY, { taskId: task.id, task });
+                this.publishEvent(EVENTS.TASK_READY, { taskId: task.id, task });
             } else if (nextState === 'assigned') {
-                this.eventBus.publish(DOMAIN_EVENTS.TASK_ASSIGNED, { taskId: task.id, task });
+                this.publishEvent(EVENTS.TASK_ASSIGNED, { taskId: task.id, task });
             } else if (nextState === 'completed') {
-                this.eventBus.publish(DOMAIN_EVENTS.TASK_COMPLETED, { taskId: task.id, task });
+                this.publishEvent(EVENTS.TASK_COMPLETED, { taskId: task.id, task });
             } else if (nextState === 'failed') {
-                this.eventBus.publish(DOMAIN_EVENTS.TASK_FAILED, { taskId: task.id, task });
+                this.publishEvent(EVENTS.TASK_FAILED, { taskId: task.id, task });
             }
         }
 

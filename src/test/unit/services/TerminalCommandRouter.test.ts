@@ -76,18 +76,13 @@ describe('TerminalCommandRouter', () => {
         } as any;
 
         // Setup onDidWriteTerminalData mock
-        (vscode.window as any).onDidWriteTerminalData = jest.fn((handler) => {
+        (vscode.window as any).onDidWriteTerminalData = jest.fn(handler => {
             mockWriteDataHandler = handler;
             return { dispose: jest.fn() };
         });
 
         // Create router
-        router = new TerminalCommandRouter(
-            mockAgentManager,
-            mockTaskQueue,
-            mockLoggingService,
-            mockEventBus
-        );
+        router = new TerminalCommandRouter(mockAgentManager, mockTaskQueue, mockLoggingService, mockEventBus);
 
         // Clear all mocks
         jest.clearAllMocks();
@@ -101,24 +96,20 @@ describe('TerminalCommandRouter', () => {
     describe('startMonitoring', () => {
         it('should start monitoring terminal successfully', () => {
             router.startMonitoring(mockTerminal);
-            
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                'TerminalCommandRouter: Starting command monitoring'
-            );
+
+            expect(mockLoggingService.info).toHaveBeenCalledWith('TerminalCommandRouter: Starting command monitoring');
             expect((vscode.window as any).onDidWriteTerminalData).toHaveBeenCalled();
         });
 
         it('should handle VS Code version without onDidWriteTerminalData', () => {
             (vscode.window as any).onDidWriteTerminalData = undefined;
-            
+
             router.startMonitoring(mockTerminal);
-            
+
             expect(mockLoggingService.warn).toHaveBeenCalledWith(
                 'Terminal data monitoring not available in this VS Code version'
             );
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                'Setting up alternative terminal monitoring'
-            );
+            expect(mockLoggingService.info).toHaveBeenCalledWith('Setting up alternative terminal monitoring');
         });
 
         it('should handle errors during monitoring setup', () => {
@@ -142,7 +133,7 @@ describe('TerminalCommandRouter', () => {
         it('should process spawn command from terminal output', async () => {
             const command = { type: 'spawn', role: 'frontend-specialist', name: 'UI Dev' };
             (MessageProtocol.extractJsonFromClaudeOutput as jest.Mock).mockReturnValue(command);
-            
+
             mockAgentManager.spawnAgent.mockResolvedValue({
                 id: 'agent-1',
                 name: 'UI Dev',
@@ -167,9 +158,9 @@ describe('TerminalCommandRouter', () => {
         });
 
         it('should process assign task command', async () => {
-            const command = { 
-                type: 'assign', 
-                task: 'Create login form', 
+            const command = {
+                type: 'assign',
+                task: 'Create login form',
                 agentId: 'agent-1',
                 priority: 'high'
             };
@@ -196,9 +187,7 @@ describe('TerminalCommandRouter', () => {
                 priority: 'high'
             });
             expect(mockTaskQueue.assignTask).toHaveBeenCalledWith('task-1', 'agent-1');
-            expect(mockTerminal.sendText).toHaveBeenCalledWith(
-                expect.stringContaining('New Task Assigned')
-            );
+            expect(mockTerminal.sendText).toHaveBeenCalledWith(expect.stringContaining('New Task Assigned'));
         });
 
         it('should process status query command', async () => {
@@ -215,9 +204,7 @@ describe('TerminalCommandRouter', () => {
             await new Promise(resolve => setTimeout(resolve, 600));
 
             expect(mockAgentManager.getActiveAgents).toHaveBeenCalled();
-            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                expect.stringContaining('Agent Status')
-            );
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(expect.stringContaining('Agent Status'));
         });
 
         it('should process terminate command', async () => {
@@ -233,30 +220,22 @@ describe('TerminalCommandRouter', () => {
             await new Promise(resolve => setTimeout(resolve, 600));
 
             expect(mockAgentManager.removeAgent).toHaveBeenCalledWith('agent-1');
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                AGENT_EVENTS.AGENT_TERMINATED,
-                { agentId: 'agent-1' }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(AGENT_EVENTS.AGENT_TERMINATED, { agentId: 'agent-1' });
         });
 
         it('should handle invalid terminal data type', () => {
             mockWriteDataHandler({ terminal: mockTerminal, data: 123 });
-            
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                'Invalid terminal data type:',
-                'number'
-            );
+
+            expect(mockLoggingService.warn).toHaveBeenCalledWith('Invalid terminal data type:', 'number');
         });
 
         it('should handle buffer overflow', async () => {
             // Create very large data
             const largeData = 'x'.repeat(100001);
-            
+
             mockWriteDataHandler({ terminal: mockTerminal, data: largeData });
-            
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                'Terminal buffer overflow, processing and clearing'
-            );
+
+            expect(mockLoggingService.warn).toHaveBeenCalledWith('Terminal buffer overflow, processing and clearing');
         });
     });
 
@@ -277,17 +256,13 @@ describe('TerminalCommandRouter', () => {
                 .mockResolvedValueOnce({ id: 'agent-1', name: 'Agent 1' } as any);
 
             mockWriteDataHandler({ terminal: mockTerminal, data: JSON.stringify(command) });
-            
+
             // Wait for retries (exponential backoff: 1s, 2s, 4s)
             await new Promise(resolve => setTimeout(resolve, 4000));
 
             expect(mockAgentManager.spawnAgent).toHaveBeenCalledTimes(3);
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                expect.stringContaining('retry 1/3')
-            );
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                expect.stringContaining('retry 2/3')
-            );
+            expect(mockLoggingService.warn).toHaveBeenCalledWith(expect.stringContaining('retry 1/3'));
+            expect(mockLoggingService.warn).toHaveBeenCalledWith(expect.stringContaining('retry 2/3'));
         });
 
         it('should fail after MAX_RETRIES', async () => {
@@ -299,7 +274,7 @@ describe('TerminalCommandRouter', () => {
             mockAgentManager.spawnAgent.mockRejectedValue(new Error('Persistent error'));
 
             mockWriteDataHandler({ terminal: mockTerminal, data: JSON.stringify(command) });
-            
+
             // Wait for all retries
             await new Promise(resolve => setTimeout(resolve, 8000));
 
@@ -348,9 +323,7 @@ describe('TerminalCommandRouter', () => {
 
             await new Promise(resolve => setTimeout(resolve, 100));
 
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                expect.stringContaining('Command queue full')
-            );
+            expect(mockLoggingService.warn).toHaveBeenCalledWith(expect.stringContaining('Command queue full'));
         });
     });
 
@@ -439,7 +412,7 @@ describe('TerminalCommandRouter', () => {
 
         it('should report health status', () => {
             const health = router.getHealthStatus();
-            
+
             expect(health).toEqual({
                 isHealthy: true,
                 queueSize: 0,
@@ -450,15 +423,15 @@ describe('TerminalCommandRouter', () => {
 
         it('should perform health checks periodically', () => {
             jest.useFakeTimers();
-            
+
             router.startMonitoring(mockTerminal);
-            
+
             // Fast-forward 30 seconds (HEALTH_CHECK_INTERVAL)
             jest.advanceTimersByTime(30000);
-            
+
             const health = router.getHealthStatus();
             expect(health.lastHealthCheck).toBeDefined();
-            
+
             jest.useRealTimers();
         });
 
@@ -482,17 +455,15 @@ describe('TerminalCommandRouter', () => {
 
         it('should attempt self-healing when unhealthy', () => {
             jest.useFakeTimers();
-            
+
             // Force unhealthy state
             (router as any).isHealthy = false;
-            
+
             // Trigger health check
             (router as any).performHealthCheck();
-            
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                'Attempting self-healing of terminal monitoring'
-            );
-            
+
+            expect(mockLoggingService.info).toHaveBeenCalledWith('Attempting self-healing of terminal monitoring');
+
             jest.useRealTimers();
         });
     });
@@ -508,7 +479,9 @@ describe('TerminalCommandRouter', () => {
                 undefined,
                 'string',
                 123,
-                { /* no type */ },
+                {
+                    /* no type */
+                },
                 { type: null }
             ];
 
@@ -532,9 +505,7 @@ describe('TerminalCommandRouter', () => {
             mockWriteDataHandler({ terminal: mockTerminal, data: JSON.stringify(command) });
             await new Promise(resolve => setTimeout(resolve, 600));
 
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                'Unknown command type: unknown_command'
-            );
+            expect(mockLoggingService.warn).toHaveBeenCalledWith('Unknown command type: unknown_command');
         });
     });
 
@@ -598,9 +569,9 @@ describe('TerminalCommandRouter', () => {
         });
 
         it('should handle auto-assignment for priority tasks', async () => {
-            const command = { 
-                type: 'assign', 
-                task: 'Critical fix', 
+            const command = {
+                type: 'assign',
+                task: 'Critical fix',
                 agentId: 'auto',
                 priority: 'high'
             };
@@ -634,7 +605,7 @@ describe('TerminalCommandRouter', () => {
                 {"type": "status", "agentId": "all"}
                 End
             `;
-            
+
             (MessageProtocol.extractJsonFromClaudeOutput as jest.Mock).mockReturnValue(null);
             mockAgentManager.spawnAgent.mockResolvedValue({ id: 'agent-1' } as any);
             mockAgentManager.getActiveAgents.mockReturnValue([]);
@@ -651,7 +622,7 @@ describe('TerminalCommandRouter', () => {
                 {"type": "status", "agentId": "all"}
                 {"type": "status", "agentId": "all"}
             `;
-            
+
             (MessageProtocol.extractJsonFromClaudeOutput as jest.Mock).mockReturnValue(null);
             mockAgentManager.getActiveAgents.mockReturnValue([]);
 
@@ -668,9 +639,7 @@ describe('TerminalCommandRouter', () => {
             router.startMonitoring(mockTerminal);
             router.stopMonitoring();
 
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                'TerminalCommandRouter: Stopped monitoring'
-            );
+            expect(mockLoggingService.info).toHaveBeenCalledWith('TerminalCommandRouter: Stopped monitoring');
 
             const health = router.getHealthStatus();
             expect(health.queueSize).toBe(0);
@@ -686,7 +655,7 @@ describe('TerminalCommandRouter', () => {
             router.stopMonitoring();
 
             expect(clearIntervalSpy).toHaveBeenCalled();
-            
+
             jest.useRealTimers();
         });
     });
@@ -694,9 +663,9 @@ describe('TerminalCommandRouter', () => {
     describe('dispose', () => {
         it('should call stopMonitoring on dispose', () => {
             const stopSpy = jest.spyOn(router, 'stopMonitoring');
-            
+
             router.dispose();
-            
+
             expect(stopSpy).toHaveBeenCalled();
         });
     });
@@ -721,10 +690,7 @@ describe('TerminalCommandRouter', () => {
 
             expect(mockAgentManager.removeAgent).toHaveBeenCalledWith('agent-1');
             expect(mockAgentManager.removeAgent).toHaveBeenCalledWith('agent-2');
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                AGENT_EVENTS.ALL_TERMINATED,
-                {}
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(AGENT_EVENTS.ALL_TERMINATED, {});
         });
     });
 
@@ -736,15 +702,15 @@ describe('TerminalCommandRouter', () => {
         it('should continue monitoring after terminal data event error', () => {
             // First event throws error
             mockWriteDataHandler({ terminal: mockTerminal, data: null });
-            
+
             // Should log error but continue
             expect(mockLoggingService.warn).toHaveBeenCalled();
-            
+
             // Second event should still be processed
             const command = { type: 'help' };
             (MessageProtocol.extractJsonFromClaudeOutput as jest.Mock).mockReturnValue(command);
             mockWriteDataHandler({ terminal: mockTerminal, data: JSON.stringify(command) });
-            
+
             // Verify router is still working
             expect(mockLoggingService.info).toHaveBeenCalledWith(
                 expect.stringContaining('Detected conductor command'),

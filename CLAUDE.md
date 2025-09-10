@@ -488,3 +488,4 @@ lsof -i :7777
 ---
 
 *This extension orchestrates the future of AI-assisted development. When multiple AI agents work together, amazing things happen! 🎸*
+- when your compile, also install into cursor

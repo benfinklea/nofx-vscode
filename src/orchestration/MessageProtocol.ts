@@ -1,90 +1,77 @@
 /**
- * Message Protocol for NofX Orchestration System
- * Defines all message types and interfaces for conductor-agent communication
+ * Message Protocol for NofX DirectCommunication System
+ *
+ * SIMPLIFIED VERSION - Removed WebSocket-specific features:
+ * - No connection management messages
+ * - No heartbeat/ping-pong protocols
+ * - Focused on core orchestration messages only
+ * - Uses VS Code's EventBus for in-process communication
  */
 
 export enum MessageType {
-    // Conductor -> Agent commands
+    // Core Conductor -> Agent commands
     SPAWN_AGENT = 'spawn_agent',
+    SPAWN_SMART_AGENT = 'spawn_smart_agent',
+    CREATE_SMART_TEAM = 'create_smart_team',
     ASSIGN_TASK = 'assign_task',
     QUERY_STATUS = 'query_status',
     TERMINATE_AGENT = 'terminate_agent',
     PAUSE_AGENT = 'pause_agent',
     RESUME_AGENT = 'resume_agent',
 
-    // Agent -> Conductor status
+    // Core Agent -> Conductor responses
     AGENT_READY = 'agent_ready',
     TASK_ACCEPTED = 'task_accepted',
     TASK_PROGRESS = 'task_progress',
     TASK_COMPLETE = 'task_complete',
     TASK_ERROR = 'task_error',
     AGENT_STATUS = 'agent_status',
-    AGENT_QUERY = 'agent_query',
 
-    // Sub-agent messages (NEW)
+    // Sub-agent orchestration
     SPAWN_SUB_AGENT = 'spawn_sub_agent',
-    SUB_AGENT_STARTED = 'sub_agent_started',
-    SUB_AGENT_PROGRESS = 'sub_agent_progress',
     SUB_AGENT_RESULT = 'sub_agent_result',
     SUB_AGENT_ERROR = 'sub_agent_error',
     CANCEL_SUB_AGENT = 'cancel_sub_agent',
-    SUB_AGENT_CANCELLED = 'sub_agent_cancelled',
     SUB_AGENT_STATUS = 'sub_agent_status',
-    SUB_AGENT_STATUS_RESPONSE = 'sub_agent_status_response',
 
-    // System messages
-    CONNECTION_ESTABLISHED = 'connection_established',
-    CONNECTION_LOST = 'connection_lost',
-    HEARTBEAT = 'heartbeat',
+    // Smart template messages
+    TEMPLATE_CONFIG_REQUEST = 'template_config_request',
+    TEMPLATE_CONFIG_RESPONSE = 'template_config_response',
+    TEMPLATE_RESOLVED = 'template_resolved',
+    NATURAL_LANGUAGE_PARSE = 'natural_language_parse',
+
+    // System messages (simplified)
+    SYSTEM_MESSAGE = 'system_message',
     SYSTEM_ERROR = 'system_error',
-    SYSTEM_STATUS = 'system_status',
-    SYSTEM_ACK = 'system_ack',
-    BROADCAST = 'broadcast',
-
-    // Additional test/protocol messages
-    CONDUCTOR_REGISTER = 'conductor_register',
-    AGENT_REGISTER = 'agent_register',
-    AGENT_RECONNECT = 'agent_reconnect',
-    RECONNECT_ACK = 'reconnect_ack',
-    RATE_LIMIT_WARNING = 'rate_limit_warning',
-    CREATE_TASK = 'create_task',
-    TASK_CREATED = 'task_created',
-    TASK_REJECTED = 'task_rejected',
-    TASK_CANCELLED = 'task_cancelled',
-    TASK_RETRY = 'task_retry',
-    DATA_TRANSFER = 'data_transfer',
-    DATA_RECEIVED = 'data_received',
-    AUTO_ASSIGN_TASK = 'auto_assign_task',
-    QUEUE_TASK = 'queue_task',
-    PROCESS_QUEUE = 'process_queue',
-    CANCEL_TASK = 'cancel_task',
-    GET_TASK_RESULT = 'get_task_result',
-    TASK_RESULT = 'task_result',
-    GET_AGENT_METRICS = 'get_agent_metrics',
-    AGENT_METRICS = 'agent_metrics',
-    UPDATE_AGENT_TEMPLATE = 'update_agent_template',
-    AGENT_TEMPLATE_UPDATED = 'agent_template_updated',
-
-    // Worktree messages
-    ENABLE_WORKTREES = 'enable_worktrees',
-    WORKTREE_CREATED = 'worktree_created',
-    WORKTREE_REMOVED = 'worktree_removed',
-    WORKTREE_MERGED = 'worktree_merged',
-    MERGE_AGENT_WORK = 'merge_agent_work',
-    MERGE_CONFLICT = 'merge_conflict',
-    GET_WORKTREE_METRICS = 'get_worktree_metrics',
-    WORKTREE_METRICS = 'worktree_metrics'
+    BROADCAST = 'broadcast'
 }
 
+/**
+ * Core message interface for DirectCommunication
+ * Simplified from WebSocket version - removed network-specific fields
+ */
 export interface OrchestratorMessage {
-    id: string; // Unique message ID (UUID)
+    id: string; // Unique message ID
     timestamp: string; // ISO 8601 timestamp
-    from: string; // conductor | agent-{id} | system
-    to: string; // conductor | agent-{id} | broadcast | dashboard
+    source: string; // conductor | agent-{id} | system
+    target?: string; // conductor | agent-{id} | broadcast | dashboard
+    to?: string; // Backwards compatibility
+    from?: string; // Backwards compatibility
     type: MessageType; // Message type enum
-    payload: any; // Message-specific payload
-    correlationId?: string; // For request-response correlation
-    requiresAck?: boolean; // Whether acknowledgment is required
+    content: string; // Message content/description
+    payload?: any; // Optional message-specific data
+    status: MessageStatus; // Message processing status
+    metadata?: Record<string, any>; // Additional metadata
+}
+
+/**
+ * Message processing status
+ */
+export enum MessageStatus {
+    PENDING = 'pending',
+    PROCESSING = 'processing',
+    COMPLETED = 'completed',
+    FAILED = 'failed'
 }
 
 // Specific payload interfaces
@@ -94,6 +81,92 @@ export interface SpawnAgentPayload {
     name: string; // Display name
     template?: string; // Template ID to use
     autoStart?: boolean; // Start immediately after spawn
+}
+
+// Smart template payload interfaces
+
+export interface SpawnSmartAgentPayload {
+    name: string; // Display name
+    config: SmartAgentConfig; // Dynamic template configuration
+    autoStart?: boolean; // Start immediately after spawn
+    workingDirectory?: string; // Optional working directory
+}
+
+export interface SmartAgentConfig {
+    category: 'developer' | 'architect' | 'quality' | 'process';
+    primaryDomain?: string; // For developers: frontend, backend, fullstack, ai-ml, mobile, etc.
+    scope?: string; // For architects: software, database, security, cloud, etc.
+    primaryFocus?: string; // For quality: testing, security, audit, performance, etc.
+    role?: string; // For process: product-manager, scrum-master, technical-writer, etc.
+    languages?: string[]; // Programming languages
+    frameworks?: string[]; // Frameworks and libraries
+    specializations?: string[]; // Specific specializations
+    toolchain?: string[]; // Tools and technologies
+    focusAreas?: string[]; // Areas of focus
+    decisionLevel?: 'tactical' | 'strategic' | 'operational'; // Decision-making level
+    systemTypes?: string[]; // Types of systems to work with
+    testingTypes?: string[]; // Types of testing
+    securityScope?: string[]; // Security domains
+    auditAreas?: string[]; // Audit focus areas
+    methodologies?: string[]; // Process methodologies
+    stakeholders?: string[]; // Stakeholder types
+    deliverables?: string[]; // Expected deliverables
+    communicationStyle?: 'technical' | 'business' | 'user-focused'; // Communication approach
+    complexity: 'low' | 'medium' | 'high'; // Task complexity preference
+    priority: 'low' | 'medium' | 'high' | 'critical'; // Agent priority level
+}
+
+export interface CreateSmartTeamPayload {
+    teamName: string; // Team display name
+    teamType: string; // Team preset type (e.g., 'full-stack-team', 'security-audit-team')
+    agentConfigs: SmartAgentConfig[]; // Array of agent configurations
+    autoStart?: boolean; // Start all agents immediately
+    workspaceStrategy?: 'shared' | 'worktrees' | 'isolated'; // Workspace management
+}
+
+export interface TemplateConfigRequestPayload {
+    requestId: string; // Unique request ID
+    agentId?: string; // Target agent (optional for broadcast)
+    configType: 'partial' | 'complete' | 'suggestions'; // Type of configuration needed
+    context?: {
+        naturalLanguagePrompt?: string; // Original natural language request
+        existingConfig?: Partial<SmartAgentConfig>; // Partial configuration
+        domainHints?: string[]; // Domain suggestions
+        taskContext?: string; // Context about the intended task
+    };
+}
+
+export interface TemplateConfigResponsePayload {
+    requestId: string; // Matching request ID
+    agentId: string; // Responding agent ID
+    suggestedConfig: SmartAgentConfig; // Suggested configuration
+    confidence: number; // Confidence score (0-1)
+    reasoning?: string; // Explanation of suggestions
+    alternatives?: SmartAgentConfig[]; // Alternative configurations
+}
+
+export interface TemplateResolvedPayload {
+    requestId: string; // Original request ID
+    resolvedConfig: SmartAgentConfig; // Final resolved configuration
+    templateId: string; // Generated template ID
+    agentName: string; // Final agent name
+    resolutionMethod: 'automatic' | 'user-selected' | 'ai-suggested'; // How it was resolved
+}
+
+export interface NaturalLanguageParsePayload {
+    originalPrompt: string; // Original natural language request
+    parsedIntent: {
+        action: 'spawn_agent' | 'create_team' | 'assign_task' | 'modify_config'; // Detected action
+        agentType?: string; // Detected agent type/role
+        teamType?: string; // Detected team type
+        taskDescription?: string; // Extracted task description
+        priority?: 'low' | 'medium' | 'high' | 'critical'; // Detected priority
+        urgency?: 'low' | 'medium' | 'high'; // Detected urgency
+    };
+    extractedConfig?: Partial<SmartAgentConfig>; // Extracted configuration elements
+    confidence: number; // Parse confidence (0-1)
+    ambiguities?: string[]; // Areas needing clarification
+    suggestions?: string[]; // Alternative interpretations
 }
 
 export interface AssignTaskPayload {
@@ -207,22 +280,28 @@ export interface ClientConnection {
 
 // Helper functions
 
+/**
+ * Create a DirectCommunication message
+ */
 export function createMessage(
-    from: string,
-    to: string,
+    source: string,
+    target: string,
     type: MessageType,
-    payload: any,
-    correlationId?: string
+    content: string,
+    payload?: any
 ): OrchestratorMessage {
     return {
         id: generateMessageId(),
         timestamp: new Date().toISOString(),
-        from,
-        to,
+        source,
+        target,
         type,
+        content,
+        status: MessageStatus.PENDING,
         payload,
-        correlationId: correlationId || generateMessageId(),
-        requiresAck: shouldRequireAck(type)
+        // Backwards compatibility
+        from: source,
+        to: target
     };
 }
 
@@ -236,10 +315,13 @@ export function shouldRequireAck(type: MessageType): boolean {
     // Commands typically require acknowledgment
     return [
         MessageType.SPAWN_AGENT,
+        MessageType.SPAWN_SMART_AGENT,
+        MessageType.CREATE_SMART_TEAM,
         MessageType.ASSIGN_TASK,
         MessageType.TERMINATE_AGENT,
         MessageType.PAUSE_AGENT,
-        MessageType.RESUME_AGENT
+        MessageType.RESUME_AGENT,
+        MessageType.TEMPLATE_CONFIG_REQUEST
     ].includes(type);
 }
 
@@ -268,11 +350,36 @@ export function formatMessageForClaude(message: OrchestratorMessage): string {
             content = `[TASK ASSIGNED] ${task.title}\nPriority: ${task.priority}\nDescription: ${task.description}`;
             break;
 
+        case MessageType.SPAWN_SMART_AGENT:
+            const smartAgent = message.payload as SpawnSmartAgentPayload;
+            content = `[SMART AGENT REQUEST] Spawn ${smartAgent.name}\nCategory: ${smartAgent.config.category}\nConfiguration: ${JSON.stringify(smartAgent.config, null, 2)}`;
+            break;
+
+        case MessageType.CREATE_SMART_TEAM:
+            const smartTeam = message.payload as CreateSmartTeamPayload;
+            content = `[SMART TEAM REQUEST] Create ${smartTeam.teamName}\nType: ${smartTeam.teamType}\nAgents: ${smartTeam.agentConfigs.length}`;
+            break;
+
+        case MessageType.TEMPLATE_CONFIG_REQUEST:
+            const configReq = message.payload as TemplateConfigRequestPayload;
+            content = `[TEMPLATE CONFIG REQUEST] Type: ${configReq.configType}\nContext: ${configReq.context?.naturalLanguagePrompt || 'N/A'}`;
+            break;
+
+        case MessageType.TEMPLATE_CONFIG_RESPONSE:
+            const configResp = message.payload as TemplateConfigResponsePayload;
+            content = `[TEMPLATE CONFIG RESPONSE] Confidence: ${(configResp.confidence * 100).toFixed(0)}%\nReasoning: ${configResp.reasoning || 'N/A'}`;
+            break;
+
+        case MessageType.NATURAL_LANGUAGE_PARSE:
+            const nlParse = message.payload as NaturalLanguageParsePayload;
+            content = `[NATURAL LANGUAGE PARSE] Action: ${nlParse.parsedIntent.action}\nConfidence: ${(nlParse.confidence * 100).toFixed(0)}%\nPrompt: "${nlParse.originalPrompt}"`;
+            break;
+
         case MessageType.QUERY_STATUS:
             content = '[STATUS REQUEST] Please report your current status';
             break;
 
-        case MessageType.AGENT_QUERY:
+        case MessageType.AGENT_STATUS:
             const query = message.payload as AgentQueryPayload;
             content = `[QUESTION FROM ${message.from}] ${query.question}`;
             break;
@@ -336,24 +443,84 @@ export function extractJsonFromClaudeOutput(output: string): any | null {
     return null;
 }
 
-function convertClaudeCommandToMessage(command: any): OrchestratorMessage {
+export function convertClaudeCommandToMessage(command: any): OrchestratorMessage {
     // Map Claude's simplified commands to full messages
     let type: MessageType;
+    let content: string;
     let payload: any;
+    let target: string;
 
     switch (command.type) {
         case 'spawn':
         case 'spawn_agent':
             type = MessageType.SPAWN_AGENT;
+            content = `Spawn ${command.role} agent`;
+            target = 'system';
             payload = {
                 role: command.role,
                 name: command.name || `${command.role}-agent`
             };
             break;
 
+        case 'spawn_smart':
+        case 'spawn_smart_agent':
+            type = MessageType.SPAWN_SMART_AGENT;
+            content = `Spawn smart agent: ${command.name}`;
+            target = 'system';
+            payload = {
+                name: command.name,
+                config: command.config,
+                autoStart: command.autoStart !== false
+            };
+            break;
+
+        case 'create_team':
+        case 'create_smart_team':
+            type = MessageType.CREATE_SMART_TEAM;
+            content = `Create smart team: ${command.teamName}`;
+            target = 'system';
+            payload = {
+                teamName: command.teamName,
+                teamType: command.teamType,
+                agentConfigs: command.agentConfigs,
+                autoStart: command.autoStart !== false,
+                workspaceStrategy: command.workspaceStrategy || 'shared'
+            };
+            break;
+
+        case 'parse_natural':
+        case 'natural_language':
+            type = MessageType.NATURAL_LANGUAGE_PARSE;
+            content = `Parse natural language: "${command.prompt}"`;
+            target = 'system';
+            payload = {
+                originalPrompt: command.prompt,
+                parsedIntent: command.intent || {},
+                extractedConfig: command.config,
+                confidence: command.confidence || 0.5,
+                ambiguities: command.ambiguities || [],
+                suggestions: command.suggestions || []
+            };
+            break;
+
+        case 'request_config':
+        case 'template_config':
+            type = MessageType.TEMPLATE_CONFIG_REQUEST;
+            content = `Request template configuration`;
+            target = command.agentId || 'broadcast';
+            payload = {
+                requestId: generateMessageId(),
+                agentId: command.agentId,
+                configType: command.configType || 'complete',
+                context: command.context
+            };
+            break;
+
         case 'assign':
         case 'assign_task':
             type = MessageType.ASSIGN_TASK;
+            content = `Assign task: ${command.task || command.title}`;
+            target = command.agentId;
             payload = {
                 agentId: command.agentId,
                 taskId: generateMessageId(),
@@ -366,19 +533,37 @@ function convertClaudeCommandToMessage(command: any): OrchestratorMessage {
         case 'status':
         case 'query':
             type = MessageType.QUERY_STATUS;
+            content = `Query status for ${command.agentId || 'all agents'}`;
+            target = command.agentId || 'all';
             payload = { agentId: command.agentId || 'all' };
             break;
 
         case 'terminate':
         case 'stop':
             type = MessageType.TERMINATE_AGENT;
+            content = `Terminate agent ${command.agentId}`;
+            target = command.agentId;
             payload = { agentId: command.agentId };
             break;
 
         default:
             type = MessageType.BROADCAST;
+            content = JSON.stringify(command);
+            target = 'broadcast';
             payload = command;
     }
 
-    return createMessage('conductor', command.agentId || 'broadcast', type, payload);
+    return {
+        id: generateMessageId(),
+        timestamp: new Date().toISOString(),
+        source: 'conductor',
+        target,
+        type,
+        content,
+        status: MessageStatus.PENDING,
+        payload,
+        // Backwards compatibility
+        from: 'conductor',
+        to: target
+    };
 }

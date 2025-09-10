@@ -4,21 +4,21 @@ import { Container } from '../../services/Container';
 import { SERVICE_TOKENS } from '../../services/interfaces';
 import { AgentManager } from '../../agents/AgentManager';
 import { AgentTemplateManager } from '../../agents/AgentTemplateManager';
-import { ConductorTerminal } from '../../conductor/ConductorTerminal';
-import { IntelligentConductor } from '../../conductor/IntelligentConductor';
-import { SuperSmartConductor } from '../../conductor/SuperSmartConductor';
+import { SmartConductor } from '../../conductor/SmartConductor';
 import { ConductorCommands } from '../../commands/ConductorCommands';
 import { EventBus } from '../../services/EventBus';
 import { DOMAIN_EVENTS } from '../../services/EventConstants';
 import { ConfigurationService } from '../../services/ConfigurationService';
 import { LoggingService } from '../../services/LoggingService';
 import { AgentTreeProvider } from '../../views/AgentTreeProvider';
-import { TreeStateManager } from '../../services/TreeStateManager';
+import { UIStateManager } from '../../services/UIStateManager';
 import { createIntegrationContainer, ExtensionTestHelpers } from './../utils/TestHelpers';
 import { setupMockWorkspace, clearMockWorkspace } from './setup';
 import { TestHarness } from './testHarness';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../state/AppStateStore';
+import * as selectors from '../../state/selectors';
+import * as actions from '../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,

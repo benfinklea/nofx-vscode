@@ -11,7 +11,9 @@ import { ConfigurationService } from '../../../services/ConfigurationService';
 import { Container } from '../../../services/Container';
 import { DOMAIN_EVENTS } from '../../../services/EventConstants';
 import * as vscode from 'vscode';
-
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';
 interface Task {
     id: string;
     title: string;

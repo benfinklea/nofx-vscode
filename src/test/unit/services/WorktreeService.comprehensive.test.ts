@@ -48,26 +48,28 @@ describe('WorktreeService - Comprehensive Tests', () => {
         mockNotificationService = createMockNotificationService();
         mockLoggingService = createMockLoggingService();
         mockErrorHandler = createMockErrorHandler();
-        
+
         // Setup WorktreeManager mock
         mockWorktreeManager = new WorktreeManager('/test/workspace') as jest.Mocked<WorktreeManager>;
-        
+
         // Default mock implementations
         mockConfigService.isUseWorktrees.mockReturnValue(true);
         mockConfigService.onDidChange.mockReturnValue({ dispose: jest.fn() });
-        
+
         // Mock VS Code workspace
-        (vscode.workspace as any).workspaceFolders = [{
-            uri: { fsPath: '/test/workspace' },
-            name: 'Test Workspace',
-            index: 0
-        }];
-        
+        (vscode.workspace as any).workspaceFolders = [
+            {
+                uri: { fsPath: '/test/workspace' },
+                name: 'Test Workspace',
+                index: 0
+            }
+        ];
+
         // Mock WorktreeManager static method
         (WorktreeManager as any).isWorktreeAvailable = jest.fn().mockReturnValue(true);
-        
+
         // Mock error handler to pass through
-        mockErrorHandler.handleAsync.mockImplementation(async (fn) => {
+        mockErrorHandler.handleAsync.mockImplementation(async fn => {
             try {
                 return await fn();
             } catch (error) {
@@ -113,22 +115,13 @@ describe('WorktreeService - Comprehensive Tests', () => {
         it('should handle missing workspace folder', () => {
             (vscode.workspace as any).workspaceFolders = undefined;
 
-            service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService,
-                mockWorktreeManager
-            );
+            service = new WorktreeService(mockConfigService, mockNotificationService, mockWorktreeManager);
 
             expect(mockLoggingService?.debug).not.toHaveBeenCalled();
         });
 
         it('should handle missing worktree manager', () => {
-            service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService,
-                undefined,
-                mockLoggingService
-            );
+            service = new WorktreeService(mockConfigService, mockNotificationService, undefined, mockLoggingService);
 
             expect(mockLoggingService.debug).toHaveBeenCalledWith(
                 expect.stringContaining('WorktreeManager not available')
@@ -163,7 +156,7 @@ describe('WorktreeService - Comprehensive Tests', () => {
 
         it('should respond to configuration changes', () => {
             let configChangeCallback: any;
-            mockConfigService.onDidChange.mockImplementation((callback) => {
+            mockConfigService.onDidChange.mockImplementation(callback => {
                 configChangeCallback = callback;
                 return { dispose: jest.fn() };
             });
@@ -212,14 +205,12 @@ describe('WorktreeService - Comprehensive Tests', () => {
 
             expect(result).toBe('/test/.nofx-worktrees/agent-1');
             expect(mockWorktreeManager.createWorktreeForAgent).toHaveBeenCalledWith(agent);
-            expect(mockLoggingService.debug).toHaveBeenCalledWith(
-                expect.stringContaining('Worktree created')
-            );
+            expect(mockLoggingService.debug).toHaveBeenCalledWith(expect.stringContaining('Worktree created'));
         });
 
         it('should return undefined when worktrees disabled', async () => {
             mockConfigService.isUseWorktrees.mockReturnValue(false);
-            
+
             // Re-create service with worktrees disabled
             service = new WorktreeService(
                 mockConfigService,
@@ -250,11 +241,9 @@ describe('WorktreeService - Comprehensive Tests', () => {
         });
 
         it('should handle creation errors', async () => {
-            mockWorktreeManager.createWorktreeForAgent.mockRejectedValue(
-                new Error('Creation failed')
-            );
+            mockWorktreeManager.createWorktreeForAgent.mockRejectedValue(new Error('Creation failed'));
 
-            mockErrorHandler.handleAsync.mockImplementation(async (fn) => {
+            mockErrorHandler.handleAsync.mockImplementation(async fn => {
                 try {
                     return await fn();
                 } catch {
@@ -323,7 +312,7 @@ describe('WorktreeService - Comprehensive Tests', () => {
 
         it('should return true when worktrees disabled', async () => {
             mockConfigService.isUseWorktrees.mockReturnValue(false);
-            
+
             service = new WorktreeService(
                 mockConfigService,
                 mockNotificationService,
@@ -341,11 +330,9 @@ describe('WorktreeService - Comprehensive Tests', () => {
         it('should handle removal errors', async () => {
             mockWorktreeManager.getWorktreePath.mockReturnValue('/test/.nofx-worktrees/agent-1');
             mockNotificationService.showInformation.mockResolvedValue('Remove Without Merging');
-            mockWorktreeManager.removeWorktreeForAgent.mockRejectedValue(
-                new Error('Removal failed')
-            );
+            mockWorktreeManager.removeWorktreeForAgent.mockRejectedValue(new Error('Removal failed'));
 
-            mockErrorHandler.handleAsync.mockImplementation(async (fn) => {
+            mockErrorHandler.handleAsync.mockImplementation(async fn => {
                 try {
                     return await fn();
                 } catch {
@@ -377,14 +364,12 @@ describe('WorktreeService - Comprehensive Tests', () => {
 
             expect(result).toBe(true);
             expect(mockWorktreeManager.mergeAgentWork).toHaveBeenCalledWith('agent-1');
-            expect(mockLoggingService.debug).toHaveBeenCalledWith(
-                expect.stringContaining('Worktree merged')
-            );
+            expect(mockLoggingService.debug).toHaveBeenCalledWith(expect.stringContaining('Worktree merged'));
         });
 
         it('should return true when worktrees disabled', async () => {
             mockConfigService.isUseWorktrees.mockReturnValue(false);
-            
+
             service = new WorktreeService(
                 mockConfigService,
                 mockNotificationService,
@@ -400,11 +385,9 @@ describe('WorktreeService - Comprehensive Tests', () => {
         });
 
         it('should handle merge errors', async () => {
-            mockWorktreeManager.mergeAgentWork.mockRejectedValue(
-                new Error('Merge conflict')
-            );
+            mockWorktreeManager.mergeAgentWork.mockRejectedValue(new Error('Merge conflict'));
 
-            mockErrorHandler.handleAsync.mockImplementation(async (fn) => {
+            mockErrorHandler.handleAsync.mockImplementation(async fn => {
                 try {
                     return await fn();
                 } catch {
@@ -421,12 +404,8 @@ describe('WorktreeService - Comprehensive Tests', () => {
     describe('getWorktreePath', () => {
         it('should return worktree path', () => {
             mockWorktreeManager.getWorktreePath.mockReturnValue('/test/.nofx-worktrees/agent-1');
-            
-            service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService,
-                mockWorktreeManager
-            );
+
+            service = new WorktreeService(mockConfigService, mockNotificationService, mockWorktreeManager);
 
             const result = service.getWorktreePath('agent-1');
 
@@ -435,11 +414,7 @@ describe('WorktreeService - Comprehensive Tests', () => {
         });
 
         it('should return undefined when no worktree manager', () => {
-            service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService,
-                undefined
-            );
+            service = new WorktreeService(mockConfigService, mockNotificationService, undefined);
 
             const result = service.getWorktreePath('agent-1');
 
@@ -448,12 +423,8 @@ describe('WorktreeService - Comprehensive Tests', () => {
 
         it('should return undefined when worktree does not exist', () => {
             mockWorktreeManager.getWorktreePath.mockReturnValue(undefined);
-            
-            service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService,
-                mockWorktreeManager
-            );
+
+            service = new WorktreeService(mockConfigService, mockNotificationService, mockWorktreeManager);
 
             const result = service.getWorktreePath('non-existent');
 
@@ -463,11 +434,7 @@ describe('WorktreeService - Comprehensive Tests', () => {
 
     describe('isAvailable', () => {
         it('should return true when worktrees available', () => {
-            service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService,
-                mockWorktreeManager
-            );
+            service = new WorktreeService(mockConfigService, mockNotificationService, mockWorktreeManager);
 
             const result = service.isAvailable();
 
@@ -476,12 +443,8 @@ describe('WorktreeService - Comprehensive Tests', () => {
 
         it('should return false when worktrees disabled', () => {
             mockConfigService.isUseWorktrees.mockReturnValue(false);
-            
-            service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService,
-                mockWorktreeManager
-            );
+
+            service = new WorktreeService(mockConfigService, mockNotificationService, mockWorktreeManager);
 
             const result = service.isAvailable();
 
@@ -490,12 +453,8 @@ describe('WorktreeService - Comprehensive Tests', () => {
 
         it('should return false when git not available', () => {
             (WorktreeManager as any).isWorktreeAvailable.mockReturnValue(false);
-            
-            service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService,
-                mockWorktreeManager
-            );
+
+            service = new WorktreeService(mockConfigService, mockNotificationService, mockWorktreeManager);
 
             const result = service.isAvailable();
 
@@ -504,12 +463,8 @@ describe('WorktreeService - Comprehensive Tests', () => {
 
         it('should return false when no workspace', () => {
             (vscode.workspace as any).workspaceFolders = undefined;
-            
-            service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService,
-                mockWorktreeManager
-            );
+
+            service = new WorktreeService(mockConfigService, mockNotificationService, mockWorktreeManager);
 
             const result = service.isAvailable();
 
@@ -554,9 +509,7 @@ describe('WorktreeService - Comprehensive Tests', () => {
         });
 
         it('should handle cleanup errors', async () => {
-            mockWorktreeManager.cleanupOrphanedWorktrees.mockRejectedValue(
-                new Error('Cleanup failed')
-            );
+            mockWorktreeManager.cleanupOrphanedWorktrees.mockRejectedValue(new Error('Cleanup failed'));
 
             await service.cleanupOrphaned();
 
@@ -582,11 +535,7 @@ describe('WorktreeService - Comprehensive Tests', () => {
         });
 
         it('should clear worktree manager reference', () => {
-            service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService,
-                mockWorktreeManager
-            );
+            service = new WorktreeService(mockConfigService, mockNotificationService, mockWorktreeManager);
 
             service.dispose();
 
@@ -599,11 +548,7 @@ describe('WorktreeService - Comprehensive Tests', () => {
             const mockDispose = jest.fn();
             mockConfigService.onDidChange.mockReturnValue({ dispose: mockDispose });
 
-            service = new WorktreeService(
-                mockConfigService,
-                mockNotificationService,
-                mockWorktreeManager
-            );
+            service = new WorktreeService(mockConfigService, mockNotificationService, mockWorktreeManager);
 
             service.dispose();
             service.dispose(); // Second call should not error
@@ -637,20 +582,18 @@ describe('WorktreeService - Comprehensive Tests', () => {
             });
 
             expect(() => {
-                service = new WorktreeService(
-                    mockConfigService,
-                    mockNotificationService,
-                    mockWorktreeManager
-                );
+                service = new WorktreeService(mockConfigService, mockNotificationService, mockWorktreeManager);
             }).toThrow('Config error');
         });
 
         it('should handle workspace folder with special characters', () => {
-            (vscode.workspace as any).workspaceFolders = [{
-                uri: { fsPath: '/test/work space/project@2024' },
-                name: 'Special Project',
-                index: 0
-            }];
+            (vscode.workspace as any).workspaceFolders = [
+                {
+                    uri: { fsPath: '/test/work space/project@2024' },
+                    name: 'Special Project',
+                    index: 0
+                }
+            ];
 
             service = new WorktreeService(
                 mockConfigService,
@@ -659,9 +602,7 @@ describe('WorktreeService - Comprehensive Tests', () => {
                 mockLoggingService
             );
 
-            expect(WorktreeManager.isWorktreeAvailable).toHaveBeenCalledWith(
-                '/test/work space/project@2024'
-            );
+            expect(WorktreeManager.isWorktreeAvailable).toHaveBeenCalledWith('/test/work space/project@2024');
         });
     });
 
@@ -688,9 +629,7 @@ describe('WorktreeService - Comprehensive Tests', () => {
                 return `/test/.nofx-worktrees/${agent.id}`;
             });
 
-            const results = await Promise.all(
-                agents.map(agent => service.createForAgent(agent))
-            );
+            const results = await Promise.all(agents.map(agent => service.createForAgent(agent)));
 
             expect(results).toHaveLength(3);
             results.forEach((result, index) => {
@@ -706,9 +645,7 @@ describe('WorktreeService - Comprehensive Tests', () => {
             });
             mockNotificationService.showInformation.mockResolvedValue('Remove Without Merging');
 
-            const results = await Promise.all(
-                agentIds.map(id => service.removeForAgent(id))
-            );
+            const results = await Promise.all(agentIds.map(id => service.removeForAgent(id)));
 
             expect(results).toEqual([true, true, true]);
             expect(mockWorktreeManager.removeWorktreeForAgent).toHaveBeenCalledTimes(3);

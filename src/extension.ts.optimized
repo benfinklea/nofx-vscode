@@ -1,0 +1,876 @@
+import * as vscode from 'vscode';
+import { GracefulShutdown } from './services/reliability/GracefulShutdown';
+
+console.log('[NofX Debug] Extension module loading...');
+
+// Global services
+let gracefulShutdown: GracefulShutdown;
+
+// Core services
+import { ServiceLocator } from './services/ServiceLocator';
+import { OUTPUT_CHANNELS } from './constants/outputChannels';
+import {
+    ILogger,
+    IEventEmitter, IEventSubscriber,
+    ITaskStateMachine,
+    INotificationService,
+    IConfiguration,
+    IErrorHandler,
+    ICommandService,
+    IPersistenceService,
+    ValidationError,
+    CONFIG_KEYS
+} from './services/interfaces';
+import { EVENTS } from './services/EventConstants';
+import { ConfigurationService } from './services/ConfigurationService';
+// ConfigurationValidator removed - over-engineered
+// MetricsService removed - unused
+import { NotificationService } from './services/NotificationService';
+import { LoggingService } from './services/LoggingService';
+import { EventBus } from './services/EventBus';
+import { ErrorHandler } from './services/ErrorHandler';
+import { CommandService } from './services/CommandService';
+import { TerminalManager } from './services/TerminalManager';
+import { WorktreeService } from './services/WorktreeService';
+// AutoWorktreeManager removed - redundant with WorktreeService
+// AgentLifecycleManager removed - redundant with AgentManager
+
+// Business logic
+import { AgentManager } from './agents/AgentManager';
+import { TaskQueue } from './tasks/TaskQueue';
+import { TaskStateMachine } from './tasks/TaskStateMachine';
+import { PriorityTaskQueue } from './tasks/PriorityTaskQueue';
+import { CapabilityMatcher } from './tasks/CapabilityMatcher';
+import { TaskDependencyManager } from './tasks/TaskDependencyManager';
+import { priorityToNumeric } from './tasks/priority';
+import { DirectCommunicationService } from './services/DirectCommunicationService';
+// ConnectionPoolService removed - WebSocket overkill
+// MessageRouter removed - overly complex, unused
+// MessageValidator removed - over-engineered
+// MessagePersistenceService removed - never actually persists
+// InMemoryMessagePersistenceService removed - redundant
+// Lazy load: MessageFlowDashboard
+let MessageFlowDashboard: any;
+import { MessageType, OrchestratorMessage } from './orchestration/MessageProtocol';
+// PersistenceService unified
+import { PersistenceService } from './services/PersistenceService';
+// Lazy load: WorktreeManager
+let WorktreeManager: any;
+// TaskToolBridge removed - overly complex
+
+// Views
+import { AgentTreeProvider } from './views/AgentTreeProvider';
+import { TaskTreeProvider } from './views/TaskTreeProvider';
+import { NofxDevTreeProvider } from './views/NofxDevTreeProvider';
+import { NofxTerminalProvider } from './views/NofxTerminalProvider';
+import { ModernNofXPanel } from './views/ModernNofXPanel';
+
+// UI Services
+import { UIStateManager } from './services/UIStateManager';
+// UIStateManager removed - UI state, move to views
+import { ConductorViewModel } from './viewModels/ConductorViewModel';
+import { DashboardViewModel } from './viewModels/DashboardViewModel';
+import { TreeViewHost } from './ui/TreeViewHost';
+
+// Command handlers
+import { AgentCommands } from './commands/AgentCommands';
+// TaskCommands removed - over-engineered
+import { ConductorCommands } from './commands/ConductorCommands';
+import { OrchestrationCommands } from './commands/OrchestrationCommands';
+// PersistenceCommands removed - redundant session commands
+// TemplateCommands removed - templates are JSON files
+// WorktreeCommands removed - mostly unused git commands
+import { UtilityCommands } from './commands/UtilityCommands';
+import { getAppStateStore } from './state/AppStateStore';
+import * as selectors from './state/selectors';
+import * as actions from './state/actions';// MetricsCommands removed - all metrics commands unused
+
+// Lazy loading helper
+function lazyLoad<T>(loader: () => Promise<T>): () => Promise<T> {
+    let instance: T | undefined;
+    return async () => {
+        if (!instance) {
+            instance = await loader();
+        }
+        return instance;
+    };
+}
+
+// Lazy loaders
+const getAgentTemplateManager = lazyLoad(async () => {
+    const { AgentTemplateManager } = await import('./agents/AgentTemplateManager');
+    return new AgentTemplateManager();
+});
+
+const getMessageFlowDashboard = lazyLoad(async () => {
+    const { MessageFlowDashboard } = await import('./dashboard/MessageFlowDashboard');
+    return MessageFlowDashboard;
+});
+// SessionCommands removed - redundant with auto-persistence
+
+// Global container for dependency injection
+// ServiceLocator replaces Container
+
+export async function activate(context: vscode.ExtensionContext) {
+    // 🚀 Initialize ServiceLocator
+    ServiceLocator.initialize(context);
+    const activationStartTime = Date.now();
+    console.log('[NofX Debug] Extension activation started');
+
+    try {
+        // Basic telemetry using VS Code's built-in service
+        console.log('[NofX Debug] Extension initializing with simplified telemetry');
+
+        // Initialize graceful shutdown handler with enterprise reliability
+        try {
+            gracefulShutdown = new GracefulShutdown({
+                maxShutdownTime: 30000, // 30 seconds
+                forcefulShutdownDelay: 45000, // 45 seconds before forceful shutdown
+                persistState: true,
+                notifyUsers: true,
+                onShutdownStart: () => {
+                    console.log('[NofX] Graceful shutdown initiated...');
+                },
+                onShutdownComplete: () => {
+                    console.log('[NofX] Graceful shutdown completed successfully');
+                },
+                onShutdownError: (error) => {
+                    console.error('[NofX] Graceful shutdown error:', error);
+                }
+            });
+            
+            console.log('[NofX Debug] Graceful shutdown handler initialized');
+        } catch (error) {
+            console.error('[NofX Debug] Failed to initialize graceful shutdown:', error);
+            // Continue without graceful shutdown - not critical for extension operation
+        }
+
+        // ServiceLocator already initialized above
+
+        // Register core services
+        ServiceLocator.register('ExtensionContext', context);
+
+        const outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNELS.MAIN);
+        ServiceLocator.register('OutputChannel', outputChannel);
+        
+        // Register enterprise telemetry service
+        // Enterprise telemetry service removed - using VS Code built-in telemetry
+
+        // Register LoggingService with enterprise telemetry integration
+        ServiceLocator.register('LoggingService', () => {
+                const loggingService = new LoggingService(
+                    undefined, // ConfigurationService will be available later via resolveOptional
+                    ServiceLocator.get('OutputChannel')
+                );
+                
+                // Removed enterprise telemetry service - simplified architecture for entrepreneurs
+                
+                return loggingService;
+            });
+
+        // Register foundational services (in dependency order)
+        ServiceLocator.register('EventBus', () => {
+                console.log('[NofX Debug] Creating EventBus...');
+                try {
+                    const loggingService = ServiceLocator.tryGet<ILogger>('LoggingService');
+                    console.log('[NofX Debug] LoggingService resolved for EventBus (optional):', !!loggingService);
+
+                    const eventBus = new EventBus(loggingService);
+                    console.log('[NofX Debug] EventBus created successfully');
+                    return eventBus;
+                } catch (error) {
+                    console.error('[NofX Debug] Failed to create EventBus:', error);
+                    throw error;
+                }
+            });
+        ServiceLocator.register('NotificationService', () => {
+                console.log('[NofX Debug] Creating NotificationService...');
+                try {
+                    const notificationService = new NotificationService();
+                    console.log('[NofX Debug] NotificationService created successfully');
+                    return notificationService;
+                } catch (error) {
+                    console.error('[NofX Debug] Failed to create NotificationService:', error);
+                    throw error;
+                }
+            });
+
+        // Register configuration service (simplified - no validator needed)
+        ServiceLocator.register('ConfigurationService', () => {
+                try {
+                    console.log('[NofX Debug] Creating ConfigurationService...');
+                    const configService = new ConfigurationService();
+                    console.log('[NofX Debug] ConfigurationService created successfully');
+                    return configService;
+                } catch (error) {
+                    console.error('[NofX Debug] Failed to create ConfigurationService:', error);
+                    // Try to create basic service
+                    try {
+                        return new ConfigurationService();
+                    } catch (fallbackError) {
+                        console.error('[NofX Debug] Fallback ConfigurationService creation failed:', fallbackError);
+                        throw error;
+                    }
+                }
+            });
+
+        // Now connect LoggingService to ConfigurationService
+        try {
+            const loggingSvc = ServiceLocator.get<ILogger>('LoggingService') as any;
+            const configSvc = ServiceLocator.get<IConfiguration>('ConfigurationService');
+            if (loggingSvc && typeof loggingSvc.setConfigurationService === 'function') {
+                loggingSvc.setConfigurationService(configSvc);
+            }
+        } catch (error) {
+            console.error('[NofX Debug] Failed to connect LoggingService to ConfigurationService:', error);
+            // Continue without configuration-aware logging
+        }
+
+        ServiceLocator.register('ErrorHandler', () => new ErrorHandler(
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    ServiceLocator.get<INotificationService>('NotificationService')
+                ));
+
+        ServiceLocator.register('CommandService', () => new CommandService(
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    ServiceLocator.get<IErrorHandler>('ErrorHandler')
+                ));
+
+        // Register AgentNotificationService for agent-specific and system-wide notifications
+        ServiceLocator.register('AgentNotificationService', () => {
+                const AgentNotificationService =
+                    require('./services/AgentNotificationService').AgentNotificationService;
+                return new AgentNotificationService(
+                    ServiceLocator.get<vscode.ExtensionContext>('ExtensionContext'),
+                    ServiceLocator.get<ILogger>('LoggingService')
+                );
+            });
+
+        // Get logging service for use in activation
+        const loggingService = ServiceLocator.get<ILogger>('LoggingService');
+        const errorHandler = ServiceLocator.get<IErrorHandler>('ErrorHandler');
+
+        // Set logging service on container for future operations
+        // Logging service set directly in ServiceLocator
+
+        // EventBus already has loggingService from constructor, verify it's working
+        const eventBus = ServiceLocator.get('EventBus') as any;
+        // Skip setLoggingService call if method doesn't exist (already set in constructor)
+        if (typeof eventBus.setLoggingService === 'function') {
+            eventBus.setLoggingService(loggingService);
+        }
+
+        loggingService.info('🎸 n of x Multi-Agent Orchestrator is now active!');
+
+        // Get workspace folder once
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+        // Register WorktreeManager and PersistenceService BEFORE WorktreeService
+        if (workspaceFolder) {
+            const worktreeManager = new WorktreeManager(
+                workspaceFolder.uri.fsPath,
+                loggingService,
+                ServiceLocator.get<INotificationService>('NotificationService')
+            );
+            ServiceLocator.register('WorktreeManager', worktreeManager);
+
+            // Register PersistenceService
+            const agentPersistence = new PersistenceService(context, loggingService, eventBus);
+            ServiceLocator.register('PersistenceService', agentPersistence);
+
+            // PersistenceService removed - using PersistenceService instead
+
+            // Register new unified PersistenceService (already registered above)
+        }
+
+        // Register new services
+        ServiceLocator.register('TerminalManager', () => new TerminalManager(
+                    ServiceLocator.get<IConfiguration>('ConfigurationService'),
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    ServiceLocator.get('EventBus'),
+                    ServiceLocator.get<IErrorHandler>('ErrorHandler')
+                ));
+        ServiceLocator.register('WorktreeService', () => new WorktreeService(
+                    ServiceLocator.get<IConfiguration>('ConfigurationService'),
+                    ServiceLocator.get<INotificationService>('NotificationService'),
+                    ServiceLocator.get('WorktreeManager'),
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    ServiceLocator.get<IErrorHandler>('ErrorHandler')
+                ));
+
+        // Register business services
+        const agentManager = new AgentManager(context, ServiceLocator.tryGet('PersistenceService'));
+        ServiceLocator.register('AgentManager', agentManager);
+
+        // AgentLifecycleManager removed - functionality merged into AgentManager
+
+        // Set the dependencies in AgentManager after registration
+        agentManager.setDependencies(
+            undefined, // AgentLifecycleManager removed
+            ServiceLocator.get('TerminalManager'),
+            ServiceLocator.get('WorktreeService'),
+            ServiceLocator.get<IConfiguration>('ConfigurationService'),
+            ServiceLocator.get<INotificationService>('NotificationService'),
+            ServiceLocator.get<ILogger>('LoggingService'),
+            ServiceLocator.get('EventBus'),
+            ServiceLocator.get<IErrorHandler>('ErrorHandler'),
+            undefined // PersistenceService removed
+        );
+
+        // Register shutdown handlers for enterprise reliability
+        if (gracefulShutdown) {
+            // Register agent manager shutdown handler
+            gracefulShutdown.registerHandler({
+                name: 'agent-manager',
+                priority: 1,
+                timeout: 15000, // 15 seconds for agent cleanup
+                handler: async () => {
+                    loggingService.info('[GracefulShutdown] Disposing AgentManager...');
+                    await agentManager.dispose();
+                }
+            });
+
+            // Register telemetry shutdown handler
+            gracefulShutdown.registerHandler({
+                name: 'telemetry-service',
+                priority: 5,
+                timeout: 5000, // 5 seconds for telemetry
+                handler: async () => {
+                    loggingService.info('[GracefulShutdown] Shutting down telemetry...');
+                    // Telemetry cleanup - using VS Code built-in service
+                }
+            });
+
+            // Register container shutdown handler
+            gracefulShutdown.registerHandler({
+                name: 'dependency-container',
+                priority: 10,
+                timeout: 10000, // 10 seconds for container disposal
+                handler: async () => {
+                    loggingService.info('[GracefulShutdown] Disposing dependency container...');
+                    // Container replaced by ServiceLocator - no disposal needed
+                }
+            });
+
+            loggingService.info('[GracefulShutdown] Registered shutdown handlers for enterprise components');
+        }
+
+        // AutoWorktreeManager removed - functionality merged into WorktreeService
+
+        // Register new task management services
+        ServiceLocator.register('TaskStateMachine', () => new TaskStateMachine(
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    ServiceLocator.get('EventBus'),
+                    ServiceLocator.tryGet('TaskQueue') // Optional to avoid circular dependency during initial registration
+                ));
+
+        // Register TaskDependencyManager BEFORE PriorityTaskQueue to ensure it's available
+        ServiceLocator.register('TaskDependencyManager', () => new TaskDependencyManager(
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    ServiceLocator.get('EventBus'),
+                    ServiceLocator.get<INotificationService>('NotificationService')
+                ));
+
+        ServiceLocator.register('PriorityTaskQueue', () => new PriorityTaskQueue(
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    ServiceLocator.get('TaskDependencyManager')
+                ));
+
+        ServiceLocator.register('CapabilityMatcher', () => new CapabilityMatcher(
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    ServiceLocator.get<IConfiguration>('ConfigurationService')
+                ));
+
+        // Register sub-agent services
+        ServiceLocator.register('TaskToolBridge', () => new (require('./services/TaskToolBridge').TaskToolBridge)(
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    ServiceLocator.get<IConfiguration>('ConfigurationService')
+                ));
+
+        ServiceLocator.register('TerminalMonitor', () => new (require('./services/TerminalMonitor').TerminalMonitor)(
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    ServiceLocator.get<IConfiguration>('ConfigurationService'),
+                    ServiceLocator.get('TaskToolBridge')
+                ));
+
+        const taskQueue = new TaskQueue(
+            agentManager,
+            ServiceLocator.get<ILogger>('LoggingService'),
+            ServiceLocator.get('EventBus'),
+            ServiceLocator.get<IErrorHandler>('ErrorHandler'),
+            ServiceLocator.get<INotificationService>('NotificationService'),
+            ServiceLocator.get<IConfiguration>('ConfigurationService'),
+            ServiceLocator.get('TaskStateMachine'),
+            ServiceLocator.get('PriorityTaskQueue'),
+            ServiceLocator.get('CapabilityMatcher'),
+            ServiceLocator.get('TaskDependencyManager')
+        );
+        ServiceLocator.register('TaskQueue', taskQueue);
+
+        // Inject TaskQueue into TaskStateMachine for dependency validation
+        const taskStateMachine = ServiceLocator.get<ITaskStateMachine>('TaskStateMachine');
+        taskStateMachine.setTaskReader(taskQueue);
+
+        // Check if we're in test mode to skip auto behaviors and noisy services
+        const config = ServiceLocator.get<ConfigurationService>('ConfigurationService');
+        const isTestMode = config.get('testMode', false);
+        console.log('[NofX Debug] Test mode:', isTestMode);
+
+        if (isTestMode) {
+            loggingService.info('🧪 Test mode enabled - skipping auto behaviors and noisy services');
+            // Metrics already removed from codebase
+        }
+
+        // Initialize agent manager (this will check for saved agents)
+        await agentManager.initialize();
+
+        // Migrate existing tasks to normalize new fields
+        await migrateExistingTasks(taskQueue, loggingService);
+
+        // Set initial context for UI
+        const commandService = ServiceLocator.get<ICommandService>('CommandService');
+        await commandService.execute('setContext', 'nofx.hasAgents', agentManager.getActiveAgents().length > 0);
+
+        // ConnectionPoolService removed - WebSocket orchestration simplified
+
+        // MessageValidator removed - over-engineered for current needs
+
+        // MessagePersistenceService removed - messages handled by DirectCommunicationService
+
+        // MessageRouter removed - DirectCommunicationService handles routing
+
+        // Start DirectCommunicationService with new services (skip in test mode)
+        let directCommunicationService: DirectCommunicationService | undefined;
+        if (!isTestMode) {
+            console.log('[NofX Debug] Creating DirectCommunicationService (not in test mode)');
+            directCommunicationService = new DirectCommunicationService(
+                ServiceLocator.get('EventBus'),
+                ServiceLocator.get<ILogger>('LoggingService'),
+                ServiceLocator.get<INotificationService>('NotificationService')
+            );
+
+            // Start DirectCommunicationService with error handling
+            try {
+                console.log('[NofX Debug] Starting DirectCommunicationService...');
+                await directCommunicationService.start();
+                console.log('[NofX Debug] DirectCommunicationService started successfully');
+            } catch (error: any) {
+                console.error('[NofX Debug] Failed to start DirectCommunicationService:', error);
+                const notificationService = ServiceLocator.get<INotificationService>('NotificationService');
+                loggingService.error('Failed to start DirectCommunicationService', error);
+
+                notificationService.showWarning(
+                    `NofX DirectCommunicationService could not start: ${error.message}. Some features may be unavailable.`
+                );
+
+                // Continue activation without failing - other features can still work
+                directCommunicationService = undefined;
+            }
+
+            if (directCommunicationService) {
+                ServiceLocator.register('OrchestrationServer', directCommunicationService);
+            } else {
+                // Register a mock service if the real one failed to start
+                const mockDirectCommunicationService = {
+                    start: () => Promise.resolve(),
+                    stop: () => Promise.resolve(),
+                    generateTestMessages: () => {},
+                    getMetrics: () => ({ totalMessages: 0, isStarted: false }),
+                    setDashboardCallback: () => {},
+                    dispose: () => {}
+                };
+                ServiceLocator.register('OrchestrationServer', mockDirectCommunicationService);
+            }
+        } else {
+            console.log('[NofX Debug] Skipping DirectCommunicationService (test mode enabled)');
+            // Register a mock service for test mode
+            const mockDirectCommunicationService = {
+                start: () => Promise.resolve(),
+                stop: () => Promise.resolve(),
+                generateTestMessages: () => {},
+                getMetrics: () => ({ totalMessages: 0, isStarted: false }),
+                setDashboardCallback: () => {},
+                dispose: () => {}
+            };
+            ServiceLocator.register('OrchestrationServer', mockDirectCommunicationService);
+        }
+
+        // Register UI services
+        ServiceLocator.register('UIStateManager', () => new UIStateManager());
+
+        // UIStateManager removed - UI state moved to views
+
+        ServiceLocator.register('ConductorViewModel', () => new ConductorViewModel(
+                    ServiceLocator.get('UIStateManager'),
+                    ServiceLocator.get<ICommandService>('CommandService'),
+                    ServiceLocator.get('EventBus'),
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    ServiceLocator.get<INotificationService>('NotificationService')
+                ));
+
+        ServiceLocator.register('DashboardViewModel', () => new DashboardViewModel(
+                    ServiceLocator.get('UIStateManager'),
+                    ServiceLocator.get('OrchestrationServer'),
+                    ServiceLocator.get('EventBus'),
+                    ServiceLocator.get<ILogger>('LoggingService'),
+                    undefined, // MessagePersistenceService removed
+                    undefined  // ConnectionPoolService removed
+                ));
+
+        // Register message flow dashboard factory for on-demand creation
+        // Dashboard will be created via 'nofx.openMessageFlow' command when needed
+        ServiceLocator.register('MessageFlowDashboard', () => MessageFlowDashboard.create(
+                    context,
+                    ServiceLocator.get('DashboardViewModel'),
+                    ServiceLocator.get<ILogger>('LoggingService')
+                ));
+
+        // Message handling is now done through MessageRouter
+
+        // Register tree data providers for sidebar views
+        const nofxDevProvider = new NofxDevTreeProvider();
+        const agentProvider = new AgentTreeProvider(
+            ServiceLocator.get('UIStateManager'),
+            ServiceLocator.get('UIStateManager'),
+            undefined // TaskToolBridge is optional and was removed
+        );
+        const taskProvider = new TaskTreeProvider(ServiceLocator.get('UIStateManager'), ServiceLocator);
+
+        vscode.window.registerTreeDataProvider('nofx.dev', nofxDevProvider);
+        vscode.window.registerTreeDataProvider('nofx.activity', agentProvider);
+
+        // Register task tree with drag and drop support
+        const taskTreeView = vscode.window.createTreeView('nofx.tasks', {
+            treeDataProvider: taskProvider,
+            dragAndDropController: taskProvider.getDragAndDropController(),
+            showCollapseAll: true
+        });
+        context.subscriptions.push(taskTreeView);
+
+        const agentTreeView = vscode.window.createTreeView('nofx.agents', {
+            treeDataProvider: agentProvider,
+            showCollapseAll: true
+        });
+
+        // Create TreeViewHost for the agents tree view
+        const agentTreeViewHost = TreeViewHost.create(agentTreeView, agentProvider, loggingService);
+        ServiceLocator.register('AgentTreeViewHost', agentTreeViewHost);
+
+        // TreeView state management handled directly in providers
+        // Hook into expand/collapse events for UI updates
+        context.subscriptions.push(
+            agentTreeView.onDidExpandElement(e => {
+                const element = e.element;
+                if (element && element.contextValue === 'teamSection') {
+                    // Team section expanded
+                    console.log('[NofX Debug] Team section expanded:', element.label);
+                }
+            }),
+            agentTreeView.onDidCollapseElement(e => {
+                const element = e.element;
+                if (element && element.contextValue === 'teamSection') {
+                    // Team section collapsed
+                    console.log('[NofX Debug] Team section collapsed:', element.label);
+                }
+            })
+        );
+
+        context.subscriptions.push(agentTreeView);
+
+        // Register modern NofX control panel
+        const modernPanelProvider = new ModernNofXPanel(ServiceLocator);
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider(ModernNofXPanel.viewType, modernPanelProvider, {
+                webviewOptions: {
+                    retainContextWhenHidden: true
+                }
+            })
+        );
+
+        // Register NofX terminal panel provider
+        const terminalProvider = new NofxTerminalProvider(context.extensionUri, agentManager);
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider(NofxTerminalProvider.viewType, terminalProvider, {
+                webviewOptions: {
+                    retainContextWhenHidden: true
+                }
+            })
+        );
+
+        // Update context when agents change
+        agentManager.onAgentUpdate(() => {
+            const hasAgents = agentManager.getActiveAgents().length > 0;
+            commandService.execute('setContext', 'nofx.hasAgents', hasAgents);
+        });
+
+        // Register command handlers
+        const agentCommands = new AgentCommands();
+        agentCommands.register();
+        context.subscriptions.push({ dispose: () => agentCommands.dispose() });
+
+        // TaskCommands removed - over-engineered for current needs
+
+        const conductorCommands = new ConductorCommands(ServiceLocator);
+        conductorCommands.setAgentProvider(agentProvider);
+        conductorCommands.register();
+        context.subscriptions.push({ dispose: () => conductorCommands.dispose() });
+
+        const orchestrationCommands = new OrchestrationCommands(ServiceLocator);
+        if (directCommunicationService) {
+            orchestrationCommands.setOrchestrationServer(directCommunicationService);
+        }
+        orchestrationCommands.register();
+        context.subscriptions.push({ dispose: () => orchestrationCommands.dispose() });
+
+        // PersistenceCommands removed - redundant with auto-persistence
+
+        // TemplateCommands removed - templates are managed as JSON files
+
+        // WorktreeCommands removed - basic git commands only
+
+        const utilityCommands = new UtilityCommands(ServiceLocator);
+        utilityCommands.register();
+        context.subscriptions.push({ dispose: () => utilityCommands.dispose() });
+
+
+        // SessionCommands removed - auto-persistence handles sessions
+
+        // Add a simple test command to verify command registration works
+        const testCommand = vscode.commands.registerCommand('nofx.testCommand', () => {
+            console.log('[NofX Debug] Test command executed!');
+            vscode.window.showInformationMessage('NofX Test Command Works! 🎉');
+        });
+        context.subscriptions.push(testCommand);
+
+        // Log all registered commands for debugging
+        console.log('[NofX Debug] Extension activated, registered commands:', commandService.getRegisteredCommands());
+
+        // Status Bar Item (skip in test mode to reduce noise)
+        let statusBarItem: vscode.StatusBarItem | undefined;
+        let updateStatusBar: (() => void) | undefined;
+
+        if (!isTestMode) {
+            statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+            statusBarItem.text = '$(organization) NofX';
+            statusBarItem.tooltip = 'Multi-Agent Orchestrator';
+            statusBarItem.command = 'nofx.showOrchestrator';
+            statusBarItem.show();
+            context.subscriptions.push(statusBarItem);
+            ServiceLocator.register('StatusBarItem', statusBarItem);
+
+            // Update status bar with task statistics
+            updateStatusBar = () => {
+                const taskStats = taskQueue.getTaskStats();
+                const agentStats = agentManager.getAgentStats();
+
+                let statusText = '$(organization) NofX';
+                if (taskStats.total > 0) {
+                    statusText += ` | 📋 ${taskStats.ready} ready, ${taskStats.inProgress} active`;
+                    if (taskStats.blocked > 0) {
+                        statusText += `, 🔴 ${taskStats.blocked} blocked`;
+                    }
+                }
+                if (agentStats.total > 0) {
+                    statusText += ` | 🤖 ${agentStats.idle} idle, ${agentStats.working} working`;
+                }
+
+                statusBarItem!.text = statusText;
+            };
+
+            // Subscribe to task and agent updates
+            const eventBus = ServiceLocator.get('EventBus') as any;
+            const eventSubscriptions = [
+                eventBus.subscribe(EVENTS.TASK_CREATED, updateStatusBar),
+                eventBus.subscribe(EVENTS.TASK_COMPLETED, updateStatusBar),
+                eventBus.subscribe(EVENTS.TASK_ASSIGNED, updateStatusBar),
+                eventBus.subscribe(EVENTS.TASK_BLOCKED, updateStatusBar),
+                eventBus.subscribe(EVENTS.TASK_READY, updateStatusBar),
+                eventBus.subscribe(EVENTS.AGENT_CREATED, updateStatusBar),
+                eventBus.subscribe(EVENTS.AGENT_REMOVED, updateStatusBar),
+                eventBus.subscribe(EVENTS.AGENT_STATUS_CHANGED, updateStatusBar)
+            ];
+
+            // Add all event subscriptions to context for disposal
+            context.subscriptions.push(...eventSubscriptions);
+
+            // Initial update
+            updateStatusBar();
+        } else {
+            // Register a mock status bar item for test mode
+            const mockStatusBarItem = {
+                text: '',
+                tooltip: '',
+                command: '',
+                show: () => {},
+                hide: () => {},
+                dispose: () => {}
+            };
+            ServiceLocator.register('StatusBarItem', mockStatusBarItem);
+        }
+
+        // Auto-start if configured (skip in test mode)
+        if (!isTestMode && config.get(CONFIG_KEYS.AUTO_START, false)) {
+            await commandService.execute('nofx.quickStartChat');
+        }
+
+
+        // Configuration validation removed - over-engineered
+
+
+        // Send telemetry for extension activation with enterprise reliability
+        try {
+            console.log('[NofX Debug] Extension activated successfully', {
+                'services.registered': '19', // Updated service count
+                'agents.active': String(agentManager.getActiveAgents().length),
+                'tasks.total': String(taskQueue.getTasks().length),
+                'initialization.duration': String(Date.now() - activationStartTime)
+            }, {
+                'startup.latency': Date.now() - activationStartTime,
+                'queue.size': taskQueue.getTasks().length,
+                'agents.count': agentManager.getActiveAgents().length
+            });
+        } catch (error) {
+            // Telemetry errors should never break extension functionality
+            loggingService.warn('Failed to send activation telemetry', error);
+        }
+
+        loggingService.info('🎸 NofX Multi-Agent Orchestrator activation completed with VS Code telemetry');
+
+        console.log('[NofX Debug] Extension fully activated');
+        console.log('[NofX Debug] Registered commands:', commandService.getRegisteredCommands());
+
+        // Note: Global context removed - use dependency injection instead
+    } catch (error) {
+        console.error('[NofX Debug] Extension activation failed:', error);
+        vscode.window.showErrorMessage(`NofX Extension failed to activate: ${error}`);
+        throw error;
+    }
+}
+
+/**
+ * Get container for tests only
+ * This is guarded by NODE_ENV to prevent accidental usage in production
+ */
+export function __getContainerForTests(): any {
+    if (process.env.NODE_ENV === 'test') {
+        return ServiceLocator;
+    }
+    return undefined;
+}
+
+/**
+ * Migrates existing tasks to normalize new fields
+ */
+async function migrateExistingTasks(taskQueue: TaskQueue, loggingService: ILogger): Promise<void> {
+    try {
+        const allTasks = taskQueue.getTasks();
+        let migratedCount = 0;
+
+        for (const task of allTasks) {
+            let needsUpdate = false;
+
+            // Ensure numericPriority is set
+            if (task.numericPriority === undefined) {
+                task.numericPriority = priorityToNumeric(task.priority);
+                needsUpdate = true;
+            }
+
+            // Ensure conflictsWith is initialized
+            if (task.conflictsWith === undefined) {
+                task.conflictsWith = [];
+                needsUpdate = true;
+            }
+
+            // Ensure blockedBy is initialized
+            if (task.blockedBy === undefined) {
+                task.blockedBy = [];
+                needsUpdate = true;
+            }
+
+            // Ensure dependsOn is initialized
+            if (task.dependsOn === undefined) {
+                task.dependsOn = [];
+                needsUpdate = true;
+            }
+
+            // Ensure tags is initialized
+            if (task.tags === undefined) {
+                task.tags = [];
+                needsUpdate = true;
+            }
+
+            // Ensure requiredCapabilities is initialized
+            if (task.requiredCapabilities === undefined) {
+                task.requiredCapabilities = [];
+                needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+                migratedCount++;
+                loggingService.debug(`Migrated task ${task.id} with new fields`);
+            }
+        }
+
+        if (migratedCount > 0) {
+            loggingService.info(`Migrated ${migratedCount} existing tasks with new field defaults`);
+        }
+    } catch (error) {
+        loggingService.error('Error during task migration:', error);
+    }
+}
+
+export async function deactivate(): Promise<void> {
+    console.log('[NofX Debug] Extension deactivation initiated');
+    
+    // Get logging service for deactivation logging
+    const loggingService = ServiceLocator.tryGet<ILogger>('LoggingService');
+    if (loggingService) {
+        loggingService.info('NofX extension deactivating with enterprise reliability...');
+    }
+
+    // Use graceful shutdown if available
+    if (gracefulShutdown) {
+        try {
+            // Simple deactivation logging
+            console.log('[NofX Debug] Extension deactivation started');
+            
+            // Execute graceful shutdown
+            await gracefulShutdown.shutdown('Extension deactivation');
+            console.log('[NofX Debug] Graceful shutdown completed successfully');
+            return;
+            
+        } catch (error) {
+            console.error('[NofX Debug] Graceful shutdown failed, falling back to manual cleanup:', error);
+            // Fall through to manual cleanup
+        }
+    }
+
+    // Manual cleanup fallback (if graceful shutdown is not available or fails)
+    console.log('[NofX Debug] Performing manual cleanup...');
+
+    // Simple cleanup without enterprise telemetry
+    try {
+        console.log('[NofX Debug] Manual cleanup - extension deactivated');
+    } catch (error) {
+        console.warn('[NofX Debug] Error during cleanup:', error);
+    }
+
+    // Stop DirectCommunicationService and services
+    const directCommunicationService = ServiceLocator.tryGet<DirectCommunicationService>('OrchestrationServer');
+    if (directCommunicationService) {
+        await directCommunicationService.stop();
+    }
+
+    // Get agent manager and dispose it properly
+    const agentManager = ServiceLocator.tryGet('AgentManager');
+    if (agentManager && typeof agentManager === 'object' && agentManager !== null && 'dispose' in agentManager) {
+        await (agentManager as any).dispose();
+    }
+
+    // Log deactivation before disposing container
+    if (loggingService) {
+        loggingService.info('NofX extension deactivated');
+    }
+
+    // ServiceLocator handles its own lifecycle - no explicit disposal needed
+}

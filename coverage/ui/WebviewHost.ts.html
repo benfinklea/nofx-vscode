@@ -256,7 +256,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -264,7 +263,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -325,6 +323,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -357,10 +357,10 @@ import { IWebviewHost, ILoggingService, WebviewHostFactory } from '../services/i
 <span class="cstat-no" title="statement not covered" >        this.panel = panel;</span>
 <span class="cstat-no" title="statement not covered" >        this.loggingService = loggingService;</span>
 <span class="cstat-no" title="statement not covered" >        this.nonce = this.generateNonce();</span>
-        
-<span class="cstat-no" title="statement not covered" >        this.loggingService?.debug('WebviewHost: Created for panel', { </span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >        this.loggingService?.debug('WebviewHost: Created for panel', {</span>
             viewType: panel.viewType,
-            title: panel.title 
+            title: panel.title
         });
     }
 &nbsp;
@@ -371,9 +371,9 @@ import { IWebviewHost, ILoggingService, WebviewHostFactory } from '../services/i
 <span class="fstat-no" title="function not covered" >    postMessage(</span>data: any): Thenable&lt;boolean&gt; {
 <span class="cstat-no" title="statement not covered" >        try {</span>
             const result = <span class="cstat-no" title="statement not covered" >this.panel.webview.postMessage(data);</span>
-<span class="cstat-no" title="statement not covered" >            this.loggingService?.debug('WebviewHost: Posted message', { </span>
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.debug('WebviewHost: Posted message', {</span>
                 command: data.command,
-                hasData: !!data.data 
+                hasData: !!data.data
             });
 <span class="cstat-no" title="statement not covered" >            return result;</span>
         } catch (error) {
@@ -385,8 +385,8 @@ import { IWebviewHost, ILoggingService, WebviewHostFactory } from '../services/i
 <span class="fstat-no" title="function not covered" >    setHtml(</span>content: string): void {
 <span class="cstat-no" title="statement not covered" >        try {</span>
 <span class="cstat-no" title="statement not covered" >            this.panel.webview.html = content;</span>
-<span class="cstat-no" title="statement not covered" >            this.loggingService?.debug('WebviewHost: Set HTML content', { </span>
-                contentLength: content.length 
+<span class="cstat-no" title="statement not covered" >            this.loggingService?.debug('WebviewHost: Set HTML content', {</span>
+                contentLength: content.length
             });
         } catch (error) {
 <span class="cstat-no" title="statement not covered" >            this.loggingService?.error('WebviewHost: Error setting HTML', error);</span>
@@ -395,19 +395,17 @@ import { IWebviewHost, ILoggingService, WebviewHostFactory } from '../services/i
     }
 &nbsp;
 <span class="fstat-no" title="function not covered" >    onDidReceiveMessage(</span>handler: (message: any) =&gt; void): vscode.Disposable {
-        const disposable = <span class="cstat-no" title="statement not covered" >this.panel.webview.onDidReceiveMessage(</span>
-<span class="fstat-no" title="function not covered" >            (m</span>essage) =&gt; {
-<span class="cstat-no" title="statement not covered" >                try {</span>
-<span class="cstat-no" title="statement not covered" >                    this.loggingService?.debug('WebviewHost: Received message', { </span>
-                        command: message.command 
-                    });
-<span class="cstat-no" title="statement not covered" >                    handler(message);</span>
-                } catch (error) {
-<span class="cstat-no" title="statement not covered" >                    this.loggingService?.error('WebviewHost: Error handling message', error);</span>
-                }
+        const disposable = <span class="cstat-no" title="statement not covered" >this.panel.webview.onDidReceiveMessage(<span class="fstat-no" title="function not covered" >message </span>=&gt; {</span>
+<span class="cstat-no" title="statement not covered" >            try {</span>
+<span class="cstat-no" title="statement not covered" >                this.loggingService?.debug('WebviewHost: Received message', {</span>
+                    command: message.command
+                });
+<span class="cstat-no" title="statement not covered" >                handler(message);</span>
+            } catch (error) {
+<span class="cstat-no" title="statement not covered" >                this.loggingService?.error('WebviewHost: Error handling message', error);</span>
             }
-        );
-        
+        });
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        this.subscriptions.push(disposable);</span>
 <span class="cstat-no" title="statement not covered" >        return disposable;</span>
     }
@@ -464,16 +462,18 @@ import { IWebviewHost, ILoggingService, WebviewHostFactory } from '../services/i
     }
 &nbsp;
     private <span class="fstat-no" title="function not covered" >generateNonce(</span>): string {
-<span class="cstat-no" title="statement not covered" >        return randomBytes(16).toString('base64').replace(/[^a-zA-Z0-9]/g, '');</span>
+<span class="cstat-no" title="statement not covered" >        return randomBytes(16)</span>
+            .toString('base64')
+            .replace(/[^a-zA-Z0-9]/g, '');
     }
 &nbsp;
 <span class="fstat-no" title="function not covered" >    dispose(</span>): void {
 <span class="cstat-no" title="statement not covered" >        this.loggingService?.debug('WebviewHost: Disposing');</span>
-        
+&nbsp;
         // Dispose all subscriptions
 <span class="cstat-no" title="statement not covered" >        this.subscriptions.forEach(<span class="fstat-no" title="function not covered" >sub </span>=&gt; <span class="cstat-no" title="statement not covered" >sub.dispose())</span>;</span>
 <span class="cstat-no" title="statement not covered" >        this.subscriptions = [];</span>
-        
+&nbsp;
         // Dispose the panel
 <span class="cstat-no" title="statement not covered" >        this.panel.dispose();</span>
     }
@@ -490,7 +490,7 @@ export const <span class="cstat-no" title="statement not covered" >createWebview
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-05T12:10:29.182Z
+                at 2025-09-09T01:48:57.497Z
             </div>
         <script src="../prettify.js"></script>
         <script>

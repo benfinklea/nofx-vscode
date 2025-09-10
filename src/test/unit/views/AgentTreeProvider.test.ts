@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
 import { AgentTreeProvider } from '../../../views/AgentTreeProvider';
-import { ITreeStateManager, IUIStateManager } from '../../../services/interfaces';
+import { IUIStateManager, IUIStateManager } from '../../../services/interfaces';
 import { normalizeAgentStatus, normalizeTaskStatus } from '../../../types/ui';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,
@@ -19,7 +21,7 @@ jest.mock('vscode');
 
 describe('AgentTreeProvider', () => {
     let provider: AgentTreeProvider;
-    let mockTreeStateManager: jest.Mocked<ITreeStateManager>;
+    let mockUIStateManager: jest.Mocked<IUIStateManager>;
     let mockUIStateManager: jest.Mocked<IUIStateManager>;
     let mockRefreshFire: jest.Mock;
     let mockDisposables: vscode.Disposable[];
@@ -31,8 +33,8 @@ describe('AgentTreeProvider', () => {
         mockDisposables = [];
         mockRefreshFire = jest.fn();
 
-        // Mock TreeStateManager
-        mockTreeStateManager = {
+        // Mock UIStateManager
+        mockUIStateManager = {
             getSectionItems: jest.fn(),
             isSectionExpanded: jest.fn(),
             setTeamName: jest.fn(),
@@ -69,12 +71,12 @@ describe('AgentTreeProvider', () => {
             Expanded: 2
         };
 
-        provider = new AgentTreeProvider(mockTreeStateManager, mockUIStateManager);
+        provider = new AgentTreeProvider(mockUIStateManager, mockUIStateManager);
     });
 
     describe('constructor', () => {
         it('should subscribe to tree state manager changes', () => {
-            expect(mockTreeStateManager.subscribe).toHaveBeenCalledWith(expect.any(Function));
+            expect(mockUIStateManager.subscribe).toHaveBeenCalledWith(expect.any(Function));
         });
 
         it('should subscribe to UI state manager changes', () => {
@@ -82,7 +84,7 @@ describe('AgentTreeProvider', () => {
         });
 
         it('should trigger refresh when tree state changes', () => {
-            const callback = mockTreeStateManager.subscribe.mock.calls[0][0];
+            const callback = mockUIStateManager.subscribe.mock.calls[0][0];
             callback();
             expect(mockRefreshFire).toHaveBeenCalled();
         });
@@ -106,8 +108,8 @@ describe('AgentTreeProvider', () => {
                 hasData: true
             };
 
-            mockTreeStateManager.getSectionItems.mockReturnValue(mockData);
-            mockTreeStateManager.isSectionExpanded.mockReturnValue(true);
+            mockUIStateManager.getSectionItems.mockReturnValue(mockData);
+            mockUIStateManager.isSectionExpanded.mockReturnValue(true);
 
             const children = await provider.getChildren();
 
@@ -143,7 +145,7 @@ describe('AgentTreeProvider', () => {
                 tasks: []
             };
 
-            mockTreeStateManager.getSectionItems.mockReturnValue(mockData);
+            mockUIStateManager.getSectionItems.mockReturnValue(mockData);
 
             const children = await provider.getChildren();
 
@@ -163,7 +165,7 @@ describe('AgentTreeProvider', () => {
                 hasData: true
             };
 
-            mockTreeStateManager.getSectionItems.mockReturnValue(mockData);
+            mockUIStateManager.getSectionItems.mockReturnValue(mockData);
 
             const children = await provider.getChildren();
 
@@ -192,7 +194,7 @@ describe('AgentTreeProvider', () => {
     describe('setTeamName', () => {
         it('should delegate to tree state manager', () => {
             provider.setTeamName('New Team Name');
-            expect(mockTreeStateManager.setTeamName).toHaveBeenCalledWith('New Team Name');
+            expect(mockUIStateManager.setTeamName).toHaveBeenCalledWith('New Team Name');
         });
     });
 
@@ -215,8 +217,8 @@ describe('AgentTreeProvider', () => {
                 hasData: true
             };
 
-            mockTreeStateManager.getSectionItems.mockReturnValue(mockData);
-            mockTreeStateManager.isSectionExpanded.mockReturnValue(true);
+            mockUIStateManager.getSectionItems.mockReturnValue(mockData);
+            mockUIStateManager.isSectionExpanded.mockReturnValue(true);
 
             const children = await provider.getChildren();
             const teamSection = children[0];
@@ -270,7 +272,7 @@ describe('AgentTreeProvider', () => {
                 hasData: true
             };
 
-            mockTreeStateManager.getSectionItems.mockReturnValue(mockData);
+            mockUIStateManager.getSectionItems.mockReturnValue(mockData);
 
             const children = await provider.getChildren();
             // First item is section header, second is the task
@@ -290,8 +292,8 @@ describe('AgentTreeProvider', () => {
                 hasData: true
             };
 
-            mockTreeStateManager.getSectionItems.mockReturnValue(mockData);
-            mockTreeStateManager.isSectionExpanded.mockReturnValue(true);
+            mockUIStateManager.getSectionItems.mockReturnValue(mockData);
+            mockUIStateManager.isSectionExpanded.mockReturnValue(true);
 
             await provider.getChildren();
 
@@ -322,15 +324,15 @@ describe('AgentTreeProvider', () => {
                 hasData: true
             };
 
-            mockTreeStateManager.getSectionItems.mockReturnValue(mockData);
+            mockUIStateManager.getSectionItems.mockReturnValue(mockData);
 
             // Test expanded state
-            mockTreeStateManager.isSectionExpanded.mockReturnValue(true);
+            mockUIStateManager.isSectionExpanded.mockReturnValue(true);
             let children = await provider.getChildren();
             expect(children[0].collapsibleState).toBe(vscode.TreeItemCollapsibleState.Expanded);
 
             // Test collapsed state
-            mockTreeStateManager.isSectionExpanded.mockReturnValue(false);
+            mockUIStateManager.isSectionExpanded.mockReturnValue(false);
             children = await provider.getChildren();
             expect(children[0].collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
         });

@@ -1,10 +1,12 @@
-import { AgentPersistence as BaseAgentPersistence } from '../../persistence/AgentPersistence';
+import { PersistenceService as BasePersistenceService } from '../../services/PersistenceService';
 import { Agent } from '../../types/agent';
-
+import { getAppStateStore } from '../../state/AppStateStore';
+import * as selectors from '../../state/selectors';
+import * as actions from '../../state/actions';
 /**
- * Test wrapper for AgentPersistence that provides additional methods for testing
+ * Test wrapper for PersistenceService that provides additional methods for testing
  */
-export class AgentPersistence extends BaseAgentPersistence {
+export class PersistenceService extends BasePersistenceService {
     // Add alias for loadAgentState
     async loadAgents(): Promise<Agent[]> {
         const state = await this.loadAgentState();

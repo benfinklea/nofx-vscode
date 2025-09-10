@@ -1,0 +1,41 @@
+{
+  "name": "NofX Multi-Agent Orchestrator",
+  "version": "0.1.0",
+  "description": "Telemetry data collected by the NofX extension",
+  "events": {
+    "extension.activated": {
+      "description": "Extension activation event",
+      "properties": {
+        "services.registered": "Number of services registered in container",
+        "agents.active": "Number of active agents at startup",
+        "tasks.total": "Number of tasks in queue at startup"
+      }
+    },
+    "agent.spawned": {
+      "description": "Agent creation event",
+      "properties": {
+        "type": "Type of agent created (e.g., frontend, backend)"
+      }
+    },
+    "task.completed": {
+      "description": "Task completion event", 
+      "properties": {
+        "duration": "Task completion time in milliseconds",
+        "priority": "Task priority level"
+      }
+    },
+    "extension.error": {
+      "description": "Extension error event",
+      "properties": {
+        "error.message": "Error message (PII cleaned)",
+        "error.code": "Error code or type"
+      }
+    }
+  },
+  "privacy": {
+    "dataCollection": "This extension collects anonymous usage data to help improve functionality and performance.",
+    "optOut": "Users can disable telemetry in VS Code settings (telemetry.telemetryLevel = 'off')",
+    "dataRetention": "Data is retained according to Azure Monitor retention policies",
+    "piiCleaning": "All personally identifiable information is automatically removed"
+  }
+}

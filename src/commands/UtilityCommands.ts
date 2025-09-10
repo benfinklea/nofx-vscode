@@ -4,28 +4,47 @@ import * as path from 'path';
 import { OUTPUT_CHANNELS } from '../constants/outputChannels';
 import {
     ICommandHandler,
-    IContainer,
     ICommandService,
     INotificationService,
-    IConfigurationService,
-    ILoggingService,
-    SERVICE_TOKENS
+    IConfiguration,
+    ILogger
 } from '../services/interfaces';
+import { ServiceLocator } from '../services/ServiceLocator';
 import { PickItem } from '../types/ui';
-import { AIProviderResolver } from '../services/AIProviderResolver';
+
+// Simple inline AIProviderResolver implementation
+class AIProviderResolver {
+    constructor(private configService: IConfiguration) {}
+
+    getAiCommand(): string {
+        return this.configService.getAiPath();
+    }
+
+    getCurrentProviderDescription(): string {
+        return 'AI Provider';
+    }
+
+    getAllProviders(): any {
+        return {};
+    }
+
+    supportsSystemPrompt(): boolean {
+        return true;
+    }
+}
 
 export class UtilityCommands implements ICommandHandler {
     private readonly commandService: ICommandService;
     private readonly notificationService: INotificationService;
-    private readonly configService: IConfigurationService;
-    private readonly loggingService?: ILoggingService;
+    private readonly configService: IConfiguration;
+    private readonly loggingService?: ILogger;
     private readonly aiResolver: AIProviderResolver;
 
-    constructor(container: IContainer) {
-        this.commandService = container.resolve<ICommandService>(SERVICE_TOKENS.CommandService);
-        this.notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
-        this.configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
-        this.loggingService = container.resolveOptional<ILoggingService>(SERVICE_TOKENS.LoggingService);
+    constructor(container: any) {
+        this.commandService = ServiceLocator.get<ICommandService>('CommandService');
+        this.notificationService = ServiceLocator.get<INotificationService>('NotificationService');
+        this.configService = ServiceLocator.get<IConfiguration>('ConfigurationService');
+        this.loggingService = ServiceLocator.tryGet<ILogger>('LoggingService');
         this.aiResolver = new AIProviderResolver(this.configService);
     }
 
@@ -33,6 +52,10 @@ export class UtilityCommands implements ICommandHandler {
         this.commandService.register('nofx.testClaude', this.testClaude.bind(this));
         this.commandService.register('nofx.debug.verifyCommands', this.verifyCommands.bind(this));
         this.commandService.register('nofx.selectAiProvider', this.selectAiProvider.bind(this));
+        this.commandService.register('nofx.exportSessions', this.exportSessions.bind(this));
+        this.commandService.register('nofx.settings', this.openSettings.bind(this));
+        this.commandService.register('nofx.dashboard', this.openDashboard.bind(this));
+        this.commandService.register('nofx.reset', this.resetExtension.bind(this));
     }
 
     private async testClaude(): Promise<void> {
@@ -268,6 +291,125 @@ EOF`;
             const err = error instanceof Error ? error : new Error(String(error));
             this.loggingService?.error('Error verifying commands', err);
             await this.notificationService.showError(`Failed to verify commands: ${err.message}`);
+        }
+    }
+
+    private async exportSessions(): Promise<void> {
+        try {
+            const context = ServiceLocator.get<vscode.ExtensionContext>('ExtensionContext');
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+            if (!workspaceFolder) {
+                await this.notificationService.showError('No workspace folder open');
+                return;
+            }
+
+            // Get session data
+            const agentManager = ServiceLocator.get('AgentManager') as any;
+            const agents = agentManager.getActiveAgents();
+
+            if (agents.length === 0) {
+                await this.notificationService.showInformation('No active agents to export');
+                return;
+            }
+
+            // Create session export
+            const sessionData = {
+                timestamp: new Date().toISOString(),
+                workspace: workspaceFolder.uri.fsPath,
+                agents: agents.map((agent: any) => ({
+                    id: agent.id,
+                    name: agent.name,
+                    type: agent.type,
+                    template: agent.template,
+                    status: agent.status,
+                    createdAt: agent.createdAt
+                }))
+            };
+
+            // Ask user where to save
+            const saveUri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.file(path.join(workspaceFolder.uri.fsPath, `nofx-session-${Date.now()}.json`)),
+                filters: {
+                    'JSON Files': ['json'],
+                    'All Files': ['*']
+                }
+            });
+
+            if (saveUri) {
+                fs.writeFileSync(saveUri.fsPath, JSON.stringify(sessionData, null, 2));
+                await this.notificationService.showInformation(`Session exported to ${path.basename(saveUri.fsPath)}`);
+            }
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.loggingService?.error('Failed to export sessions', err);
+            await this.notificationService.showError(`Failed to export sessions: ${err.message}`);
+        }
+    }
+
+    private async openSettings(): Promise<void> {
+        try {
+            // Open VS Code settings with NofX filter
+            await vscode.commands.executeCommand('workbench.action.openSettings', 'nofx');
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.loggingService?.error('Failed to open settings', err);
+            await this.notificationService.showError(`Failed to open settings: ${err.message}`);
+        }
+    }
+
+    private async openDashboard(): Promise<void> {
+        try {
+            // Open the message flow dashboard
+            await this.commandService.execute('nofx.openMessageFlow');
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.loggingService?.error('Failed to open dashboard', err);
+            await this.notificationService.showError(`Failed to open dashboard: ${err.message}`);
+        }
+    }
+
+    private async resetExtension(): Promise<void> {
+        try {
+            const confirmed = await this.notificationService.confirmDestructive(
+                'Reset NofX extension? This will clear all agents and settings.',
+                'Reset'
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            // Clear all agents
+            const agentManager = ServiceLocator.get('AgentManager') as any;
+            const agents = agentManager.getActiveAgents();
+            for (const agent of agents) {
+                await agentManager.removeAgent(agent.id);
+            }
+
+            // Clear persistence
+            const context = ServiceLocator.get<vscode.ExtensionContext>('ExtensionContext');
+            await context.globalState.update('nofx.agents', undefined);
+            await context.globalState.update('nofx.sessions', undefined);
+            await context.workspaceState.update('nofx.agents', undefined);
+            await context.workspaceState.update('nofx.sessions', undefined);
+
+            await this.notificationService.showInformation('NofX extension has been reset');
+
+            // Suggest reload
+            const reload = await vscode.window.showInformationMessage(
+                'NofX has been reset. Reload window to complete the reset?',
+                'Reload Window',
+                'Later'
+            );
+
+            if (reload === 'Reload Window') {
+                await vscode.commands.executeCommand('workbench.action.reloadWindow');
+            }
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            this.loggingService?.error('Failed to reset extension', err);
+            await this.notificationService.showError(`Failed to reset extension: ${err.message}`);
         }
     }
 

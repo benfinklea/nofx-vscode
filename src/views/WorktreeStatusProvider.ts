@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { WorktreeManager } from '../worktrees/WorktreeManager';
 import { AgentManager } from '../agents/AgentManager';
-import { ILoggingService } from '../services/interfaces';
+import { ILogger } from '../services/interfaces';
 
 export class WorktreeStatusProvider implements vscode.TreeDataProvider<WorktreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<WorktreeItem | undefined | null | void> = new vscode.EventEmitter<
@@ -16,7 +16,7 @@ export class WorktreeStatusProvider implements vscode.TreeDataProvider<WorktreeI
     constructor(
         private worktreeManager: WorktreeManager,
         private agentManager: AgentManager,
-        private loggingService?: ILoggingService
+        private loggingService?: ILogger
     ) {
         // Auto-refresh every 10 seconds
         this.startAutoRefresh();

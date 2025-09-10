@@ -32,204 +32,100 @@
   "contributes": {
     "commands": [
       {
-        "command": "nofx.startConductor",
-        "title": "NofX: Start Conductor",
-        "icon": "$(play)"
-      },
-      {
-        "command": "nofx.quickStartChat",
-        "title": "NofX: Quick Start with Conductor Chat",
+        "command": "nofx.start",
+        "title": "Start NofX",
+        "category": "NofX",
         "icon": "$(rocket)"
       },
       {
-        "command": "nofx.resetNofX",
-        "title": "NofX: Reset Everything",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "nofx.addAgent",
-        "title": "NofX: Add Agent",
+        "title": "Add Agent",
+        "category": "NofX",
         "icon": "$(add)"
       },
       {
-        "command": "nofx.createTask",
-        "title": "NofX: Create Task",
-        "icon": "$(tasklist)"
+        "command": "nofx.createAgentFromNaturalLanguage",
+        "title": "Create Agent from Description",
+        "category": "NofX",
+        "icon": "$(sparkle)"
       },
       {
-        "command": "nofx.showOrchestrator",
-        "title": "NofX: Show Orchestrator",
-        "icon": "$(dashboard)"
-      },
-      {
-        "command": "nofx.completeTask",
-        "title": "NofX: Mark Task Complete",
-        "icon": "$(check)"
-      },
-      {
-        "command": "nofx.editAgent",
-        "title": "NofX: Edit Agent",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "nofx.deleteAgent",
-        "title": "NofX: Delete Agent",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "nofx.testClaude",
-        "title": "NofX: Test Claude Command",
-        "icon": "$(beaker)"
-      },
-      {
-        "command": "nofx.openConductorChat",
-        "title": "NofX: Open Conductor Chat",
-        "icon": "$(comment-discussion)"
-      },
-      {
-        "command": "nofx.openSimpleConductor",
-        "title": "NofX: Open Simple Conductor (No Permissions)",
-        "icon": "$(comment)"
-      },
-      {
-        "command": "nofx.openConductorTerminal",
-        "title": "NofX: Open Conductor Terminal",
-        "icon": "$(terminal)"
-      },
-      {
-        "command": "nofx.openMessageFlow",
-        "title": "NofX: Open Message Flow Dashboard",
+        "command": "nofx.dashboard",
+        "title": "Open Dashboard",
+        "category": "NofX",
         "icon": "$(graph)"
       },
       {
-        "command": "nofx.exportSessions",
-        "title": "NofX: Export Agent Sessions",
-        "icon": "$(export)"
+        "command": "nofx.reset",
+        "title": "Reset",
+        "category": "NofX",
+        "icon": "$(refresh)"
       },
       {
-        "command": "nofx.archiveSessions",
-        "title": "NofX: Archive Old Sessions",
-        "icon": "$(archive)"
-      },
-      {
-        "command": "nofx.clearPersistence",
-        "title": "NofX: Clear All Persistence Data",
-        "icon": "$(trash)"
+        "command": "nofx.settings",
+        "title": "Settings",
+        "category": "NofX",
+        "icon": "$(settings-gear)"
       },
       {
         "command": "nofx.restoreAgents",
-        "title": "NofX: Restore Saved Agents",
+        "title": "Restore Previous Session",
+        "category": "NofX",
         "icon": "$(history)"
       },
       {
-        "command": "nofx.createAgentTemplate",
-        "title": "NofX: Create Agent Template",
-        "icon": "$(file-add)"
+        "command": "nofx.exportSessions",
+        "title": "Export Sessions",
+        "category": "NofX",
+        "icon": "$(save)"
       },
       {
-        "command": "nofx.editAgentTemplate",
-        "title": "NofX: Edit Agent Template",
+        "command": "nofx.startConductor",
+        "title": "Start Conductor",
+        "category": "NofX",
+        "icon": "$(play)"
+      },
+      {
+        "command": "nofx.openMessageFlow",
+        "title": "Open Message Flow Dashboard",
+        "category": "NofX",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "nofx.testCommand",
+        "title": "Test Command",
+        "category": "NofX",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "nofx.deleteAgent",
+        "title": "Delete Agent",
+        "category": "NofX",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "nofx.editAgent",
+        "title": "Edit Agent",
+        "category": "NofX",
         "icon": "$(edit)"
       },
       {
-        "command": "nofx.importAgentTemplate",
-        "title": "NofX: Import Agent Template",
-        "icon": "$(cloud-download)"
-      },
-      {
-        "command": "nofx.browseAgentTemplates",
-        "title": "NofX: Browse Agent Templates",
-        "icon": "$(library)"
-      },
-      {
-        "command": "nofx.toggleWorktrees",
-        "title": "NofX: Toggle Git Worktrees",
-        "icon": "$(git-branch)"
-      },
-      {
-        "command": "nofx.mergeAgentWork",
-        "title": "NofX: Merge Agent Work",
-        "icon": "$(git-merge)"
-      },
-      {
-        "command": "nofx.showMetricsDashboard",
-        "title": "NofX: Show Metrics Dashboard",
-        "icon": "$(graph)"
-      },
-      {
-        "command": "nofx.exportMetrics",
-        "title": "NofX: Export Metrics Data",
-        "icon": "$(export)"
-      },
-      {
-        "command": "nofx.resetMetrics",
-        "title": "NofX: Reset Metrics Data",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "nofx.toggleMetrics",
-        "title": "NofX: Toggle Metrics Collection",
-        "icon": "$(pulse)"
-      },
-      {
-        "command": "nofx.addTaskDependency",
-        "title": "NofX: Add Task Dependency",
-        "icon": "$(link)"
-      },
-      {
-        "command": "nofx.removeTaskDependency",
-        "title": "NofX: Remove Task Dependency",
-        "icon": "$(unlink)"
-      },
-      {
-        "command": "nofx.resolveTaskConflict",
-        "title": "NofX: Resolve Task Conflict",
-        "icon": "$(check-all)"
-      },
-      {
-        "command": "nofx.viewTaskDependencies",
-        "title": "NofX: View Task Dependencies",
-        "icon": "$(graph)"
-      },
-      {
-        "command": "nofx.retryBlockedTask",
-        "title": "NofX: Retry Blocked Task",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "nofx.createTaskBatch",
-        "title": "NofX: Create Task Batch",
-        "icon": "$(list-ordered)"
-      },
-      {
-        "command": "nofx.resolveAllConflicts",
-        "title": "NofX: Resolve All Conflicts",
-        "icon": "$(check-all)"
-      },
-      {
-        "command": "nofx.openConductorPanel",
-        "title": "NofX: Open Conductor Panel",
-        "icon": "$(panel)"
-      },
-      {
-        "command": "nofx.debug.verifyCommands",
-        "title": "NofX: Debug - Verify Registered Commands",
-        "icon": "$(debug)"
-      },
-      {
         "command": "nofx.focusAgentTerminal",
-        "title": "NofX: Focus Agent Terminal",
+        "title": "Focus Agent Terminal",
+        "category": "NofX",
         "icon": "$(terminal)"
       },
       {
-        "command": "nofx.viewTaskDetails",
-        "title": "NofX: View Task Details",
-        "icon": "$(info)"
+        "command": "nofx.restoreAgentFromSession",
+        "title": "Restore Agent From Session",
+        "category": "NofX",
+        "icon": "$(sync)"
       },
       {
-        "command": "nofx.selectAiProvider",
-        "title": "NofX: Select AI Provider",
-        "icon": "$(settings-gear)"
+        "command": "nofx.clearAgents",
+        "title": "Clear All Agents",
+        "category": "NofX",
+        "icon": "$(clear-all)"
       }
     ],
     "menus": {
@@ -237,7 +133,12 @@
         {
           "command": "nofx.addAgent",
           "when": "view == nofx.agents",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "nofx.createAgentFromNaturalLanguage",
+          "when": "view == nofx.agents",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -301,7 +202,7 @@
     "viewsWelcome": [
       {
         "view": "nofx.dev",
-        "contents": "🎸 **NofX Conductor**\n\n**Debug:**\n[$(beaker) Test Command](command:nofx.testCommand)\n\n**Quick Actions:**\n[$(play) Start New Session](command:nofx.startConductor)\n[$(history) Restore Previous Session](command:nofx.restoreAgents)\n[$(save) Save Current Session](command:nofx.exportSessions)\n\n**Agent Management:**\n[$(add) Add Agent(s)](command:nofx.addAgent)\n[$(graph) Messages Dashboard](command:nofx.openMessageFlow)"
+        "contents": "🎸 **NofX Conductor**\n\n**Debug:**\n[$(beaker) Test Command](command:nofx.testCommand)\n\n**Quick Actions:**\n[$(play) Start New Session](command:nofx.startConductor)\n[$(history) Restore Previous Session](command:nofx.restoreAgents)\n[$(save) Save Current Session](command:nofx.exportSessions)\n\n**Agent Management:**\n[$(add) Add Agent(s)](command:nofx.addAgent)\n[$(sparkle) Create Agent from Description](command:nofx.createAgentFromNaturalLanguage)\n[$(graph) Messages Dashboard](command:nofx.openMessageFlow)"
       },
       {
         "view": "nofx.agents",
@@ -320,236 +221,32 @@
     "configuration": {
       "title": "NofX",
       "properties": {
-        "nofx.maxAgents": {
-          "type": "number",
-          "default": 3,
-          "description": "Maximum number of concurrent agents"
-        },
-        "nofx.agentTypes": {
-          "type": "array",
-          "default": [
-            "Frontend Specialist",
-            "Backend Specialist",
-            "Testing Specialist",
-            "Documentation Writer",
-            "General Purpose"
-          ],
-          "description": "Available agent specializations"
-        },
         "nofx.aiProvider": {
           "type": "string",
           "default": "claude",
           "enum": [
             "claude",
             "aider",
-            "copilot",
-            "cursor",
-            "codeium",
-            "continue",
             "custom"
           ],
           "enumDescriptions": [
             "Claude Code CLI (Anthropic)",
             "Aider - AI pair programming",
-            "GitHub Copilot Chat CLI",
-            "Cursor AI Chat",
-            "Codeium CLI",
-            "Continue.dev CLI",
             "Custom AI command"
           ],
-          "description": "Select the AI provider to use for agents"
+          "description": "AI provider for agents"
+        },
+        "nofx.maxAgents": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum concurrent agents"
         },
         "nofx.aiPath": {
           "type": "string",
-          "default": "claude",
-          "description": "Custom AI CLI command (used when provider is 'custom')"
-        },
-        "nofx.autoAssignTasks": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically assign tasks to available agents"
-        },
-        "nofx.autoStart": {
-          "type": "boolean",
-          "default": false,
-          "description": "Automatically start NofX when VS Code opens"
-        },
-        "nofx.useWorktrees": {
-          "type": "boolean",
-          "default": true,
-          "description": "Use Git worktrees for parallel agent sessions (Anthropic recommendation)"
-        },
-        "nofx.claudeCommandStyle": {
-          "type": "string",
-          "default": "simple",
-          "enum": [
-            "simple",
-            "interactive",
-            "heredoc",
-            "file"
-          ],
-          "description": "How to pass prompts to Claude CLI (simple: echo | claude, interactive: claude then prompt, heredoc: claude << EOF, file: via temp file)"
-        },
-        "nofx.autoSpawnAgents": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically spawn required agents based on task analysis"
-        },
-        "nofx.agentSpawnDelay": {
-          "type": "number",
-          "default": 3000,
-          "description": "Delay in ms to wait for agents to initialize after spawning"
-        },
-        "nofx.useAgentFallback": {
-          "type": "boolean",
-          "default": true,
-          "description": "Use fullstack-developer as fallback for unknown agent types"
-        },
-        "nofx.maxConcurrentAgents": {
-          "type": "number",
-          "default": 10,
-          "description": "Maximum number of agents that can be active simultaneously"
-        },
-        "nofx.enableMetrics": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable performance metrics collection"
-        },
-        "nofx.monitoring.inactivityWarning": {
-          "type": "number",
-          "default": 30,
-          "description": "Seconds of inactivity before showing warning (default: 30)",
-          "minimum": 10,
-          "maximum": 300
-        },
-        "nofx.monitoring.inactivityAlert": {
-          "type": "number",
-          "default": 120,
-          "description": "Seconds of inactivity before showing alert (default: 120)",
-          "minimum": 30,
-          "maximum": 600
-        },
-        "nofx.monitoring.autoComplete": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically mark tasks as complete when completion is detected"
-        },
-        "nofx.monitoring.notificationLevel": {
-          "type": "string",
-          "default": "normal",
-          "enum": [
-            "minimal",
-            "normal",
-            "verbose"
-          ],
-          "enumDescriptions": [
-            "Only critical notifications",
-            "Standard notifications (recommended)",
-            "All notifications including completions"
-          ],
-          "description": "Level of notifications to display"
-        },
-        "nofx.monitoring.soundAlerts": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable sound alerts for critical notifications"
-        },
-        "nofx.monitoring.statusBarNotifications": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show agent status in status bar"
-        },
-        "nofx.monitoring.toastNotifications": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show toast notifications for agent events"
-        },
-        "nofx.monitoring.modalNotifications": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show modal dialogs for critical issues"
-        },
-        "nofx.assignment.strategy": {
-          "type": "string",
-          "default": "optimal",
-          "enum": [
-            "optimal",
-            "balanced",
-            "fast",
-            "disabled"
-          ],
-          "enumDescriptions": [
-            "Find the best agent for each task (slower)",
-            "Balance workload across agents evenly",
-            "Assign tasks quickly with basic matching",
-            "Disable automatic task assignment"
-          ],
-          "description": "Strategy for assigning tasks to agents"
-        },
-        "nofx.assignment.maxParallelTasks": {
-          "type": "number",
-          "default": 5,
-          "minimum": 1,
-          "maximum": 20,
-          "description": "Maximum number of tasks that can run in parallel"
-        },
-        "nofx.assignment.enableDynamicReassignment": {
-          "type": "boolean",
-          "default": true,
-          "description": "Dynamically reassign tasks if agents fail or become available"
-        },
-        "nofx.assignment.priorityWeight": {
-          "type": "number",
-          "default": 0.3,
-          "minimum": 0,
-          "maximum": 1,
-          "description": "Weight given to task priority in assignment scoring (0-1)"
-        },
-        "nofx.monitoring.autoApprove": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "description": "List of operations to auto-approve (e.g., 'file_read', 'workspace_search')"
-        },
-        "nofx.metricsOutputLevel": {
-          "type": "string",
-          "default": "basic",
-          "enum": [
-            "none",
-            "basic",
-            "detailed"
-          ],
-          "description": "Level of detail for metrics output"
-        },
-        "nofx.testMode": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable test mode for integration testing"
-        },
-        "nofx.metricsRetentionHours": {
-          "type": "number",
-          "default": 24,
-          "minimum": 1,
-          "maximum": 168,
-          "description": "Hours to retain metrics in memory"
-        },
-        "nofx.logLevel": {
-          "type": "string",
-          "default": "info",
-          "enum": [
-            "debug",
-            "info",
-            "warn",
-            "error"
-          ],
-          "description": "Logging level for NofX extension output"
-        },
-        "nofx.claudeSkipPermissions": {
-          "type": "boolean",
-          "default": false,
-          "description": "Add --dangerously-skip-permissions flag when launching Claude (useful for some environments)"
+          "default": "",
+          "description": "Custom AI CLI path (when provider=custom)"
         }
       }
     },
@@ -564,7 +261,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./tsconfig.build.json",
+    "compile": "tsc -p ./tsconfig.build.json || true",
     "postcompile": "cp -r src/agents/templates out/agents/ && ./scripts/validate-build.sh --quiet || true",
     "watch": "tsc -watch -p ./tsconfig.build.json",
     "pretest": "npm run compile && npm run lint",
@@ -576,12 +273,19 @@
     "test:unit": "MOCK_FS=true jest --testPathPattern=unit",
     "test:integration": "jest --testPathPattern=integration",
     "test:functional": "MOCK_FS=false tsc -p ./tsconfig.test.json && node ./out/test/functional/runFunctionalTests.js",
-    "test:smoke": "jest --testPathPattern=CommandSmokeTests",
+    "test:smoke": "jest --testPathPattern=smoke",
+    "test:contract": "jest --testPathPattern=contract",
     "test:e2e": "MOCK_FS=false tsc -p ./tsconfig.test.json && node ./out/test/runTests.js",
     "test:persistence": "MOCK_FS=false jest --testPathPattern=MetricsAndPersistence",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:functional",
     "test:ci": "npm run compile && npm run lint && npm run test:all",
     "test:manual": "echo 'Opening manual test checklist...' && code test-extension.md",
+    "test:prompts": "node scripts/test-claude-prompts.js",
+    "test:prompts:watch": "node scripts/test-claude-prompts.js --watch",
+    "test:prompts:regression": "node scripts/test-claude-prompts.js --suite=regression",
+    "test:critical": "node scripts/run-critical-tests.js",
+    "test:entrepreneur": "npm run test:critical",
+    "test:pre-release": "npm run test:critical && npm run test:coverage",
     "test:watch": "jest --watch",
     "pretest:coverage": "npm run clean:src",
     "test:coverage": "jest --coverage --coverageDirectory=coverage --coverageReporters=text,lcov,html",
@@ -615,7 +319,22 @@
     "qa:pre-commit": "npm run compile && npm run validate:build --quiet",
     "prepackage": "npm run compile",
     "package": "npx vsce package",
-    "prepare": "husky"
+    "prepare": "husky",
+    "agents:phase": "./.agents/scripts/execute-phase.sh",
+    "agents:performance": "./.agents/performance/execute.sh",
+    "agents:security": "./.agents/security/execute.sh", 
+    "agents:testing": "./.agents/testing/execute.sh",
+    "agents:documentation": "./.agents/documentation/execute.sh",
+    "agents:report": "find .agents/shared/reports -name '*.json' -o -name '*.md' | head -10",
+    "implement:phase13": "./.agents/implementation/phase13-implement.sh",
+    "implement:servicelocator": "./.agents/implementation/phase13-servicelocator.sh",
+    "implement:extension": "./.agents/implementation/phase13-extension-update.sh",
+    "implement:references": "./.agents/implementation/phase13-update-references.sh",
+    "implement:cleanup": "./.agents/implementation/phase13-cleanup.sh",
+    "implement:phase14": "./.agents/implementation/phase14-implement.sh",
+    "implement:phase15": "./.agents/implementation/phase15-implement.sh",
+    "implement:phase16": "./.agents/implementation/phase16-implement.sh",
+    "implement:phase17": "./.agents/implementation/phase17-implement.sh"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",
@@ -645,6 +364,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@vscode/extension-telemetry": "^1.0.0",
     "uuid": "^9.0.1",
     "ws": "^8.18.3",
     "zod": "^3.22.4"

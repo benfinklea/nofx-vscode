@@ -1,7 +1,9 @@
 import { OrchestrationServer } from '../../orchestration/OrchestrationServer';
 import {
-    ILoggingService,
-    IEventBus,
+import { getAppStateStore } from '../../state/AppStateStore';
+import * as selectors from '../../state/selectors';
+import * as actions from '../../state/actions';    ILogger,
+    IEventEmitter, IEventSubscriber,
     IErrorHandler,
     IConnectionPoolService,
     IMessageRouter,
@@ -15,8 +17,8 @@ import {
  */
 export function createTestOrchestrationServer(
     port: number,
-    loggingService?: ILoggingService,
-    eventBus?: IEventBus,
+    loggingService?: ILogger,
+    eventBus?: IEventEmitter & IEventSubscriber,
     errorHandler?: IErrorHandler,
     additionalServices?: {
         connectionPool?: IConnectionPoolService;

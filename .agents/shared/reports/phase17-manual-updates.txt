@@ -1,0 +1,4 @@
+src/views/AgentTreeProvider.ts
+src/views/TaskTreeProvider.ts
+src/views/AgentTreeProvider.ts
+src/views/TaskTreeProvider.ts

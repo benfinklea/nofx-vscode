@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AgentPersistence } from '../../../persistence/AgentPersistence';
+import { PersistenceService } from '../../../services/PersistenceService';
 import { MessagePersistenceService } from '../../../services/MessagePersistenceService';
 import { AgentManager } from '../../../agents/AgentManager';
 import { EventBus } from '../../../services/EventBus';
@@ -13,11 +13,13 @@ import { DOMAIN_EVENTS } from '../../../services/EventConstants';
 import { Agent } from '../../../agents/types';
 import { OrchestratorMessage, MessageType } from '../../../orchestration/MessageProtocol';
 import { createMockTerminal } from '../../helpers/mockFactories';
-
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';
 describe('Persistence Integration', () => {
     let container: Container;
     let agentManager: AgentManager;
-    let agentPersistence: AgentPersistence;
+    let agentPersistence: PersistenceService;
     let messagePersistence: MessagePersistenceService;
     let eventBus: EventBus;
     let mockContext: vscode.ExtensionContext;
@@ -129,7 +131,7 @@ describe('Persistence Integration', () => {
         );
 
         // Create persistence services
-        agentPersistence = new AgentPersistence(
+        agentPersistence = new PersistenceService(
             mockContext,
             container.resolve(Symbol.for('IEventBus')),
             container.resolve(Symbol.for('ILoggingService'))

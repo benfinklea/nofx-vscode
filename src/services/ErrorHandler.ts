@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { IErrorHandler, ErrorSeverity, ILoggingService, INotificationService } from './interfaces';
+import { IErrorHandler, ErrorSeverity, ILogger, INotificationService } from './interfaces';
 
 export class ErrorHandler implements IErrorHandler {
     private readonly errorCounts: Map<string, number> = new Map();
@@ -8,7 +8,7 @@ export class ErrorHandler implements IErrorHandler {
     private readonly errorWindowMs = 60000; // 1 minute window
 
     constructor(
-        private loggingService: ILoggingService,
+        private loggingService: ILogger,
         private notificationService: INotificationService
     ) {}
 

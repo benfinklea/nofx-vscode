@@ -1,5 +1,11 @@
 import { Task, TaskValidationError } from '../agents/types';
-import { ILoggingService, IEventBus, INotificationService, ITaskDependencyManager } from '../services/interfaces';
+import {
+    ILogger,
+    IEventEmitter,
+    IEventSubscriber,
+    INotificationService,
+    ITaskDependencyManager
+} from '../services/interfaces';
 import { DOMAIN_EVENTS } from '../services/EventConstants';
 
 interface DependencyGraph {
@@ -17,15 +23,28 @@ interface ConflictInfo {
 }
 
 export class TaskDependencyManager implements ITaskDependencyManager {
-    private readonly logger: ILoggingService;
-    private readonly eventBus: IEventBus;
+    private readonly logger: ILogger;
+    private readonly eventBus: IEventEmitter & IEventSubscriber;
     private readonly notificationService: INotificationService;
     private dependencyGraph: DependencyGraph = {};
     private softDependencyGraph: SoftDependencyGraph = {};
     private conflicts: Map<string, ConflictInfo> = new Map();
     private lastConflictResolvedState: Map<string, boolean> = new Map(); // Track last published state
 
-    constructor(loggingService: ILoggingService, eventBus: IEventBus, notificationService: INotificationService) {
+    // Helper to publish events
+    private publishEvent(event: string, data?: any): void {
+        if (this.eventBus && 'publish' in this.eventBus) {
+            (this.eventBus as any).publish(event, data);
+        } else if (this.eventBus && 'emit' in this.eventBus) {
+            this.eventBus.emit(event, data);
+        }
+    }
+
+    constructor(
+        loggingService: ILogger,
+        eventBus: IEventEmitter & IEventSubscriber,
+        notificationService: INotificationService
+    ) {
         this.logger = loggingService;
         this.eventBus = eventBus;
         this.notificationService = notificationService;
@@ -64,7 +83,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
         }
 
         this.logger.info(`Added dependency: ${taskId} -> ${dependsOnTaskId}`);
-        this.eventBus.publish(DOMAIN_EVENTS.TASK_DEPENDENCY_ADDED, { taskId, dependsOnTaskId });
+        this.publishEvent(DOMAIN_EVENTS.TASK_DEPENDENCY_ADDED, { taskId, dependsOnTaskId });
         return true;
     }
 
@@ -80,7 +99,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
         if (index > -1) {
             this.dependencyGraph[taskId].splice(index, 1);
             this.logger.info(`Removed dependency: ${taskId} -> ${dependsOnTaskId}`);
-            this.eventBus.publish(DOMAIN_EVENTS.TASK_DEPENDENCY_REMOVED, { taskId, dependsOnTaskId });
+            this.publishEvent(DOMAIN_EVENTS.TASK_DEPENDENCY_REMOVED, { taskId, dependsOnTaskId });
         }
     }
 
@@ -108,7 +127,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
         this.softDependencyGraph[taskId].push(prefersTaskId);
 
         this.logger.info(`Added soft dependency: ${taskId} -> ${prefersTaskId}`);
-        this.eventBus.publish(DOMAIN_EVENTS.TASK_SOFT_DEPENDENCY_ADDED, { taskId, prefersTaskId });
+        this.publishEvent(DOMAIN_EVENTS.TASK_SOFT_DEPENDENCY_ADDED, { taskId, prefersTaskId });
         return true;
     }
 
@@ -124,7 +143,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
         if (index > -1) {
             this.softDependencyGraph[taskId].splice(index, 1);
             this.logger.info(`Removed soft dependency: ${taskId} -> ${prefersTaskId}`);
-            this.eventBus.publish(DOMAIN_EVENTS.TASK_SOFT_DEPENDENCY_REMOVED, { taskId, prefersTaskId });
+            this.publishEvent(DOMAIN_EVENTS.TASK_SOFT_DEPENDENCY_REMOVED, { taskId, prefersTaskId });
         }
     }
 
@@ -194,7 +213,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
 
                 // Emit dependency resolution event if task was previously blocked
                 if (wasBlocked) {
-                    this.eventBus.publish(DOMAIN_EVENTS.TASK_DEPENDENCY_RESOLVED, {
+                    this.publishEvent(DOMAIN_EVENTS.TASK_DEPENDENCY_RESOLVED, {
                         taskId: task.id,
                         task,
                         resolvedDependencies: task.dependsOn || []
@@ -269,7 +288,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
             // Reset resolved state when new conflicts are detected
             this.lastConflictResolvedState.set(task.id, false);
 
-            this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_DETECTED, {
+            this.publishEvent(DOMAIN_EVENTS.TASK_CONFLICT_DETECTED, {
                 taskId: task.id,
                 conflictingTasks: conflicts,
                 reason: this.conflicts.get(task.id)?.reason
@@ -283,7 +302,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
             // Guard against duplicate publishes - only publish if state changed
             const wasResolved = this.lastConflictResolvedState.get(task.id) || false;
             if (!wasResolved) {
-                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, {
+                this.publishEvent(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, {
                     taskId: task.id,
                     resolution: 'auto'
                 });
@@ -307,7 +326,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
             case 'block':
                 // Keep the conflict entry and publish a distinct event
                 this.logger.info(`Resolved conflict for task ${taskId} by blocking`);
-                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_DECISION, { taskId, resolution });
+                this.publishEvent(DOMAIN_EVENTS.TASK_CONFLICT_DECISION, { taskId, resolution });
                 break;
             case 'allow':
             case 'merge':
@@ -323,7 +342,7 @@ export class TaskDependencyManager implements ITaskDependencyManager {
                 }
 
                 this.logger.info(`Resolved conflict for task ${taskId} by ${resolution}`);
-                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, { taskId, resolution });
+                this.publishEvent(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, { taskId, resolution });
                 break;
         }
 

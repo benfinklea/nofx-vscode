@@ -2,9 +2,10 @@ import {
     IContainer,
     SERVICE_TOKENS,
     IMetricsService,
-    IConfigurationService,
-    ILoggingService,
-    IEventBus,
+    IConfiguration,
+    ILogger,
+    IEventEmitter,
+    IEventSubscriber,
     IConfigurationValidator,
     INotificationService
 } from '../../services/interfaces';
@@ -18,7 +19,9 @@ import {
     measureTime
 } from '../setup';
 import * as vscode from 'vscode';
-
+import { getAppStateStore } from '../../state/AppStateStore';
+import * as selectors from '../../state/selectors';
+import * as actions from '../../state/actions';
 // Mock VS Code EventEmitter for integration tests
 (vscode as any).EventEmitter = jest.fn().mockImplementation(() => ({
     event: jest.fn().mockReturnValue({ dispose: jest.fn() }),
@@ -206,7 +209,7 @@ export const createIntegrationContainer = (): IContainer => {
     const { TaskDependencyManager } = require('../../tasks/TaskDependencyManager');
     const { AgentManager } = require('../../agents/AgentManager');
     const { TaskQueue } = require('../../tasks/TaskQueue');
-    const { OrchestrationServer } = require('../../orchestration/OrchestrationServer');
+    const { DirectCommunicationService } = require('../../services/DirectCommunicationService');
     const { ConnectionPoolService } = require('../../services/ConnectionPoolService');
     const { MessageRouter } = require('../../services/MessageRouter');
     const { MessageValidator } = require('../../services/MessageValidator');
@@ -385,18 +388,13 @@ export const createIntegrationContainer = (): IContainer => {
     );
     container.registerInstance(SERVICE_TOKENS.MessageRouter, messageRouter);
 
-    const orchestrationServer = new OrchestrationServer(
-        0, // Use random port
-        loggingService,
+    const directCommunicationService = new DirectCommunicationService(
         eventBus,
-        errorHandler,
-        connectionPoolService,
-        messageRouter,
-        messageValidator,
-        messagePersistenceService,
+        loggingService,
+        notificationService,
         metricsService
     );
-    container.registerInstance(SERVICE_TOKENS.OrchestrationServer, orchestrationServer);
+    container.registerInstance(SERVICE_TOKENS.OrchestrationServer, directCommunicationService);
 
     return container;
 };
@@ -637,7 +635,7 @@ export const expectMetricsRecorded = (
     });
 };
 
-export const expectConfigurationValid = (configService: IConfigurationService, key: string, value: any) => {
+export const expectConfigurationValid = (configService: IConfiguration, key: string, value: any) => {
     const result = configService.get(key);
     expect(result).toBe(value);
 };

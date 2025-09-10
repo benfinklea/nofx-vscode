@@ -487,43 +487,41 @@ export class ExtensionTestHelpers {
     }
 
     /**
-     * Create test orchestration server with free port
+     * Create test DirectCommunicationService instance
      * @param container - Container instance to resolve services from
-     * @param server - Optional pre-configured OrchestrationServer instance
-     * @param port - Optional specific port to use (will use ephemeral port if not provided)
-     * @returns The server instance and actual port being used
+     * @param service - Optional pre-configured DirectCommunicationService instance
+     * @param port - Optional (unused, kept for backward compatibility)
+     * @returns The service instance and port (always 0 for DirectCommunicationService)
      */
     static async createTestOrchestrationServer(
         container: IContainer,
-        server?: any,
+        service?: any,
         port?: number
     ): Promise<{ server: any; port: number }> {
-        const actualPort = port || (await getPort());
+        // If no service provided, try to resolve from container or return mock
+        if (!service) {
+            // Check if DirectCommunicationService is registered
+            service = container.resolveOptional(SERVICE_TOKENS.OrchestrationServer);
 
-        // If no server provided, try to resolve from container or return mock
-        if (!server) {
-            // Check if OrchestrationServer is registered
-            server = container.resolveOptional(SERVICE_TOKENS.OrchestrationServer);
-
-            if (!server) {
-                // Return a mock server that tracks the port
+            if (!service) {
+                // Return a mock service
                 return {
                     server: {
                         start: jest.fn().mockResolvedValue(undefined),
                         stop: jest.fn().mockResolvedValue(undefined),
-                        getStatus: jest.fn().mockReturnValue({ port: actualPort, running: true })
+                        getMetrics: jest.fn().mockReturnValue({ isStarted: true, totalMessages: 0 }),
+                        generateTestMessages: jest.fn(),
+                        setDashboardCallback: jest.fn(),
+                        removeDashboardCallback: jest.fn()
                     },
-                    port: actualPort
+                    port: 0 // DirectCommunicationService doesn't use ports
                 };
             }
         }
 
-        await server.start(actualPort);
+        await service.start();
 
-        // Get actual bound port from server status if available
-        const boundPort = server.getStatus?.()?.port || actualPort;
-
-        return { server, port: boundPort };
+        return { server: service, port: 0 }; // DirectCommunicationService doesn't use ports
     }
 
     /**

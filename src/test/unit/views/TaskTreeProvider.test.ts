@@ -3,7 +3,9 @@ import { TaskTreeProvider } from '../../../views/TaskTreeProvider';
 import { IUIStateManager, IContainer, SERVICE_TOKENS, ITaskQueue } from '../../../services/interfaces';
 import { TaskDTO } from '../../../types/ui';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { IDashboardViewModel, ILoggingService, IWebviewHost, WebviewHostFactory } from '../services/interfaces';
+import { IDashboardViewModel, ILogger, IWebviewHost, WebviewHostFactory } from '../services/interfaces';
 import { createWebviewHost } from '../ui/WebviewHost';
 import { DashboardTemplate } from '../templates/DashboardTemplate';
 
@@ -14,7 +14,7 @@ export class MessageFlowDashboard {
         webviewHost: IWebviewHost,
         private context: vscode.ExtensionContext,
         private viewModel: IDashboardViewModel,
-        private loggingService: ILoggingService
+        private loggingService: ILogger
     ) {
         this.webviewHost = webviewHost;
         this.template = new DashboardTemplate(context);
@@ -23,7 +23,7 @@ export class MessageFlowDashboard {
     public static create(
         context: vscode.ExtensionContext,
         viewModel: IDashboardViewModel,
-        loggingService: ILoggingService,
+        loggingService: ILogger,
         webviewHostFactory: WebviewHostFactory = createWebviewHost
     ): MessageFlowDashboard {
         const panel = vscode.window.createWebviewPanel(
@@ -47,7 +47,7 @@ export class MessageFlowDashboard {
     public static createOrShow(
         context: vscode.ExtensionContext,
         viewModel: IDashboardViewModel,
-        loggingService: ILoggingService
+        loggingService: ILogger
     ): MessageFlowDashboard {
         if (MessageFlowDashboard.currentPanel) {
             MessageFlowDashboard.currentPanel.reveal();

@@ -1,23 +1,27 @@
 import * as vscode from 'vscode';
 import {
     IUIStateManager,
-    IEventBus,
-    ILoggingService,
+    IEventEmitter,
+    IEventSubscriber,
+    ILogger,
     IDashboardViewModel,
     IMessagePersistenceService,
     IConnectionPoolService,
     MessageFilter
 } from '../services/interfaces';
 import { DashboardViewState, WebviewCommand, WEBVIEW_COMMANDS } from '../types/ui';
-import { OrchestrationServer } from '../orchestration/OrchestrationServer';
+import { DirectCommunicationService } from '../services/DirectCommunicationService';
 import { OrchestratorMessage, MessageType } from '../orchestration/MessageProtocol';
 import { ORCH_EVENTS } from '../services/EventConstants';
-
+import { getAppStateStore } from '../state/AppStateStore';
+import * as selectors from '../state/selectors';
+import * as actions from '../state/actions';
 export class DashboardViewModel implements IDashboardViewModel {
+    private store: IUIStateManager; // Alias for compatibility
     private uiStateManager: IUIStateManager;
-    private orchestrationServer: OrchestrationServer;
-    private eventBus: IEventBus;
-    private loggingService: ILoggingService;
+    private directCommunicationService: DirectCommunicationService;
+    private eventBus: IEventEmitter & IEventSubscriber;
+    private loggingService: ILogger;
     private messagePersistence: IMessagePersistenceService;
     private connectionPool?: IConnectionPoolService;
 
@@ -52,17 +56,18 @@ export class DashboardViewModel implements IDashboardViewModel {
     private stateChangeCallbacks: ((state: DashboardViewState) => void)[] = [];
     private throttledUpdateTimer: NodeJS.Timeout | undefined;
     private isPaused: boolean = false;
+    private dashboardCallback?: (message: OrchestratorMessage) => void;
 
     constructor(
         uiStateManager: IUIStateManager,
-        orchestrationServer: OrchestrationServer,
-        eventBus: IEventBus,
-        loggingService: ILoggingService,
+        directCommunicationService: DirectCommunicationService,
+        eventBus: IEventEmitter & IEventSubscriber,
+        loggingService: ILogger,
         messagePersistence: IMessagePersistenceService,
         connectionPool?: IConnectionPoolService
     ) {
-        this.uiStateManager = uiStateManager;
-        this.orchestrationServer = orchestrationServer;
+        this.store = uiStateManager;
+        this.directCommunicationService = directCommunicationService;
         this.eventBus = eventBus;
         this.loggingService = loggingService;
         this.messagePersistence = messagePersistence;
@@ -77,22 +82,33 @@ export class DashboardViewModel implements IDashboardViewModel {
         try {
             // Subscribe to orchestration events with error handling
             if (this.eventBus) {
+                // Add helper for subscription compatibility
+                const subscribeToEvent = (event: string, handler: (data: any) => void) => {
+                    if (this.eventBus && 'subscribe' in this.eventBus) {
+                        return (this.eventBus as any).subscribe(event, handler);
+                    } else if (this.eventBus && 'on' in this.eventBus) {
+                        this.eventBus.on(event, handler);
+                        return { dispose: () => this.eventBus?.off?.(event, handler) };
+                    }
+                    return { dispose: () => {} };
+                };
+
                 this.subscriptions.push(
-                    this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_RECEIVED, data => {
+                    subscribeToEvent(ORCH_EVENTS.MESSAGE_RECEIVED, data => {
                         try {
                             this.handleNewMessage(data.message);
                         } catch (error) {
                             this.loggingService.error('Error handling MESSAGE_RECEIVED event', error);
                         }
                     }),
-                    this.eventBus.subscribe(ORCH_EVENTS.CLIENT_CONNECTED, data => {
+                    subscribeToEvent(ORCH_EVENTS.CLIENT_CONNECTED, data => {
                         try {
                             this.updateConnectionStatus(data);
                         } catch (error) {
                             this.loggingService.error('Error handling CLIENT_CONNECTED event', error);
                         }
                     }),
-                    this.eventBus.subscribe(ORCH_EVENTS.CLIENT_DISCONNECTED, data => {
+                    subscribeToEvent(ORCH_EVENTS.CLIENT_DISCONNECTED, data => {
                         try {
                             this.connectionStatus.set(data.clientId, 'disconnected');
                             this.publishStateChange();
@@ -100,14 +116,14 @@ export class DashboardViewModel implements IDashboardViewModel {
                             this.loggingService.error('Error handling CLIENT_DISCONNECTED event', error);
                         }
                     }),
-                    this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_REGISTERED, data => {
+                    subscribeToEvent(ORCH_EVENTS.LOGICAL_ID_REGISTERED, data => {
                         try {
                             this.handleLogicalIdRegistered(data);
                         } catch (error) {
                             this.loggingService.error('Error handling LOGICAL_ID_REGISTERED event', error);
                         }
                     }),
-                    this.eventBus.subscribe(ORCH_EVENTS.LOGICAL_ID_UNREGISTERED, data => {
+                    subscribeToEvent(ORCH_EVENTS.LOGICAL_ID_UNREGISTERED, data => {
                         try {
                             this.handleLogicalIdUnregistered(data);
                         } catch (error) {
@@ -115,14 +131,14 @@ export class DashboardViewModel implements IDashboardViewModel {
                         }
                     }),
                     // Subscribe to persistence events for real-time updates
-                    this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_PERSISTED, () => {
+                    subscribeToEvent(ORCH_EVENTS.MESSAGE_PERSISTED, () => {
                         try {
                             this.handlePersistenceUpdate();
                         } catch (error) {
                             this.loggingService.error('Error handling MESSAGE_PERSISTED event', error);
                         }
                     }),
-                    this.eventBus.subscribe(ORCH_EVENTS.MESSAGE_STORAGE_CLEANUP, () => {
+                    subscribeToEvent(ORCH_EVENTS.MESSAGE_STORAGE_CLEANUP, () => {
                         try {
                             this.handlePersistenceUpdate();
                         } catch (error) {
@@ -134,19 +150,20 @@ export class DashboardViewModel implements IDashboardViewModel {
                 this.loggingService.warn('EventBus not available, dashboard will not receive real-time updates');
             }
 
-            // Register dashboard callback with orchestration server
-            if (this.orchestrationServer) {
-                this.orchestrationServer.setDashboardCallback(message => {
+            // Register dashboard callback with DirectCommunicationService
+            if (this.directCommunicationService) {
+                this.dashboardCallback = message => {
                     try {
                         this.handleNewMessage(message);
                     } catch (error) {
                         this.loggingService.error('Error in dashboard callback', error);
                     }
-                });
-                this.loggingService.info('Dashboard callback registered with orchestration server');
+                };
+                this.directCommunicationService.setDashboardCallback(this.dashboardCallback);
+                this.loggingService.info('Dashboard callback registered with DirectCommunicationService');
             } else {
                 this.loggingService.warn(
-                    'OrchestrationServer not available, dashboard will not receive message updates'
+                    'DirectCommunicationService not available, dashboard will not receive message updates'
                 );
             }
         } catch (error) {
@@ -279,7 +296,14 @@ export class DashboardViewModel implements IDashboardViewModel {
             this.loggingService.info('DashboardViewModel: Exporting messages');
 
             const history = await this.messagePersistence.getHistory();
-            const connections = this.orchestrationServer.getConnectionSummaries();
+            const connections = this.directCommunicationService.getActiveConnections().map(conn => ({
+                clientId: conn.id,
+                isAgent: conn.type === 'agent',
+                connectedAt: conn.connectedAt.toISOString(),
+                lastHeartbeat: conn.lastSeen.toISOString(),
+                messageCount: conn.messageCount,
+                userAgent: conn.metadata?.userAgent
+            }));
 
             const exportData = {
                 timestamp: new Date().toISOString(),
@@ -549,8 +573,10 @@ export class DashboardViewModel implements IDashboardViewModel {
     dispose(): void {
         this.loggingService.info('DashboardViewModel: Disposing');
 
-        // Clear orchestration callback
-        this.orchestrationServer.clearDashboardCallback();
+        // Clear DirectCommunicationService callback
+        if (this.directCommunicationService && this.dashboardCallback) {
+            this.directCommunicationService.removeDashboardCallback(this.dashboardCallback);
+        }
 
         // Clear throttled update timer
         if (this.throttledUpdateTimer) {

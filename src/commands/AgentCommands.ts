@@ -1,28 +1,22 @@
 import * as vscode from 'vscode';
-import {
-    ICommandHandler,
-    IContainer,
-    ICommandService,
-    INotificationService,
-    IConfigurationService,
-    SERVICE_TOKENS
-} from '../services/interfaces';
+import { ICommandHandler, ICommandService, INotificationService, IConfiguration } from '../services/interfaces';
 import { PickItem } from '../types/ui';
 import { AgentManager } from '../agents/AgentManager';
+import { ServiceLocator } from '../services/ServiceLocator';
 
 export class AgentCommands implements ICommandHandler {
     private readonly agentManager: AgentManager;
     private readonly commandService: ICommandService;
     private readonly notificationService: INotificationService;
-    private readonly configService: IConfigurationService;
+    private readonly configService: IConfiguration;
     private readonly context: vscode.ExtensionContext;
 
-    constructor(container: IContainer) {
-        this.agentManager = container.resolve<AgentManager>(SERVICE_TOKENS.AgentManager);
-        this.commandService = container.resolve<ICommandService>(SERVICE_TOKENS.CommandService);
-        this.notificationService = container.resolve<INotificationService>(SERVICE_TOKENS.NotificationService);
-        this.configService = container.resolve<IConfigurationService>(SERVICE_TOKENS.ConfigurationService);
-        this.context = container.resolve<vscode.ExtensionContext>(SERVICE_TOKENS.ExtensionContext);
+    constructor() {
+        this.agentManager = ServiceLocator.get<AgentManager>('AgentManager');
+        this.commandService = ServiceLocator.get<ICommandService>('CommandService');
+        this.notificationService = ServiceLocator.get<INotificationService>('NotificationService');
+        this.configService = ServiceLocator.get<IConfiguration>('ConfigurationService');
+        this.context = ServiceLocator.get<vscode.ExtensionContext>('ExtensionContext');
     }
 
     register(): void {
@@ -33,6 +27,11 @@ export class AgentCommands implements ICommandHandler {
         this.commandService.register('nofx.focusAgentTerminal', this.focusAgentTerminal.bind(this));
         this.commandService.register('nofx.restoreAgents', this.restoreAgents.bind(this));
         this.commandService.register('nofx.restoreAgentFromSession', this.restoreAgentFromSession.bind(this));
+        this.commandService.register('nofx.clearAgents', this.clearAgents.bind(this));
+        this.commandService.register(
+            'nofx.createAgentFromNaturalLanguage',
+            this.createAgentFromNaturalLanguage.bind(this)
+        );
     }
 
     private async addAgent(): Promise<void> {
@@ -467,6 +466,126 @@ export class AgentCommands implements ICommandHandler {
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             await this.notificationService.showError(`Failed to restore agent from session: ${err.message}`);
+        }
+    }
+
+    private async clearAgents(): Promise<void> {
+        const agents = this.agentManager.getActiveAgents();
+        if (agents.length === 0) {
+            await this.notificationService.showInformation('No agents to clear');
+            return;
+        }
+
+        const confirmed = await this.notificationService.confirmDestructive(
+            `Clear all ${agents.length} agents? This will terminate all agent terminals.`,
+            'Clear All'
+        );
+
+        if (confirmed) {
+            // Remove all agents
+            for (const agent of agents) {
+                await this.agentManager.removeAgent(agent.id);
+            }
+            await this.notificationService.showInformation(`Cleared ${agents.length} agents`);
+        }
+    }
+
+    private async createAgentFromNaturalLanguage(): Promise<void> {
+        // Get natural language description from user
+        const description = await this.notificationService.showInputBox({
+            prompt: 'Describe the agent you want to create',
+            placeHolder: 'e.g., "I need a Python expert who can write unit tests and handle API integrations"',
+            validateInput: (value: string): string | undefined => {
+                if (!value || value.trim().length < 10) {
+                    return 'Please provide a more detailed description (at least 10 characters)';
+                }
+                return undefined;
+            }
+        });
+
+        if (!description) {
+            return;
+        }
+
+        try {
+            // Import NaturalLanguageService
+            const { NaturalLanguageService } = await import('../services/NaturalLanguageService');
+            const nlService = new NaturalLanguageService();
+
+            // Parse the description to determine agent type and capabilities
+            const agentConfig = await nlService.parseAgentDescription(description);
+
+            if (!agentConfig) {
+                await this.notificationService.showError(
+                    'Could not understand the agent description. Please try again.'
+                );
+                return;
+            }
+
+            // Import template manager to find best matching template
+            const { AgentTemplateManager } = await import('../agents/AgentTemplateManager');
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                await this.notificationService.showError('No workspace folder open');
+                return;
+            }
+
+            const templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
+            const templates = await templateManager.getTemplates();
+
+            // Find best matching template based on capabilities
+            let bestTemplate = templates[0]; // Default to first template
+            let bestScore = 0;
+
+            for (const template of templates) {
+                const capabilities = template.capabilities || [];
+                let score = 0;
+
+                // Calculate match score based on overlapping capabilities
+                for (const cap of agentConfig.capabilities || []) {
+                    if (capabilities.some(c => c.toLowerCase().includes(cap.toLowerCase()))) {
+                        score++;
+                    }
+                }
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestTemplate = template;
+                }
+            }
+
+            // Get agent name
+            const agentName = await this.notificationService.showInputBox({
+                prompt: 'Enter a name for your agent',
+                value: agentConfig.suggestedName || bestTemplate.name,
+                validateInput: (value: string): string | undefined => {
+                    if (!value || value.trim().length === 0) {
+                        return 'Agent name is required';
+                    }
+                    return undefined;
+                }
+            });
+
+            if (!agentName) {
+                return;
+            }
+
+            // Create the agent with custom system prompt
+            const customPrompt = `${bestTemplate.systemPrompt}\n\nAdditional context from user: ${description}`;
+
+            const agent = await this.agentManager.spawnAgent({
+                name: agentName,
+                type: bestTemplate.id ?? 'general',
+                template: {
+                    ...bestTemplate,
+                    systemPrompt: customPrompt
+                }
+            });
+
+            await this.notificationService.showInformation(`Agent "${agentName}" created from your description`);
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            await this.notificationService.showError(`Failed to create agent: ${err.message}`);
         }
     }
 

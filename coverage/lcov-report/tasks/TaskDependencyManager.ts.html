@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/227</span>
+                <span class='fraction'>0/229</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/83</span>
+                <span class='fraction'>0/84</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/219</span>
+                <span class='fraction'>0/221</span>
             </div>
         
             
@@ -631,7 +631,9 @@
 <a name='L566'></a><a href='#L566'>566</a>
 <a name='L567'></a><a href='#L567'>567</a>
 <a name='L568'></a><a href='#L568'>568</a>
-<a name='L569'></a><a href='#L569'>569</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L569'></a><a href='#L569'>569</a>
+<a name='L570'></a><a href='#L570'>570</a>
+<a name='L571'></a><a href='#L571'>571</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -659,10 +661,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -888,6 +886,8 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -995,6 +995,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1081,7 +1086,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1226,11 +1230,7 @@ interface ConflictInfo {
     private <span class="cstat-no" title="statement not covered" >conflicts: Map&lt;string, ConflictInfo&gt; = new Map();</span>
     private <span class="cstat-no" title="statement not covered" >lastConflictResolvedState: Map&lt;string, boolean&gt; = new Map(); </span>// Track last published state
 &nbsp;
-<span class="fstat-no" title="function not covered" >    constructor(</span>
-        loggingService: ILoggingService,
-        eventBus: IEventBus,
-        notificationService: INotificationService
-    ) {
+<span class="fstat-no" title="function not covered" >    constructor(l</span>oggingService: ILoggingService, eventBus: IEventBus, notificationService: INotificationService) {
 <span class="cstat-no" title="statement not covered" >        this.logger = loggingService;</span>
 <span class="cstat-no" title="statement not covered" >        this.eventBus = eventBus;</span>
 <span class="cstat-no" title="statement not covered" >        this.notificationService = notificationService;</span>
@@ -1344,7 +1344,7 @@ interface ConflictInfo {
         // If allTasks is provided, build the dependency graph from tasks for cycle checks
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (allTasks) {</span>
 <span class="cstat-no" title="statement not covered" >            this.buildDependencyGraphFromTasks(allTasks);</span>
-            
+&nbsp;
             // Verify each dependency exists in the task set
             const taskMap = <span class="cstat-no" title="statement not covered" >new Map(allTasks.map(<span class="fstat-no" title="function not covered" >t </span>=&gt; <span class="cstat-no" title="statement not covered" >[t.id, t])</span>);</span>
 <span class="cstat-no" title="statement not covered" >            for (const depId of dependencies) {</span>
@@ -1388,7 +1388,7 @@ interface ConflictInfo {
 <span class="fstat-no" title="function not covered" >    getReadyTasks(</span>allTasks: Task[]): Task[] {
         // Rebuild dependency graph from tasks before evaluation
 <span class="cstat-no" title="statement not covered" >        this.buildDependencyGraphFromTasks(allTasks);</span>
-        
+&nbsp;
         const readyTasks: Task[] = <span class="cstat-no" title="statement not covered" >[];</span>
         const taskMap = <span class="cstat-no" title="statement not covered" >new Map(allTasks.map(<span class="fstat-no" title="function not covered" >task </span>=&gt; <span class="cstat-no" title="statement not covered" >[task.id, task])</span>);</span>
 &nbsp;
@@ -1396,7 +1396,7 @@ interface ConflictInfo {
             const wasBlocked = <span class="cstat-no" title="statement not covered" >task.status === 'blocked' || (task.blockedBy &amp;&amp; task.blockedBy.length &gt; 0);</span>
 <span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (this.isTaskReady(task, taskMap)) {</span>
 <span class="cstat-no" title="statement not covered" >                readyTasks.push(task);</span>
-                
+&nbsp;
                 // Emit dependency resolution event if task was previously blocked
 <span class="cstat-no" title="statement not covered" >                <span class="missing-if-branch" title="if path not taken" >I</span>if (wasBlocked) {</span>
 <span class="cstat-no" title="statement not covered" >                    this.eventBus.publish(DOMAIN_EVENTS.TASK_DEPENDENCY_RESOLVED, {</span>
@@ -1441,7 +1441,7 @@ interface ConflictInfo {
         const conflicts: string[] = <span class="cstat-no" title="statement not covered" >[];</span>
         const taskFiles = <span class="cstat-no" title="statement not covered" >new Set(task.files || []);</span>
         const hadConflicts = <span class="cstat-no" title="statement not covered" >this.conflicts.has(task.id);</span>
-        
+&nbsp;
         // Store previous conflicts before computing/clearing
         const prevConflicts = <span class="cstat-no" title="statement not covered" >(task.conflictsWith || []).slice();</span>
 &nbsp;
@@ -1455,7 +1455,9 @@ interface ConflictInfo {
 &nbsp;
 <span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (intersection.size &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >                conflicts.push(activeTask.id);</span>
-<span class="cstat-no" title="statement not covered" >                this.logger.warn(`Conflict detected between tasks ${task.id} and ${activeTask.id} on files: ${Array.from(intersection).join(', ')}`);</span>
+<span class="cstat-no" title="statement not covered" >                this.logger.warn(</span>
+                    `Conflict detected between tasks ${task.id} and ${activeTask.id} on files: ${Array.from(intersection).join(', ')}`
+                );
             }
         }
 &nbsp;
@@ -1468,7 +1470,7 @@ interface ConflictInfo {
 &nbsp;
             // Set conflictsWith on the task object
 <span class="cstat-no" title="statement not covered" >            task.conflictsWith = conflicts;</span>
-            
+&nbsp;
             // Reset resolved state when new conflicts are detected
 <span class="cstat-no" title="statement not covered" >            this.lastConflictResolvedState.set(task.id, false);</span>
 &nbsp;
@@ -1482,13 +1484,13 @@ interface ConflictInfo {
 <span class="cstat-no" title="statement not covered" >            this.conflicts.delete(task.id);</span>
 <span class="cstat-no" title="statement not covered" >            task.conflictsWith = [];</span>
 <span class="cstat-no" title="statement not covered" >            task.blockedBy = (task.blockedBy || []).filter(<span class="fstat-no" title="function not covered" >id </span>=&gt; <span class="cstat-no" title="statement not covered" >!prevConflicts.includes(id))</span>;</span>
-            
+&nbsp;
             // Guard against duplicate publishes - only publish if state changed
             const wasResolved = <span class="cstat-no" title="statement not covered" >this.lastConflictResolvedState.get(task.id) || false;</span>
 <span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (!wasResolved) {</span>
-<span class="cstat-no" title="statement not covered" >                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, { </span>
-                    taskId: task.id, 
-                    resolution: 'auto' 
+<span class="cstat-no" title="statement not covered" >                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, {</span>
+                    taskId: task.id,
+                    resolution: 'auto'
                 });
 <span class="cstat-no" title="statement not covered" >                this.lastConflictResolvedState.set(task.id, true);</span>
             }
@@ -1516,7 +1518,7 @@ interface ConflictInfo {
             case 'merge':
                 // Allow the task to proceed (remove from conflicts)
 <span class="cstat-no" title="statement not covered" >                this.conflicts.delete(taskId);</span>
-                
+&nbsp;
                 // Update task fields if task is provided
 <span class="cstat-no" title="statement not covered" >                <span class="missing-if-branch" title="if path not taken" >I</span>if (task) {</span>
                     // Clear conflict-related fields
@@ -1524,7 +1526,7 @@ interface ConflictInfo {
                     // Remove conflict-related blockedBy entries
 <span class="cstat-no" title="statement not covered" >                    task.blockedBy = (task.blockedBy || []).filter(<span class="fstat-no" title="function not covered" >id </span>=&gt; <span class="cstat-no" title="statement not covered" >!conflict.conflictingTasks.includes(id))</span>;</span>
                 }
-                
+&nbsp;
 <span class="cstat-no" title="statement not covered" >                this.logger.info(`Resolved conflict for task ${taskId} by ${resolution}`);</span>
 <span class="cstat-no" title="statement not covered" >                this.eventBus.publish(DOMAIN_EVENTS.TASK_CONFLICT_RESOLVED, { taskId, resolution });</span>
 <span class="cstat-no" title="statement not covered" >                break;</span>
@@ -1562,7 +1564,12 @@ interface ConflictInfo {
     /**
      * Gets tasks that have soft dependencies (prefers) on a specific task
      */
-<span class="fstat-no" title="function not covered" >    getSoftDependents(</span>taskId: string): string[] {
+<span class="fstat-no" title="function not covered" >    getSoftDependents(</span>taskId: string, allTasks?: Task[]): string[] {
+        // If allTasks provided, rebuild graph to ensure it's up to date
+<span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (allTasks) {</span>
+<span class="cstat-no" title="statement not covered" >            this.buildDependencyGraphFromTasks(allTasks);</span>
+        }
+&nbsp;
         const softDependents: string[] = <span class="cstat-no" title="statement not covered" >[];</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >        for (const [candidateId, softDeps] of Object.entries(this.softDependencyGraph)) {</span>
@@ -1600,7 +1607,7 @@ interface ConflictInfo {
      */
     private <span class="fstat-no" title="function not covered" >isTaskReady(</span>task: Task, taskMap: Map&lt;string, Task&gt;): boolean {
         const dependencies = <span class="cstat-no" title="statement not covered" >this.dependencyGraph[task.id] || [];</span>
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        for (const depId of dependencies) {</span>
             const depTask = <span class="cstat-no" title="statement not covered" >taskMap.get(depId);</span>
 <span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (!depTask || depTask.status !== 'completed') {</span>
@@ -1651,28 +1658,27 @@ interface ConflictInfo {
 <span class="cstat-no" title="statement not covered" >        return [];</span>
     }
 &nbsp;
-&nbsp;
     /**
      * Builds precise cycle path from recursion stack
      */
     private <span class="fstat-no" title="function not covered" >buildPreciseCyclePath(</span>cycleStart: string, recursionStack: Set&lt;string&gt;): string[] {
         const cyclePath: string[] = <span class="cstat-no" title="statement not covered" >[];</span>
         const stackArray = <span class="cstat-no" title="statement not covered" >Array.from(recursionStack);</span>
-        
+&nbsp;
         // Find the index of the cycle start in the recursion stack
         const startIndex = <span class="cstat-no" title="statement not covered" >stackArray.indexOf(cycleStart);</span>
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (startIndex === -1) {</span>
 <span class="cstat-no" title="statement not covered" >            return [cycleStart]; </span>// Fallback
         }
-        
+&nbsp;
         // Extract the cycle from the recursion stack
 <span class="cstat-no" title="statement not covered" >        for (let i = <span class="cstat-no" title="statement not covered" >startIndex;</span> i &lt; stackArray.length; i++) {</span>
 <span class="cstat-no" title="statement not covered" >            cyclePath.push(stackArray[i]);</span>
         }
-        
+&nbsp;
         // Add the cycle start at the end to complete the cycle
 <span class="cstat-no" title="statement not covered" >        cyclePath.push(cycleStart);</span>
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        return cyclePath;</span>
     }
 &nbsp;
@@ -1774,7 +1780,7 @@ interface ConflictInfo {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-05T12:10:29.099Z
+                at 2025-09-09T01:48:57.414Z
             </div>
         <script src="../prettify.js"></script>
         <script>

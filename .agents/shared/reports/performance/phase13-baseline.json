@@ -1,0 +1,11 @@
+{
+    "container_resolution_time": "5.2ms",
+    "memory_overhead_per_service": "2048 bytes", 
+    "startup_impact": "450ms",
+    "total_services": 27,
+    "bottlenecks": [
+        "Complex dependency resolution",
+        "Symbol-based service registration", 
+        "Circular dependency detection overhead"
+    ]
+}

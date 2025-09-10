@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { Task, Agent } from '../agents/types';
-import { ILoggingService, IConfigurationService, ICapabilityMatcher } from '../services/interfaces';
+import { ILogger, IConfiguration, ICapabilityMatcher } from '../services/interfaces';
 
 interface ScoringWeights {
     capabilityMatch: number;
@@ -27,8 +27,8 @@ interface AgentScore {
 }
 
 export class CapabilityMatcher implements ICapabilityMatcher {
-    private readonly logger: ILoggingService;
-    private readonly configService: IConfigurationService;
+    private readonly logger: ILogger;
+    private readonly configService: IConfiguration;
     private weights: ScoringWeights;
     private customAgentThreshold: number;
     private configChangeDisposable?: vscode.Disposable;
@@ -49,7 +49,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         ['database', ['database', 'backend']]
     ]);
 
-    constructor(loggingService: ILoggingService, configService: IConfigurationService) {
+    constructor(loggingService: ILogger, configService: IConfiguration) {
         this.logger = loggingService;
         this.configService = configService;
 
@@ -71,7 +71,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         // Load weights from configuration
         this.loadWeightsFromConfig();
 
-        // Listen to configuration changes using proper IConfigurationService API
+        // Listen to configuration changes using proper IConfiguration API
         this.configChangeDisposable = this.configService.onDidChange((e: vscode.ConfigurationChangeEvent) => {
             if (
                 e.affectsConfiguration('nofx.matcher.weights') ||
@@ -95,7 +95,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
      */
     scoreAgentWithBreakdown(agent: Agent, task: Task): { score: number; breakdown: AgentScore['breakdown'] } {
         const breakdown = this.calculateScoreBreakdown(agent, task);
-        
+
         // Ensure all breakdown values are finite numbers
         const safeBreakdown = {
             capabilityMatch: Number.isFinite(breakdown.capabilityMatch) ? breakdown.capabilityMatch : 0,
@@ -104,7 +104,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
             workloadFactor: Number.isFinite(breakdown.workloadFactor) ? breakdown.workloadFactor : 0,
             performanceFactor: Number.isFinite(breakdown.performanceFactor) ? breakdown.performanceFactor : 0
         };
-        
+
         const totalScore =
             safeBreakdown.capabilityMatch * this.weights.capabilityMatch +
             safeBreakdown.specializationMatch * this.weights.specializationMatch +
@@ -114,7 +114,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
 
         // Ensure total score is finite, otherwise default to 0
         const safeTotalScore = Number.isFinite(totalScore) ? totalScore : 0;
-        
+
         // Clamp total score to [0, 1] range
         const clampedScore = Math.max(0, Math.min(1, safeTotalScore));
 
@@ -183,7 +183,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         // Safely handle null/undefined arrays
         const agentCaps = Array.isArray(agentCapabilities) ? agentCapabilities : [];
         const requiredCaps = Array.isArray(requiredCapabilities) ? requiredCapabilities : [];
-        
+
         if (requiredCaps.length === 0) {
             return 1.0; // No requirements means perfect match
         }
@@ -335,8 +335,14 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         const safeTaskDescription = taskDescription || '';
         const safeTags = Array.isArray(taskTags) ? taskTags : [];
 
-        const specializationWords = specialization.toLowerCase().split(/[,\s]+/).filter(word => word.length > 0);
-        const descriptionWords = safeTaskDescription.toLowerCase().split(/\s+/).filter(word => word.length > 0);
+        const specializationWords = specialization
+            .toLowerCase()
+            .split(/[,\s]+/)
+            .filter(word => word.length > 0);
+        const descriptionWords = safeTaskDescription
+            .toLowerCase()
+            .split(/\s+/)
+            .filter(word => word.length > 0);
         const tagWords = safeTags.map(tag => (tag || '').toLowerCase()).filter(tag => tag.length > 0);
 
         let matchCount = 0;
@@ -396,7 +402,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
         if (!task) {
             return null;
         }
-        
+
         const description = task.description || '';
         const tags = Array.isArray(task.tags) ? task.tags : [];
         const text = `${description} ${tags.join(' ')}`.toLowerCase();
@@ -588,7 +594,7 @@ export class CapabilityMatcher implements ICapabilityMatcher {
     private loadWeightsFromConfig(): void {
         if (!this.configService) return;
 
-        // Use proper IConfigurationService API with get<T>(key, default?)
+        // Use proper IConfiguration API with get<T>(key, default?)
         this.weights.capabilityMatch = this.configService.get<number>(
             'nofx.matcher.weights.capabilityMatch',
             this.weights.capabilityMatch

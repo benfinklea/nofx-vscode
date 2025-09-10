@@ -11,7 +11,9 @@ import { MessageValidator } from '../../../services/MessageValidator';
 import { ConnectionPoolService } from '../../../services/ConnectionPoolService';
 import { createMockConfigurationService } from '../../helpers/mockFactories';
 import * as vscode from 'vscode';
-
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';
 // Mock WebSocket to avoid real network connections
 jest.mock('ws', () => {
     const EventEmitter = require('events');

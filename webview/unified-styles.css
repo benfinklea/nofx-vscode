@@ -1,0 +1,77 @@
+/* Unified NofX Webview Styles */
+:root {
+    --nofx-primary: #007ACC;
+    --nofx-secondary: #40A9FF;
+    --nofx-success: #52C41A;
+    --nofx-warning: #FAAD14;
+    --nofx-error: #F5222D;
+}
+
+body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
+    padding: 20px;
+    margin: 0;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.content {
+    padding: 20px 0;
+}
+
+.card {
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.card-header {
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-active { background: var(--nofx-success); color: white; }
+.status-pending { background: var(--nofx-warning); color: white; }
+.status-error { background: var(--nofx-error); color: white; }
+
+button {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+button:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+button:active {
+    transform: translateY(1px);
+}

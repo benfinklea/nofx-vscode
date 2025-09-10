@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { IConductorViewModel, ILoggingService, IWebviewHost, WebviewHostFactory } from '../services/interfaces';
+import { IConductorViewModel, ILogger, IWebviewHost, WebviewHostFactory } from '../services/interfaces';
 import { createWebviewHost } from '../ui/WebviewHost';
 import { ConductorTemplate } from '../templates/ConductorTemplate';
 import { PanelBinder } from './panelBinder';
@@ -15,7 +15,7 @@ export class EnhancedConductorPanel {
         webviewHost: IWebviewHost,
         private context: vscode.ExtensionContext,
         private viewModel: IConductorViewModel,
-        private loggingService: ILoggingService
+        private loggingService: ILogger
     ) {
         this.webviewHost = webviewHost;
         this.template = new ConductorTemplate(context);
@@ -42,7 +42,7 @@ export class EnhancedConductorPanel {
     public static create(
         context: vscode.ExtensionContext,
         viewModel: IConductorViewModel,
-        loggingService: ILoggingService,
+        loggingService: ILogger,
         webviewHostFactory: WebviewHostFactory = createWebviewHost
     ): EnhancedConductorPanel {
         const panel = vscode.window.createWebviewPanel(
@@ -70,7 +70,7 @@ export class EnhancedConductorPanel {
     public static createOrShow(
         context: vscode.ExtensionContext,
         viewModel: IConductorViewModel,
-        loggingService: ILoggingService
+        loggingService: ILogger
     ): EnhancedConductorPanel {
         if (EnhancedConductorPanel.currentPanel) {
             EnhancedConductorPanel.currentPanel.reveal();

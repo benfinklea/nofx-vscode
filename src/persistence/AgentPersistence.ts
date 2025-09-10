@@ -3,8 +3,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { promises as fsPromises } from 'fs';
 import { Agent } from '../agents/types';
-import { ILoggingService } from '../services/interfaces';
-
+import { ILogger } from '../services/interfaces';
+import { getAppStateStore } from '../state/AppStateStore';
+import * as selectors from '../state/selectors';
+import * as actions from '../state/actions';
 /**
  * Handles persistence of agents and their context across sessions
  */
@@ -14,9 +16,9 @@ export class AgentPersistence {
     private stateFile: string;
     private nofxDir: string;
     private sessionsDir: string;
-    private loggingService?: ILoggingService;
+    private loggingService?: ILogger;
 
-    constructor(workspaceRoot: string, loggingService?: ILoggingService) {
+    constructor(workspaceRoot: string, loggingService?: ILogger) {
         this.loggingService = loggingService;
         // Create .nofx directory in workspace for persistence
         this.persistenceDir = path.join(workspaceRoot, '.nofx');

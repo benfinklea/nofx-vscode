@@ -1,17 +1,13 @@
 import * as vscode from 'vscode';
-import { ITreeViewHost, ILoggingService, ITreeDataProviderWithRefresh } from '../services/interfaces';
+import { ITreeViewHost, ILogger, ITreeDataProviderWithRefresh } from '../services/interfaces';
 
 export class TreeViewHost implements ITreeViewHost {
     private treeView: vscode.TreeView<any>;
     private dataProvider?: ITreeDataProviderWithRefresh;
-    private loggingService?: ILoggingService;
+    private loggingService?: ILogger;
     private subscriptions: vscode.Disposable[] = [];
 
-    constructor(
-        treeView: vscode.TreeView<any>,
-        dataProvider?: ITreeDataProviderWithRefresh,
-        loggingService?: ILoggingService
-    ) {
+    constructor(treeView: vscode.TreeView<any>, dataProvider?: ITreeDataProviderWithRefresh, loggingService?: ILogger) {
         this.treeView = treeView;
         this.dataProvider = dataProvider;
         this.loggingService = loggingService;
@@ -24,7 +20,7 @@ export class TreeViewHost implements ITreeViewHost {
     static create(
         treeView: vscode.TreeView<any>,
         dataProvider?: ITreeDataProviderWithRefresh,
-        loggingService?: ILoggingService
+        loggingService?: ILogger
     ): TreeViewHost {
         return new TreeViewHost(treeView, dataProvider, loggingService);
     }

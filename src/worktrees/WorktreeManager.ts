@@ -6,7 +6,7 @@ import * as fsSync from 'fs';
 import { execSync, exec } from 'child_process';
 import { promisify } from 'util';
 import { Agent } from '../agents/types';
-import { ILoggingService, INotificationService } from '../services/interfaces';
+import { ILogger, INotificationService } from '../services/interfaces';
 
 const execAsync = promisify(exec);
 
@@ -48,18 +48,18 @@ export class WorktreeManager {
     private workspacePath: string;
     private stateFile: string;
     private backupDir: string;
-    private loggingService?: ILoggingService;
+    private loggingService?: ILogger;
     private notificationService?: INotificationService;
     private readonly MAX_RETRIES = 3;
     private readonly RETRY_DELAY = 1000; // ms
     private readonly HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
     private healthCheckTimer?: NodeJS.Timeout;
 
-    constructor(workspacePath: string, loggingService?: ILoggingService, notificationService?: INotificationService) {
+    constructor(workspacePath: string, loggingService?: ILogger, notificationService?: INotificationService) {
         this.workspacePath = workspacePath;
         this.loggingService = loggingService;
         this.notificationService = notificationService;
-        
+
         // Create worktrees in a .nofx-worktrees directory adjacent to the project
         this.baseDir = path.join(path.dirname(workspacePath), '.nofx-worktrees');
         this.stateFile = path.join(this.baseDir, '.worktree-state.json');
@@ -103,12 +103,12 @@ export class WorktreeManager {
         try {
             const stateData = await fsPromises.readFile(this.stateFile, 'utf-8');
             const states: WorktreeState[] = JSON.parse(stateData);
-            
+
             for (const state of states) {
                 this.worktreeStates.set(state.agentId, state);
                 this.worktrees.set(state.agentId, state.worktreePath);
             }
-            
+
             this.loggingService?.info(`Loaded ${states.length} worktree states from persistence`);
         } catch (error) {
             // State file doesn't exist or is corrupted - start fresh
@@ -126,8 +126,9 @@ export class WorktreeManager {
     }
 
     private async recoverIncompleteOperations(): Promise<void> {
-        const incompleteOperations = Array.from(this.worktreeStates.values())
-            .filter(state => state.status === 'creating' || state.status === 'removing');
+        const incompleteOperations = Array.from(this.worktreeStates.values()).filter(
+            state => state.status === 'creating' || state.status === 'removing'
+        );
 
         for (const state of incompleteOperations) {
             try {
@@ -144,7 +145,7 @@ export class WorktreeManager {
                 state.errorCount++;
             }
         }
-        
+
         await this.saveState();
     }
 
@@ -179,7 +180,7 @@ export class WorktreeManager {
     }
 
     private async performHealthCheck(): Promise<void> {
-        for (const [agentId, worktreePath] of this.worktrees.entries()) {
+        for (const [agentId, worktreePath] of Array.from(this.worktrees.entries())) {
             const state = this.worktreeStates.get(agentId);
             if (!state || state.status !== 'active') continue;
 
@@ -224,7 +225,7 @@ export class WorktreeManager {
                 return await operation();
             } catch (error) {
                 lastError = error as Error;
-                
+
                 if (attempt === maxRetries) {
                     break;
                 }
@@ -232,8 +233,10 @@ export class WorktreeManager {
                 // Wait before retrying with exponential backoff
                 const delay = this.RETRY_DELAY * Math.pow(2, attempt - 1);
                 await new Promise(resolve => setTimeout(resolve, delay));
-                
-                this.loggingService?.debug(`Retrying operation (attempt ${attempt + 1}/${maxRetries}) after ${delay}ms`);
+
+                this.loggingService?.debug(
+                    `Retrying operation (attempt ${attempt + 1}/${maxRetries}) after ${delay}ms`
+                );
             }
         }
 
@@ -246,11 +249,11 @@ export class WorktreeManager {
                 cwd: cwd || this.workspacePath,
                 encoding: 'utf-8'
             });
-            
+
             if (stderr && !stderr.includes('warning:')) {
                 throw new Error(`Git command failed: ${stderr}`);
             }
-            
+
             return stdout.trim();
         });
     }
@@ -258,10 +261,10 @@ export class WorktreeManager {
     private async createBackup(worktreePath: string): Promise<WorktreeBackup> {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const backupPath = path.join(this.backupDir, `backup-${timestamp}`);
-        
+
         // Copy worktree to backup location
         await fsPromises.cp(worktreePath, backupPath, { recursive: true });
-        
+
         return {
             originalPath: worktreePath,
             backupPath,
@@ -291,7 +294,7 @@ export class WorktreeManager {
                 // Create state entry immediately to track operation
                 const branchName = `agent-${agent.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
                 const worktreePath = path.join(this.baseDir, agent.id);
-                
+
                 const state: WorktreeState = {
                     agentId: agent.id,
                     agentName: agent.name,
@@ -302,7 +305,7 @@ export class WorktreeManager {
                     status: 'creating',
                     errorCount: 0
                 };
-                
+
                 this.worktreeStates.set(agent.id, state);
                 this.worktrees.set(agent.id, state.worktreePath);
                 await this.saveState();
@@ -337,14 +340,14 @@ export class WorktreeManager {
                     state.status = 'error';
                     state.errorCount++;
                     await this.saveState();
-                    
+
                     // Try to clean up partial worktree
                     try {
                         await this.executeGitCommand(`git worktree remove "${state.worktreePath}" --force`);
                     } catch {
                         // Ignore cleanup errors
                     }
-                    
+
                     this.worktrees.delete(agent.id);
                 }
 
@@ -354,7 +357,7 @@ export class WorktreeManager {
                     agent.id,
                     error as Error
                 );
-                
+
                 this.loggingService?.error('Worktree creation failed:', operationError);
                 throw operationError;
             }
@@ -370,13 +373,13 @@ export class WorktreeManager {
             branchName: state.branchName,
             createdAt: state.createdAt
         };
-        
+
         await fsPromises.writeFile(markerPath, JSON.stringify(markerData, null, 2));
     }
 
     private async updateGitignore(worktreePath: string): Promise<void> {
         const gitignorePath = path.join(worktreePath, '.gitignore');
-        
+
         try {
             const gitignoreContent = await fsPromises.readFile(gitignorePath, 'utf-8');
             if (!gitignoreContent.includes('.nofx-agent')) {
@@ -651,7 +654,7 @@ export class WorktreeManager {
 
         let totalSize = 0;
         try {
-            for (const worktreePath of this.worktrees.values()) {
+            for (const worktreePath of Array.from(this.worktrees.values())) {
                 if (fsSync.existsSync(worktreePath)) {
                     // Simple size calculation - in production you might want something more sophisticated
                     const stats = fsSync.statSync(worktreePath);

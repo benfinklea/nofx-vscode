@@ -366,7 +366,8 @@
 <a name='L301'></a><a href='#L301'>301</a>
 <a name='L302'></a><a href='#L302'>302</a>
 <a name='L303'></a><a href='#L303'>303</a>
-<a name='L304'></a><a href='#L304'>304</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -668,6 +669,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import * as vscode from 'vscode';
 <span class="cstat-no" title="statement not covered" >import * as fs from 'fs';</span>
@@ -686,7 +688,7 @@ import { ILoggingService } from '../services/interfaces';
     private nofxDir: string;
     private sessionsDir: string;
     private loggingService?: ILoggingService;
-    
+&nbsp;
 <span class="fstat-no" title="function not covered" >    constructor(w</span>orkspaceRoot: string, loggingService?: ILoggingService) {
 <span class="cstat-no" title="statement not covered" >        this.loggingService = loggingService;</span>
         // Create .nofx directory in workspace for persistence
@@ -695,10 +697,10 @@ import { ILoggingService } from '../services/interfaces';
 <span class="cstat-no" title="statement not covered" >        this.agentSessionsDir = path.join(this.persistenceDir, 'sessions');</span>
 <span class="cstat-no" title="statement not covered" >        this.sessionsDir = this.agentSessionsDir; </span>// Alias for compatibility
 <span class="cstat-no" title="statement not covered" >        this.stateFile = path.join(this.persistenceDir, 'agents.json');</span>
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        this.ensureDirectories();</span>
     }
-    
+&nbsp;
     /**
      * Ensure persistence directories exist
      */
@@ -712,7 +714,7 @@ import { ILoggingService } from '../services/interfaces';
 <span class="cstat-no" title="statement not covered" >            this.loggingService?.debug(`Created sessions directory: ${this.agentSessionsDir}`);</span>
         }
     }
-    
+&nbsp;
     /**
      * Save agent state and metadata
      */
@@ -732,22 +734,22 @@ import { ILoggingService } from '../services/interfaces';
                 createdAt: agent.startTime
             }))
         };
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        fs.writeFileSync(this.stateFile, JSON.stringify(state, null, 2));</span>
 <span class="cstat-no" title="statement not covered" >        this.loggingService?.debug(`Saved state for ${agents.length} agents`);</span>
     }
-    
+&nbsp;
     /**
      * Load saved agent state
      */
 <span class="fstat-no" title="function not covered" >    async </span>loadAgentState(): Promise&lt;any[]&gt; {
 <span class="cstat-no" title="statement not covered" >        this.loggingService?.debug(`Looking for state file: ${this.stateFile}`);</span>
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (!fs.existsSync(this.stateFile)) {</span>
 <span class="cstat-no" title="statement not covered" >            this.loggingService?.debug('No state file found');</span>
 <span class="cstat-no" title="statement not covered" >            return [];</span>
         }
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        try {</span>
             const content = <span class="cstat-no" title="statement not covered" >fs.readFileSync(this.stateFile, 'utf-8');</span>
             const state = <span class="cstat-no" title="statement not covered" >JSON.parse(content);</span>
@@ -758,13 +760,13 @@ import { ILoggingService } from '../services/interfaces';
 <span class="cstat-no" title="statement not covered" >            return [];</span>
         }
     }
-    
+&nbsp;
     /**
      * Save agent's Claude session/chat history
      */
 <span class="fstat-no" title="function not covered" >    async </span>saveAgentSession(agentId: string, content: string, append: boolean = <span class="branch-0 cbranch-no" title="branch not covered" >true)</span> {
         const sessionFile = <span class="cstat-no" title="statement not covered" >path.join(this.agentSessionsDir, this.getSessionFileName(agentId));</span>
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        if (append &amp;&amp; fs.existsSync(sessionFile)) {</span>
             // Append to existing session
             const timestamp = <span class="cstat-no" title="statement not covered" >new Date().toISOString();</span>
@@ -775,20 +777,20 @@ import { ILoggingService } from '../services/interfaces';
             const header = <span class="cstat-no" title="statement not covered" >`# Agent Session: ${agentId}\n# Started: ${new Date().toISOString()}\n\n`;</span>
 <span class="cstat-no" title="statement not covered" >            fs.writeFileSync(sessionFile, header + content);</span>
         }
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        this.loggingService?.debug(`Saved session for agent ${agentId}`);</span>
     }
-    
+&nbsp;
     /**
      * Load agent's previous session
      */
 <span class="fstat-no" title="function not covered" >    async </span>loadAgentSession(agentId: string): Promise&lt;string | null&gt; {
         const sessionFile = <span class="cstat-no" title="statement not covered" >path.join(this.agentSessionsDir, this.getSessionFileName(agentId));</span>
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (!fs.existsSync(sessionFile)) {</span>
 <span class="cstat-no" title="statement not covered" >            return null;</span>
         }
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        try {</span>
             const content = <span class="cstat-no" title="statement not covered" >fs.readFileSync(sessionFile, 'utf-8');</span>
 <span class="cstat-no" title="statement not covered" >            this.loggingService?.debug(`Loaded session for agent ${agentId}`);</span>
@@ -798,7 +800,7 @@ import { ILoggingService } from '../services/interfaces';
 <span class="cstat-no" title="statement not covered" >            return null;</span>
         }
     }
-    
+&nbsp;
     /**
      * Save a checkpoint of current conversation
      */
@@ -808,9 +810,9 @@ import { ILoggingService } from '../services/interfaces';
             user: userMessage,
             agent: agentResponse
         };
-        
+&nbsp;
         const checkpointFile = <span class="cstat-no" title="statement not covered" >path.join(this.agentSessionsDir, `${agentId}_checkpoint.json`);</span>
-        
+&nbsp;
         let checkpoints = <span class="cstat-no" title="statement not covered" >[];</span>
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (fs.existsSync(checkpointFile)) {</span>
 <span class="cstat-no" title="statement not covered" >            try {</span>
@@ -820,34 +822,34 @@ import { ILoggingService } from '../services/interfaces';
 <span class="cstat-no" title="statement not covered" >                this.loggingService?.error('Error loading checkpoints:', error);</span>
             }
         }
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        checkpoints.push(checkpoint);</span>
-        
+&nbsp;
         // Keep only last 100 checkpoints
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (checkpoints.length &gt; 100) {</span>
 <span class="cstat-no" title="statement not covered" >            checkpoints = checkpoints.slice(-100);</span>
         }
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        fs.writeFileSync(checkpointFile, JSON.stringify(checkpoints, null, 2));</span>
     }
-    
+&nbsp;
     /**
      * Get context summary for agent restoration
      */
 <span class="fstat-no" title="function not covered" >    async </span>getAgentContextSummary(agentId: string): Promise&lt;string&gt; {
         const sessionContent = <span class="cstat-no" title="statement not covered" >await this.loadAgentSession(agentId);</span>
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (!sessionContent) {</span>
 <span class="cstat-no" title="statement not covered" >            return '';</span>
         }
-        
+&nbsp;
         // Extract last N lines or last N characters for context
         const lines = <span class="cstat-no" title="statement not covered" >sessionContent.split('\n');</span>
         const recentLines = <span class="cstat-no" title="statement not covered" >lines.slice(-50);</span> // Last 50 lines
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        return `Previous session context:\n${recentLines.join('\n')}`;</span>
     }
-    
+&nbsp;
     /**
      * Archive old sessions
      */
@@ -856,15 +858,15 @@ import { ILoggingService } from '../services/interfaces';
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (!fs.existsSync(archiveDir)) {</span>
 <span class="cstat-no" title="statement not covered" >            fs.mkdirSync(archiveDir);</span>
         }
-        
+&nbsp;
         const now = <span class="cstat-no" title="statement not covered" >Date.now();</span>
         const maxAge = <span class="cstat-no" title="statement not covered" >daysOld * 24 * 60 * 60 * 1000;</span>
-        
+&nbsp;
         const files = <span class="cstat-no" title="statement not covered" >fs.readdirSync(this.agentSessionsDir);</span>
 <span class="cstat-no" title="statement not covered" >        for (const file of files) {</span>
             const filePath = <span class="cstat-no" title="statement not covered" >path.join(this.agentSessionsDir, file);</span>
             const stats = <span class="cstat-no" title="statement not covered" >fs.statSync(filePath);</span>
-            
+&nbsp;
 <span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (now - stats.mtime.getTime() &gt; maxAge) {</span>
                 const archivePath = <span class="cstat-no" title="statement not covered" >path.join(archiveDir, file);</span>
 <span class="cstat-no" title="statement not covered" >                fs.renameSync(filePath, archivePath);</span>
@@ -872,7 +874,7 @@ import { ILoggingService } from '../services/interfaces';
             }
         }
     }
-    
+&nbsp;
     /**
      * Clean up persistence data
      */
@@ -881,42 +883,42 @@ import { ILoggingService } from '../services/interfaces';
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (fs.existsSync(this.stateFile)) {</span>
 <span class="cstat-no" title="statement not covered" >            fs.unlinkSync(this.stateFile);</span>
         }
-        
+&nbsp;
         // Remove all session files
         const files = <span class="cstat-no" title="statement not covered" >fs.readdirSync(this.agentSessionsDir);</span>
 <span class="cstat-no" title="statement not covered" >        for (const file of files) {</span>
 <span class="cstat-no" title="statement not covered" >            fs.unlinkSync(path.join(this.agentSessionsDir, file));</span>
         }
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        this.loggingService?.info('Cleaned up all persistence data');</span>
     }
-    
+&nbsp;
     /**
      * Export all sessions as markdown
      */
 <span class="fstat-no" title="function not covered" >    async </span>exportSessionsAsMarkdown(): Promise&lt;string&gt; {
         const exportPath = <span class="cstat-no" title="statement not covered" >path.join(this.persistenceDir, `export_${Date.now()}.md`);</span>
         let content = <span class="cstat-no" title="statement not covered" >'# NofX Agent Sessions Export\n\n';</span>
-        
+&nbsp;
         const state = <span class="cstat-no" title="statement not covered" >await this.loadAgentState();</span>
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        for (const agent of state) {</span>
 <span class="cstat-no" title="statement not covered" >            content += `## Agent: ${agent.name} (${agent.type})\n\n`;</span>
 <span class="cstat-no" title="statement not covered" >            content += `- ID: ${agent.id}\n`;</span>
 <span class="cstat-no" title="statement not covered" >            content += `- Status: ${agent.status}\n`;</span>
 <span class="cstat-no" title="statement not covered" >            content += `- Tasks Completed: ${agent.tasksCompleted}\n\n`;</span>
-            
+&nbsp;
             const session = <span class="cstat-no" title="statement not covered" >await this.loadAgentSession(agent.id);</span>
 <span class="cstat-no" title="statement not covered" >            <span class="missing-if-branch" title="if path not taken" >I</span>if (session) {</span>
 <span class="cstat-no" title="statement not covered" >                content += '### Session History\n\n';</span>
 <span class="cstat-no" title="statement not covered" >                content += '```\n' + session + '\n```\n\n';</span>
             }
         }
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        fs.writeFileSync(exportPath, content);</span>
 <span class="cstat-no" title="statement not covered" >        return exportPath;</span>
     }
-    
+&nbsp;
     private <span class="fstat-no" title="function not covered" >getSessionFileName(</span>agentId: string): string {
 <span class="cstat-no" title="statement not covered" >        return `${agentId}_session.md`;</span>
     }
@@ -972,14 +974,15 @@ import { ILoggingService } from '../services/interfaces';
 <span class="cstat-no" title="statement not covered" >        this.loggingService?.info(`Archived sessions to ${archivePath}`);</span>
 <span class="cstat-no" title="statement not covered" >        return archivePath;</span>
     }
-}</pre></td></tr></table></pre>
+}
+&nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-05T12:10:29.099Z
+                at 2025-09-09T01:48:57.414Z
             </div>
         <script src="../prettify.js"></script>
         <script>

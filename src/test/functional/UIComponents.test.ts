@@ -3,7 +3,7 @@ import { Container } from '../../services/Container';
 import { SERVICE_TOKENS } from '../../services/interfaces';
 import { AgentTreeProvider } from '../../views/AgentTreeProvider';
 import { TaskTreeProvider } from '../../views/TaskTreeProvider';
-import { TreeStateManager } from '../../services/TreeStateManager';
+import { UIStateManager } from '../../services/UIStateManager';
 import { UIStateManager } from '../../services/UIStateManager';
 import { EventBus } from '../../services/EventBus';
 import { DOMAIN_EVENTS } from '../../services/EventConstants';
@@ -16,7 +16,9 @@ import { ConfigurationService } from '../../services/ConfigurationService';
 import { setupMockWorkspace, clearMockWorkspace } from './setup';
 import { TestHarness } from './testHarness';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../state/AppStateStore';
+import * as selectors from '../../state/selectors';
+import * as actions from '../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,
@@ -82,7 +84,7 @@ describe('UI Components', () => {
 
         // Create tree providers with real UIStateManager
         const uiStateManager = new UIStateManager(eventBus, loggingService, agentManager, taskQueue);
-        const treeStateManager = new TreeStateManager(uiStateManager, eventBus, loggingService);
+        const treeStateManager = new UIStateManager(uiStateManager, eventBus, loggingService);
 
         agentTreeProvider = new AgentTreeProvider(treeStateManager, uiStateManager);
         taskTreeProvider = new TaskTreeProvider(uiStateManager, container);

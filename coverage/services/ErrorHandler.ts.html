@@ -279,11 +279,7 @@
 <a name='L214'></a><a href='#L214'>214</a>
 <a name='L215'></a><a href='#L215'>215</a>
 <a name='L216'></a><a href='#L216'>216</a>
-<a name='L217'></a><a href='#L217'>217</a>
-<a name='L218'></a><a href='#L218'>218</a>
-<a name='L219'></a><a href='#L219'>219</a>
-<a name='L220'></a><a href='#L220'>220</a>
-<a name='L221'></a><a href='#L221'>221</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L217'></a><a href='#L217'>217</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -410,10 +406,6 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -547,7 +539,7 @@ import { IErrorHandler, ErrorSeverity, ILoggingService, INotificationService } f
 &nbsp;
     private <span class="fstat-no" title="function not covered" >getErrorMessage(</span>error: Error, context?: string): string {
         let message = <span class="cstat-no" title="statement not covered" >error.message || 'An unknown error occurred';</span>
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (context) {</span>
 <span class="cstat-no" title="statement not covered" >            message = `${context}: ${message}`;</span>
         }
@@ -566,7 +558,7 @@ import { IErrorHandler, ErrorSeverity, ILoggingService, INotificationService } f
 &nbsp;
     private <span class="fstat-no" title="function not covered" >getNotificationMessage(</span>error: Error, context?: string, severity?: ErrorSeverity): string {
         const baseMessage = <span class="cstat-no" title="statement not covered" >this.getErrorMessage(error, context);</span>
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        switch (severity) {</span>
             case 'high':
 <span class="cstat-no" title="statement not covered" >                return `Critical Error: ${baseMessage}`;</span>
@@ -597,7 +589,7 @@ import { IErrorHandler, ErrorSeverity, ILoggingService, INotificationService } f
         // Show notification based on severity and frequency
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (this.shouldShowNotification(context || 'unknown', severity)) {</span>
             const notificationMessage = <span class="cstat-no" title="statement not covered" >this.getNotificationMessage(error, context, severity);</span>
-            
+&nbsp;
             // Use appropriate notification method based on severity
 <span class="cstat-no" title="statement not covered" >            switch (severity) {</span>
                 case 'high':
@@ -633,27 +625,23 @@ import { IErrorHandler, ErrorSeverity, ILoggingService, INotificationService } f
         }
     }
 &nbsp;
-<span class="fstat-no" title="function not covered" >    async </span>withRetry&lt;T&gt;(
-        operation: () =&gt; Promise&lt;T&gt;, 
-        maxRetries: number = <span class="branch-0 cbranch-no" title="branch not covered" >3, </span>
-        context?: string
-    ): Promise&lt;T&gt; {
+<span class="fstat-no" title="function not covered" >    async </span>withRetry&lt;T&gt;(operation: () =&gt; Promise&lt;T&gt;, maxRetries: number = <span class="branch-0 cbranch-no" title="branch not covered" >3,</span> context?: string): Promise&lt;T&gt; {
         let lastError: Error | undefined;
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        for (let attempt = <span class="cstat-no" title="statement not covered" >1;</span> attempt &lt;= maxRetries; attempt++) {</span>
 <span class="cstat-no" title="statement not covered" >            try {</span>
 <span class="cstat-no" title="statement not covered" >                return await operation();</span>
             } catch (error) {
 <span class="cstat-no" title="statement not covered" >                lastError = error instanceof Error ? error : new Error(String(error));</span>
-                
+&nbsp;
 <span class="cstat-no" title="statement not covered" >                if (attempt &lt; maxRetries) {</span>
                     const retryMessage = <span class="cstat-no" title="statement not covered" >`Attempt ${attempt}/${maxRetries} failed, retrying...`;</span>
-<span class="cstat-no" title="statement not covered" >                    this.loggingService.warn(retryMessage, { </span>
-                        context, 
+<span class="cstat-no" title="statement not covered" >                    this.loggingService.warn(retryMessage, {</span>
+                        context,
                         error: lastError.message,
-                        attempt 
+                        attempt
                     });
-                    
+&nbsp;
                     // Exponential backoff: wait 1s, 2s, 4s, etc.
                     const delay = <span class="cstat-no" title="statement not covered" >Math.pow(2, attempt - 1) * 1000;</span>
 <span class="cstat-no" title="statement not covered" >                    await new Promise(<span class="fstat-no" title="function not covered" >resolve </span>=&gt; <span class="cstat-no" title="statement not covered" >setTimeout(resolve, delay))</span>;</span>
@@ -666,7 +654,7 @@ import { IErrorHandler, ErrorSeverity, ILoggingService, INotificationService } f
                 }
             }
         }
-        
+&nbsp;
         // If we get here, all retries failed
 <span class="cstat-no" title="statement not covered" >        this.handleError(lastError!, context, 'high');</span>
 <span class="cstat-no" title="statement not covered" >        throw lastError!;</span>
@@ -709,12 +697,12 @@ import { IErrorHandler, ErrorSeverity, ILoggingService, INotificationService } f
     // Get error statistics for debugging
 <span class="fstat-no" title="function not covered" >    getErrorStats(</span>): { context: string; count: number; lastTime: number }[] {
         const stats: { context: string; count: number; lastTime: number }[] = <span class="cstat-no" title="statement not covered" >[];</span>
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        for (const [context, count] of this.errorCounts.entries()) {</span>
             const lastTime = <span class="cstat-no" title="statement not covered" >this.lastErrorTimes.get(context) || 0;</span>
 <span class="cstat-no" title="statement not covered" >            stats.push({ context, count, lastTime });</span>
         }
-        
+&nbsp;
 <span class="cstat-no" title="statement not covered" >        return stats;</span>
     }
 &nbsp;
@@ -730,7 +718,7 @@ import { IErrorHandler, ErrorSeverity, ILoggingService, INotificationService } f
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-05T12:10:29.182Z
+                at 2025-09-09T01:48:57.497Z
             </div>
         <script src="../prettify.js"></script>
         <script>

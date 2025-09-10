@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
-import { IWebviewHost, ILoggingService } from '../services/interfaces';
+import { IWebviewHost, ILogger } from '../services/interfaces';
 
 export class PanelBinder {
     private subscriptions: vscode.Disposable[] = [];
     private disposed = false;
 
-    private constructor(private loggingService: ILoggingService) {}
+    private constructor(private loggingService: ILogger) {}
 
-    public static create(loggingService: ILoggingService): PanelBinder {
+    public static create(loggingService: ILogger): PanelBinder {
         return new PanelBinder(loggingService);
     }
 

@@ -276,10 +276,7 @@
 <a name='L211'></a><a href='#L211'>211</a>
 <a name='L212'></a><a href='#L212'>212</a>
 <a name='L213'></a><a href='#L213'>213</a>
-<a name='L214'></a><a href='#L214'>214</a>
-<a name='L215'></a><a href='#L215'>215</a>
-<a name='L216'></a><a href='#L216'>216</a>
-<a name='L217'></a><a href='#L217'>217</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L214'></a><a href='#L214'>214</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -480,10 +477,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -495,6 +488,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">export interface AgentTemplate {
     name: string;
     type: string;
@@ -525,7 +519,7 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_TEMPLAT
         capabilities: ['React', 'TypeScript', 'CSS', 'Testing', 'UI/UX'],
         icon: '⚛️'
     },
-    
+&nbsp;
     'backend-node': {
         name: 'Node.js Backend Developer',
         type: 'backend',
@@ -539,7 +533,7 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_TEMPLAT
         capabilities: ['Node.js', 'APIs', 'Database', 'Auth', 'Performance'],
         icon: '🟢'
     },
-    
+&nbsp;
     'fullstack-next': {
         name: 'Next.js Full-Stack Developer',
         type: 'fullstack',
@@ -553,7 +547,7 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_TEMPLAT
         capabilities: ['Next.js', 'React', 'APIs', 'Database', 'DevOps'],
         icon: '▲'
     },
-    
+&nbsp;
     'mobile-react-native': {
         name: 'React Native Developer',
         type: 'mobile',
@@ -567,7 +561,7 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_TEMPLAT
         capabilities: ['React Native', 'iOS', 'Android', 'Mobile UI', 'Deployment'],
         icon: '📱'
     },
-    
+&nbsp;
     'devops-engineer': {
         name: 'DevOps Engineer',
         type: 'devops',
@@ -581,7 +575,7 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_TEMPLAT
         capabilities: ['Docker', 'Kubernetes', 'CI/CD', 'Cloud', 'IaC'],
         icon: '🚀'
     },
-    
+&nbsp;
     'qa-automation': {
         name: 'QA Automation Engineer',
         type: 'testing',
@@ -595,7 +589,7 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_TEMPLAT
         capabilities: ['E2E Testing', 'Unit Testing', 'Automation', 'Performance', 'QA'],
         icon: '🧪'
     },
-    
+&nbsp;
     'ai-ml-engineer': {
         name: 'AI/ML Engineer',
         type: 'ai',
@@ -609,7 +603,7 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_TEMPLAT
         capabilities: ['Python', 'ML', 'LLMs', 'Data Science', 'AI'],
         icon: '🤖'
     },
-    
+&nbsp;
     'database-architect': {
         name: 'Database Architect',
         type: 'database',
@@ -647,7 +641,7 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_GROUPS:
             AGENT_TEMPLATES['qa-automation']
         ]
     },
-    
+&nbsp;
     'backend-team': {
         name: 'Backend Team',
         description: 'API developer, Database architect, and DevOps',
@@ -657,17 +651,13 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_GROUPS:
             AGENT_TEMPLATES['devops-engineer']
         ]
     },
-    
+&nbsp;
     'fullstack-team': {
         name: 'Full-Stack Team',
         description: 'Next.js developer, Backend engineer, and QA',
-        agents: [
-            AGENT_TEMPLATES['fullstack-next'],
-            AGENT_TEMPLATES['backend-node'],
-            AGENT_TEMPLATES['qa-automation']
-        ]
+        agents: [AGENT_TEMPLATES['fullstack-next'], AGENT_TEMPLATES['backend-node'], AGENT_TEMPLATES['qa-automation']]
     },
-    
+&nbsp;
     'startup-team': {
         name: 'Startup Team',
         description: 'Versatile team for rapid development',
@@ -677,7 +667,7 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_GROUPS:
             AGENT_TEMPLATES['devops-engineer']
         ]
     },
-    
+&nbsp;
     'mobile-team': {
         name: 'Mobile Team',
         description: 'Mobile app development team',
@@ -687,7 +677,7 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_GROUPS:
             AGENT_TEMPLATES['qa-automation']
         ]
     },
-    
+&nbsp;
     'ai-team': {
         name: 'AI/ML Team',
         description: 'AI development and integration',
@@ -702,23 +692,24 @@ export const <span class="cstat-no" title="statement not covered" >AGENT_GROUPS:
 // Helper function to get agent prompt
 <span class="cstat-no" title="statement not covered" >export function <span class="fstat-no" title="function not covered" >g</span>etAgentPrompt(</span>template: AgentTemplate, task?: any): string {
     let prompt = <span class="cstat-no" title="statement not covered" >template.systemPrompt + '\n\n';</span>
-    
+&nbsp;
 <span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (task) {</span>
 <span class="cstat-no" title="statement not covered" >        prompt += `Current Task: ${task.title}\n`;</span>
 <span class="cstat-no" title="statement not covered" >        prompt += `Description: ${task.description}\n\n`;</span>
 <span class="cstat-no" title="statement not covered" >        prompt += `Please complete this task using your expertise in ${template.specialization}.\n`;</span>
 <span class="cstat-no" title="statement not covered" >        prompt += `Focus on: ${template.capabilities.join(', ')}\n`;</span>
     }
-    
+&nbsp;
 <span class="cstat-no" title="statement not covered" >    return prompt;</span>
-}</pre></td></tr></table></pre>
+}
+&nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-09-05T12:10:29.099Z
+                at 2025-09-09T01:48:57.414Z
             </div>
         <script src="../prettify.js"></script>
         <script>

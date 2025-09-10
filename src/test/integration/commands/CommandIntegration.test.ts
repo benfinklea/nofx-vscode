@@ -7,7 +7,9 @@ import { ConfigurationService } from '../../../services/ConfigurationService';
 import { Container } from '../../../services/Container';
 import { SERVICE_TOKENS } from '../../../services/interfaces';
 import { DOMAIN_EVENTS } from '../../../services/EventConstants';
-
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';
 describe('Command Integration', () => {
     let container: Container;
     let agentManager: AgentManager;

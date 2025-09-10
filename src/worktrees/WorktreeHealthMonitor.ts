@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { execSync } from 'child_process';
 import { EventEmitter } from 'events';
-import { ILoggingService, INotificationService } from '../services/interfaces';
+import { ILogger, INotificationService } from '../services/interfaces';
 
 /**
  * Health status of a worktree
@@ -61,11 +61,11 @@ export class WorktreeHealthMonitor extends EventEmitter {
     private monitoringInterval: NodeJS.Timeout | undefined;
     private recoveryQueue: RecoveryAction[] = [];
     private isRecovering = false;
-    
+
     // Configuration
     private readonly config = {
-        checkIntervalMs: 30000,        // 30 seconds
-        staleThresholdMs: 3600000,     // 1 hour
+        checkIntervalMs: 30000, // 30 seconds
+        staleThresholdMs: 3600000, // 1 hour
         maxRecoveryAttempts: 3,
         autoRecoveryEnabled: true,
         criticalDiskUsageMB: 1000,
@@ -73,16 +73,16 @@ export class WorktreeHealthMonitor extends EventEmitter {
         maxUncommittedChanges: 100,
         healthCheckTimeoutMs: 5000
     };
-    
+
     // Metrics
     private totalChecks = 0;
     private totalRecoveries = 0;
     private successfulRecoveries = 0;
     private failedRecoveries = 0;
-    
+
     constructor(
         private workspacePath: string,
-        private loggingService?: ILoggingService,
+        private loggingService?: ILogger,
         private notificationService?: INotificationService
     ) {
         super();
@@ -96,7 +96,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
         this.monitoringInterval = setInterval(async () => {
             await this.performHealthCheck();
         }, this.config.checkIntervalMs);
-        
+
         // Perform initial check
         this.performHealthCheck();
     }
@@ -115,7 +115,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
             recoveryAttempts: 0,
             autoRecoveryEnabled: this.config.autoRecoveryEnabled
         });
-        
+
         this.loggingService?.debug(`Registered worktree for monitoring: ${agentId}`);
         this.emit('worktree:registered', { agentId, path: worktreePath });
     }
@@ -135,25 +135,25 @@ export class WorktreeHealthMonitor extends EventEmitter {
     async performHealthCheck(): Promise<void> {
         this.totalChecks++;
         const startTime = Date.now();
-        
+
         const checks: Promise<void>[] = [];
-        
+
         for (const [agentId, health] of this.healthStates.entries()) {
             checks.push(this.checkWorktreeHealth(agentId, health));
         }
-        
+
         await Promise.all(checks);
-        
+
         // Process recovery queue
         await this.processRecoveryQueue();
-        
+
         const duration = Date.now() - startTime;
-        this.emit('health:check:complete', { 
-            duration, 
+        this.emit('health:check:complete', {
+            duration,
             worktrees: this.healthStates.size,
             healthy: Array.from(this.healthStates.values()).filter(h => h.status === 'healthy').length
         });
-        
+
         // Alert if too many unhealthy worktrees
         this.checkOverallHealth();
     }
@@ -165,7 +165,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
         const issues: HealthIssue[] = [];
         const metrics = this.createEmptyMetrics();
         const checkStart = Date.now();
-        
+
         try {
             // 1. Check if path exists
             const exists = await this.checkPathExists(health.path);
@@ -181,7 +181,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
                 // 2. Check disk usage
                 const diskUsage = await this.checkDiskUsage(health.path);
                 metrics.diskUsageMB = diskUsage;
-                
+
                 if (diskUsage > this.config.criticalDiskUsageMB) {
                     issues.push({
                         type: 'disk-space',
@@ -199,13 +199,13 @@ export class WorktreeHealthMonitor extends EventEmitter {
                         timestamp: new Date()
                     });
                 }
-                
+
                 // 3. Check Git status
                 const gitStatus = await this.checkGitStatus(health.path);
                 metrics.gitStatus = gitStatus.status;
                 metrics.modifiedFiles = gitStatus.modifiedFiles;
                 metrics.uncommittedChanges = gitStatus.uncommittedChanges;
-                
+
                 if (gitStatus.status === 'conflicted') {
                     issues.push({
                         type: 'corrupt',
@@ -215,7 +215,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
                         timestamp: new Date()
                     });
                 }
-                
+
                 if (gitStatus.uncommittedChanges > this.config.maxUncommittedChanges) {
                     issues.push({
                         type: 'stale',
@@ -225,7 +225,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
                         timestamp: new Date()
                     });
                 }
-                
+
                 // 4. Check for locks
                 const isLocked = await this.checkForLocks(health.path);
                 if (isLocked) {
@@ -237,11 +237,11 @@ export class WorktreeHealthMonitor extends EventEmitter {
                         timestamp: new Date()
                     });
                 }
-                
+
                 // 5. Check staleness
                 const lastActivity = await this.getLastActivity(health.path);
                 metrics.lastActivity = lastActivity;
-                
+
                 if (Date.now() - lastActivity.getTime() > this.config.staleThresholdMs) {
                     issues.push({
                         type: 'stale',
@@ -251,7 +251,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
                         timestamp: new Date()
                     });
                 }
-                
+
                 // 6. Check permissions
                 const hasPermissions = await this.checkPermissions(health.path);
                 if (!hasPermissions) {
@@ -264,23 +264,22 @@ export class WorktreeHealthMonitor extends EventEmitter {
                     });
                 }
             }
-            
+
             metrics.responseTimeMs = Date.now() - checkStart;
-            
+
             // Update health state
             health.issues = issues;
             health.metrics = metrics;
             health.lastCheck = new Date();
             health.status = this.calculateHealthStatus(issues);
-            
+
             // Queue recovery if needed
             if (health.autoRecoveryEnabled && health.status !== 'healthy') {
                 this.queueRecovery(agentId, health);
             }
-            
+
             // Emit health update
             this.emit('health:update', health);
-            
         } catch (error) {
             this.loggingService?.error(`Health check failed for ${agentId}:`, error);
             health.status = 'critical';
@@ -299,15 +298,15 @@ export class WorktreeHealthMonitor extends EventEmitter {
      */
     private calculateHealthStatus(issues: HealthIssue[]): WorktreeHealth['status'] {
         if (issues.length === 0) return 'healthy';
-        
+
         const hasCritical = issues.some(i => i.severity === 'critical');
         const hasHigh = issues.some(i => i.severity === 'high');
         const hasMedium = issues.some(i => i.severity === 'medium');
-        
+
         if (hasCritical) return 'critical';
         if (hasHigh) return 'degraded';
         if (hasMedium) return 'degraded';
-        
+
         return 'healthy';
     }
 
@@ -320,13 +319,13 @@ export class WorktreeHealthMonitor extends EventEmitter {
             health.status = 'dead';
             return;
         }
-        
+
         // Determine recovery action based on issues
         const criticalIssue = health.issues.find(i => i.severity === 'critical' && i.autoRecoverable);
-        
+
         if (criticalIssue) {
             let action: RecoveryAction['type'] = 'repair';
-            
+
             switch (criticalIssue.type) {
                 case 'missing':
                     action = 'recreate';
@@ -344,14 +343,14 @@ export class WorktreeHealthMonitor extends EventEmitter {
                     action = 'prune';
                     break;
             }
-            
+
             this.recoveryQueue.push({
                 type: action,
                 agentId,
                 reason: criticalIssue.description,
                 priority: this.getRecoveryPriority(criticalIssue)
             });
-            
+
             // Sort by priority
             this.recoveryQueue.sort((a, b) => b.priority - a.priority);
         }
@@ -364,9 +363,9 @@ export class WorktreeHealthMonitor extends EventEmitter {
         if (this.isRecovering || this.recoveryQueue.length === 0) {
             return;
         }
-        
+
         this.isRecovering = true;
-        
+
         try {
             while (this.recoveryQueue.length > 0) {
                 const action = this.recoveryQueue.shift()!;
@@ -383,14 +382,14 @@ export class WorktreeHealthMonitor extends EventEmitter {
     private async performRecovery(action: RecoveryAction): Promise<void> {
         this.totalRecoveries++;
         const health = this.healthStates.get(action.agentId);
-        
+
         if (!health) return;
-        
+
         health.recoveryAttempts++;
-        
+
         this.loggingService?.info(`Performing ${action.type} recovery for ${action.agentId}: ${action.reason}`);
         this.emit('recovery:start', action);
-        
+
         try {
             switch (action.type) {
                 case 'reset':
@@ -412,16 +411,15 @@ export class WorktreeHealthMonitor extends EventEmitter {
                     await this.recoverRepair(health);
                     break;
             }
-            
+
             this.successfulRecoveries++;
             health.recoveryAttempts = 0; // Reset on success
             this.emit('recovery:success', action);
-            
         } catch (error) {
             this.failedRecoveries++;
             this.loggingService?.error(`Recovery failed for ${action.agentId}:`, error);
             this.emit('recovery:failed', { action, error });
-            
+
             // Notify user if critical
             if (health.status === 'critical') {
                 this.notificationService?.showError(
@@ -445,7 +443,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
     private async recoverClean(health: WorktreeHealth): Promise<void> {
         // Clean Git objects
         execSync('git gc --aggressive --prune=now', { cwd: health.path });
-        
+
         // Remove node_modules if present
         const nodeModulesPath = path.join(health.path, 'node_modules');
         try {
@@ -453,7 +451,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
         } catch {
             // Ignore if not present
         }
-        
+
         // Clean build artifacts
         const commonBuildDirs = ['dist', 'build', 'out', '.next', 'coverage'];
         for (const dir of commonBuildDirs) {
@@ -475,7 +473,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
         } catch {
             // Ignore if doesn't exist
         }
-        
+
         // Recreate worktree
         const branchName = `recovery-${health.agentId}-${Date.now()}`;
         execSync(`git worktree add -b ${branchName} "${health.path}"`, { cwd: this.workspacePath });
@@ -550,15 +548,15 @@ export class WorktreeHealthMonitor extends EventEmitter {
         uncommittedChanges: number;
     }> {
         try {
-            const output = execSync('git status --porcelain', { 
-                cwd: worktreePath, 
+            const output = execSync('git status --porcelain', {
+                cwd: worktreePath,
                 encoding: 'utf-8',
                 timeout: this.config.healthCheckTimeoutMs
             });
-            
+
             const lines = output.split('\n').filter(l => l.trim());
             const hasConflicts = lines.some(l => l.startsWith('UU'));
-            
+
             return {
                 status: hasConflicts ? 'conflicted' : lines.length > 0 ? 'dirty' : 'clean',
                 modifiedFiles: lines.filter(l => l.startsWith(' M')).length,
@@ -573,11 +571,8 @@ export class WorktreeHealthMonitor extends EventEmitter {
      * Check for lock files
      */
     private async checkForLocks(worktreePath: string): Promise<boolean> {
-        const lockFiles = [
-            path.join(worktreePath, '.git', 'index.lock'),
-            path.join(worktreePath, '.git', 'HEAD.lock')
-        ];
-        
+        const lockFiles = [path.join(worktreePath, '.git', 'index.lock'), path.join(worktreePath, '.git', 'HEAD.lock')];
+
         for (const lockFile of lockFiles) {
             try {
                 await fs.access(lockFile);
@@ -586,7 +581,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
                 // Lock file doesn't exist
             }
         }
-        
+
         return false;
     }
 
@@ -624,7 +619,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
             medium: 10,
             low: 1
         };
-        
+
         const typeScore = {
             missing: 500,
             corrupt: 400,
@@ -634,7 +629,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
             permission: 600,
             'disk-space': 250
         };
-        
+
         return severityScore[issue.severity] + typeScore[issue.type];
     }
 
@@ -644,7 +639,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
     private checkOverallHealth(): void {
         const healths = Array.from(this.healthStates.values());
         const unhealthy = healths.filter(h => h.status !== 'healthy');
-        
+
         if (unhealthy.length > healths.length * 0.5) {
             this.notificationService?.showWarning(
                 `${unhealthy.length} of ${healths.length} worktrees are unhealthy. Running recovery...`
@@ -688,7 +683,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
         };
     } {
         const healths = Array.from(this.healthStates.values());
-        
+
         return {
             summary: {
                 total: healths.length,
@@ -703,9 +698,7 @@ export class WorktreeHealthMonitor extends EventEmitter {
                 totalRecoveries: this.totalRecoveries,
                 successfulRecoveries: this.successfulRecoveries,
                 failedRecoveries: this.failedRecoveries,
-                successRate: this.totalRecoveries > 0 
-                    ? this.successfulRecoveries / this.totalRecoveries 
-                    : 1
+                successRate: this.totalRecoveries > 0 ? this.successfulRecoveries / this.totalRecoveries : 1
             }
         };
     }

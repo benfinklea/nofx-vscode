@@ -79,7 +79,9 @@ import {
 import { OrchestratorMessage, MessageType } from '../../../orchestration/MessageProtocol';
 import { ORCH_EVENTS } from '../../../services/EventConstants';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,

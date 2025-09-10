@@ -1,11 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { promises as fsPromises } from 'fs';
-import { AgentPersistence } from '../../../persistence/AgentPersistence';
+import { PersistenceService } from '../../../services/PersistenceService';
 import { Agent } from '../../../agents/types';
 import { ILoggingService } from '../../../services/interfaces';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,
@@ -27,8 +29,8 @@ jest.mock('fs', () => ({
     }
 }));
 
-describe('AgentPersistence', () => {
-    let agentPersistence: AgentPersistence;
+describe('PersistenceService', () => {
+    let agentPersistence: PersistenceService;
     let mockLoggingService: jest.Mocked<ILoggingService>;
     let workspaceRoot: string;
 
@@ -63,7 +65,7 @@ describe('AgentPersistence', () => {
         mockFsPromises.mkdir = jest.fn().mockResolvedValue(undefined);
         mockFsPromises.copyFile = jest.fn().mockResolvedValue(undefined);
 
-        agentPersistence = new AgentPersistence(workspaceRoot, mockLoggingService);
+        agentPersistence = new PersistenceService(workspaceRoot, mockLoggingService);
     });
 
     afterEach(() => {
@@ -72,19 +74,19 @@ describe('AgentPersistence', () => {
 
     describe('constructor', () => {
         it('should initialize with workspace root and logging service', () => {
-            const persistence = new AgentPersistence(workspaceRoot, mockLoggingService);
+            const persistence = new PersistenceService(workspaceRoot, mockLoggingService);
             expect(persistence).toBeDefined();
         });
 
         it('should initialize without logging service', () => {
-            const persistence = new AgentPersistence(workspaceRoot);
+            const persistence = new PersistenceService(workspaceRoot);
             expect(persistence).toBeDefined();
         });
 
         it('should create persistence directories on initialization', () => {
             mockFs.existsSync = jest.fn().mockReturnValue(false);
 
-            new AgentPersistence(workspaceRoot, mockLoggingService);
+            new PersistenceService(workspaceRoot, mockLoggingService);
 
             expect(mockFs.mkdirSync).toHaveBeenCalledWith(path.join(workspaceRoot, '.nofx'), { recursive: true });
             expect(mockFs.mkdirSync).toHaveBeenCalledWith(path.join(workspaceRoot, '.nofx', 'sessions'), {
@@ -95,7 +97,7 @@ describe('AgentPersistence', () => {
         it('should not create directories if they already exist', () => {
             mockFs.existsSync = jest.fn().mockReturnValue(true);
 
-            new AgentPersistence(workspaceRoot, mockLoggingService);
+            new PersistenceService(workspaceRoot, mockLoggingService);
 
             expect(mockFs.mkdirSync).not.toHaveBeenCalled();
         });
@@ -103,7 +105,7 @@ describe('AgentPersistence', () => {
         it('should log directory creation', () => {
             mockFs.existsSync = jest.fn().mockReturnValue(false);
 
-            new AgentPersistence(workspaceRoot, mockLoggingService);
+            new PersistenceService(workspaceRoot, mockLoggingService);
 
             expect(mockLoggingService.debug).toHaveBeenCalledWith(
                 expect.stringContaining('Created persistence directory')

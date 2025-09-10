@@ -1,0 +1,62 @@
+{
+  "phases": {
+    "13": {
+      "name": "Container → ServiceLocator",
+      "agents": {
+        "performance": {
+          "tasks": [
+            "baseline-service-resolution-performance",
+            "optimize-service-locator-hotpaths", 
+            "memory-usage-analysis"
+          ],
+          "deliverables": ["performance-baseline.json", "optimization-report.md"]
+        },
+        "security": {
+          "tasks": [
+            "audit-service-access-patterns",
+            "validate-service-locator-security",
+            "assess-injection-risks"
+          ],
+          "deliverables": ["security-audit.json", "access-control-spec.md"]
+        },
+        "testing": {
+          "tasks": [
+            "generate-service-locator-tests",
+            "create-performance-tests",
+            "create-security-tests"
+          ],
+          "deliverables": ["ServiceLocator.test.ts", "performance.test.ts", "security.test.ts"]
+        },
+        "documentation": {
+          "tasks": [
+            "document-migration-process",
+            "create-api-documentation",
+            "write-performance-impact-report"
+          ],
+          "deliverables": ["PHASE_13_MIGRATION.md", "ServiceLocator.api.md"]
+        }
+      }
+    },
+    "14": {
+      "name": "Test Consolidation", 
+      "agents": {
+        "performance": {
+          "tasks": ["optimize-test-execution", "parallel-test-strategy"],
+          "deliverables": ["test-performance-config.json"]
+        },
+        "security": {
+          "tasks": ["audit-test-security", "validate-test-isolation"],
+          "deliverables": ["test-security-report.md"]
+        },
+        "testing": {
+          "tasks": ["consolidate-test-files", "generate-test-utilities"],
+          "deliverables": ["consolidated-tests/", "test-helpers/"]
+        },
+        "documentation": {
+          "tasks": ["document-test-architecture"],
+          "deliverables": ["TEST_ARCHITECTURE.md"]
+        }
+      }
+    }
+  }
+}

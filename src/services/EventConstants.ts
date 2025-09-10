@@ -1,10 +1,10 @@
 /**
- * Event constants for UI and domain events
- * Centralizes event names to prevent mismatches and typos
+ * Unified Event System for NofX VS Code Extension
+ * Single namespace for all events with proper typing and metrics support
  */
 
-// Domain events - business logic events
-export const DOMAIN_EVENTS = {
+// Unified event constants - all events in one namespace
+export const EVENTS = {
     // Agent events
     AGENT_CREATED: 'agent.created',
     AGENT_REMOVED: 'agent.removed',
@@ -13,12 +13,8 @@ export const DOMAIN_EVENTS = {
     AGENT_FAILED: 'agent.failed',
     AGENT_RECOVERY_STARTED: 'agent.recovery.started',
     AGENT_RECOVERY_COMPLETED: 'agent.recovery.completed',
-
-    // Agent lifecycle events
-    AGENT_LIFECYCLE_SPAWNING: 'agent.lifecycle.spawning',
-    AGENT_LIFECYCLE_SPAWNED: 'agent.lifecycle.spawned',
-    AGENT_LIFECYCLE_REMOVING: 'agent.lifecycle.removing',
-    AGENT_LIFECYCLE_REMOVED: 'agent.lifecycle.removed',
+    AGENT_ALL_TERMINATED: 'agent.all.terminated',
+    AGENT_SAVED: 'agent.saved',
 
     // Agent spawn events (batch operations)
     AGENT_SPAWN_REQUESTED: 'agent.spawn.requested',
@@ -49,13 +45,10 @@ export const DOMAIN_EVENTS = {
     TASK_CONFLICT_DECISION: 'task.conflict.decision',
     TASK_MATCH_SCORE: 'task.match.score',
 
-    // Theme events
-    THEME_CHANGED: 'theme.changed',
-
-    // Orchestration events
-    MESSAGE_RECEIVED: 'message.received',
-    CONNECTION_ESTABLISHED: 'connection.established',
-    CONNECTION_LOST: 'connection.lost',
+    // Agent task events
+    AGENT_TASK_ASSIGNED: 'agent.task.assigned',
+    AGENT_TASK_COMPLETED: 'agent.task.completed',
+    AGENT_TASK_INTERRUPTED: 'agent.task.interrupted',
 
     // Worktree events
     WORKTREE_CREATED: 'worktree.created',
@@ -67,14 +60,75 @@ export const DOMAIN_EVENTS = {
     TERMINAL_CREATED: 'terminal.created',
     TERMINAL_CLOSED: 'terminal.closed',
     TERMINAL_DISPOSED: 'terminal.disposed',
-    TERMINAL_COMMAND: 'terminal.command',
 
-    // Agent task events
-    AGENT_TASK_ASSIGNED: 'agent.task.assigned',
-    AGENT_TASK_COMPLETED: 'agent.task.completed',
-    AGENT_TASK_INTERRUPTED: 'agent.task.interrupted',
+    // Configuration events
+    CONFIG_CHANGED: 'config.changed',
+    CONFIG_UPDATED: 'config.updated',
+    CONFIG_VALIDATION_FAILED: 'config.validation.failed',
+    CONFIG_API_ERROR: 'config.api.error',
+    CONFIG_UPDATE_FAILED: 'config.update.failed',
+    CONFIG_BACKED_UP: 'config.backed.up',
+    CONFIG_RESTORED: 'config.restored',
 
-    // Session management events
+    // Orchestration events (keep only used ones)
+    ORCH_MESSAGE_RECEIVED: 'orchestration.message.received',
+    ORCH_CLIENT_CONNECTED: 'orchestration.client.connected',
+    ORCH_CLIENT_DISCONNECTED: 'orchestration.client.disconnected',
+    ORCH_SERVER_STARTED: 'orchestration.server.started',
+    ORCH_SERVER_STOPPED: 'orchestration.server.stopped',
+    ORCH_SERVICE_STARTED: 'orchestration.service.started',
+    ORCH_SERVICE_STOPPED: 'orchestration.service.stopped',
+    ORCH_CONNECTION_ESTABLISHED: 'orchestration.connection.established',
+    ORCH_CONNECTION_CLOSED: 'orchestration.connection.closed',
+    ORCH_LOGICAL_ID_REGISTERED: 'orchestration.logical_id.registered',
+    ORCH_LOGICAL_ID_UNREGISTERED: 'orchestration.logical_id.unregistered',
+    ORCH_MESSAGE_ROUTED: 'orchestration.message.routed',
+    ORCH_MESSAGE_ACKNOWLEDGED: 'orchestration.message.acknowledged',
+    ORCH_MESSAGE_DELIVERED: 'orchestration.message.delivered',
+    ORCH_MESSAGE_DELIVERY_FAILED: 'orchestration.message.delivery_failed',
+    ORCH_HEARTBEAT_SENT: 'orchestration.heartbeat.sent',
+    ORCH_HEARTBEAT_RECEIVED: 'orchestration.heartbeat.received',
+    ORCH_CONNECTION_TIMEOUT: 'orchestration.connection.timeout',
+    ORCH_CONNECTION_WELCOME_SENT: 'orchestration.connection.welcome_sent',
+    ORCH_MESSAGE_TO_DASHBOARD: 'orchestration.message.to_dashboard',
+    ORCH_MESSAGE_TO_AGENTS: 'orchestration.message.to_agents',
+    ORCH_MESSAGE_BROADCASTED: 'orchestration.message.broadcasted',
+    ORCH_MESSAGE_VALIDATION_FAILED: 'orchestration.message.validation.failed',
+    ORCH_MESSAGE_PERSISTENCE_FAILED: 'orchestration.message.persistence_failed',
+    ORCH_MESSAGE_PERSISTED: 'orchestration.message.persisted',
+    ORCH_MESSAGE_STORAGE_CLEANUP: 'orchestration.message.storage.cleanup',
+    ORCH_AGENT_SPAWN_REQUESTED: 'orchestration.agent.spawn.requested',
+    ORCH_TASK_ASSIGNMENT_REQUESTED: 'orchestration.task.assignment.requested',
+    ORCH_AGENT_TERMINATION_REQUESTED: 'orchestration.agent.termination.requested',
+    ORCH_STATUS_QUERY_REQUESTED: 'orchestration.status.query.requested',
+    ORCH_AGENT_SPAWNED: 'orchestration.agent.spawned',
+    ORCH_AGENT_TERMINATED: 'orchestration.agent.terminated',
+
+    // UI events
+    UI_STATE_CHANGED: 'ui.state.changed',
+    DASHBOARD_STATE_CHANGED: 'ui.dashboard.state.changed',
+    TREE_STATE_CHANGED: 'ui.tree.state.changed',
+    VIEW_OPENED: 'ui.view.opened',
+    VIEW_CLOSED: 'ui.view.closed',
+    VIEW_FOCUSED: 'ui.view.focused',
+    PANEL_CREATED: 'ui.panel.created',
+    PANEL_DISPOSED: 'ui.panel.disposed',
+    WEBVIEW_MESSAGE_RECEIVED: 'ui.webview.message.received',
+    WEBVIEW_MESSAGE_SENT: 'ui.webview.message.sent',
+    TREE_ITEM_SELECTED: 'ui.tree.item.selected',
+    TREE_ITEM_EXPANDED: 'ui.tree.item.expanded',
+    TREE_ITEM_COLLAPSED: 'ui.tree.item.collapsed',
+    TREE_REFRESH_REQUESTED: 'ui.tree.refresh.requested',
+
+    // Theme events
+    THEME_CHANGED: 'theme.changed',
+
+    // Message events
+    MESSAGE_RECEIVED: 'message.received',
+    CONNECTION_ESTABLISHED: 'connection.established',
+    CONNECTION_LOST: 'connection.lost',
+
+    // Session management events (deprecated but still used)
     SESSION_CREATED: 'session.created',
     SESSION_ARCHIVED: 'session.archived',
     SESSION_RESTORED: 'session.restored',
@@ -97,94 +151,6 @@ export const DOMAIN_EVENTS = {
 
     // Load balancing events
     LOAD_BALANCING_EVENT: 'load.balancing.event'
-} as const;
-
-// Alias for common agent events
-export const AGENT_EVENTS = {
-    AGENT_CREATED: DOMAIN_EVENTS.AGENT_CREATED,
-    AGENT_TERMINATED: DOMAIN_EVENTS.AGENT_TERMINATED,
-    ALL_TERMINATED: 'agent.all.terminated'
-} as const;
-
-// Alias for common task events
-export const TASK_EVENTS = {
-    TASK_CREATED: DOMAIN_EVENTS.TASK_CREATED,
-    TASK_ASSIGNED: DOMAIN_EVENTS.TASK_ASSIGNED,
-    TASK_COMPLETED: DOMAIN_EVENTS.TASK_COMPLETED,
-    TASK_FAILED: DOMAIN_EVENTS.TASK_FAILED
-} as const;
-
-// Configuration events
-export const CONFIG_EVENTS = {
-    CONFIG_CHANGED: 'configuration.changed',
-    CONFIG_UPDATED: 'configuration.updated',
-    CONFIG_VALIDATION_FAILED: 'configuration.validation.failed',
-    CONFIG_API_ERROR: 'configuration.api.error',
-    CONFIG_UPDATE_FAILED: 'configuration.update.failed',
-    CONFIG_BACKED_UP: 'configuration.backed.up',
-    CONFIG_RESTORED: 'configuration.restored'
-} as const;
-
-// Orchestration events - specific to orchestration server
-export const ORCH_EVENTS = {
-    MESSAGE_RECEIVED: 'orchestration.message.received',
-    CLIENT_CONNECTED: 'orchestration.client.connected',
-    CLIENT_DISCONNECTED: 'orchestration.client.disconnected',
-    SERVER_STARTED: 'orchestration.server.started',
-    SERVER_STOPPED: 'orchestration.server.stopped',
-    // Heartbeat events
-    HEARTBEAT_SENT: 'orchestration.heartbeat.sent',
-    HEARTBEAT_RECEIVED: 'orchestration.heartbeat.received',
-    CONNECTION_TIMEOUT: 'orchestration.connection.timeout',
-    // Routing events
-    MESSAGE_BROADCASTED: 'orchestration.message.broadcasted',
-    MESSAGE_TO_DASHBOARD: 'orchestration.message.to_dashboard',
-    MESSAGE_DELIVERED: 'orchestration.message.delivered',
-    MESSAGE_DELIVERY_FAILED: 'orchestration.message.delivery_failed',
-    MESSAGE_TO_AGENTS: 'orchestration.message.to_agents',
-    MESSAGE_ACKNOWLEDGED: 'orchestration.message.acknowledged',
-    // Connection events
-    CONNECTION_WELCOME_SENT: 'orchestration.connection.welcome_sent',
-    // Logical ID events
-    LOGICAL_ID_REGISTERED: 'orchestration.logical_id.registered',
-    LOGICAL_ID_UNREGISTERED: 'orchestration.logical_id.unregistered',
-    LOGICAL_ID_REASSIGNED: 'orchestration.logical_id.reassigned',
-    // Message persistence events
-    MESSAGE_PERSISTED: 'orchestration.message.persisted',
-    MESSAGE_PERSISTENCE_FAILED: 'orchestration.message.persistence_failed',
-    MESSAGE_STORAGE_ROLLED: 'orchestration.message.storage.rolled',
-    MESSAGE_STORAGE_CLEANUP: 'orchestration.message.storage.cleanup',
-    // Message routing events
-    MESSAGE_ROUTED: 'orchestration.message.routed',
-    // Message validation events
-    MESSAGE_VALIDATION_FAILED: 'orchestration.message.validation.failed'
-} as const;
-
-// UI events - user interface events
-export const UI_EVENTS = {
-    // State change events
-    UI_STATE_CHANGED: 'ui.state.changed',
-    DASHBOARD_STATE_CHANGED: 'dashboard.state.changed',
-    TREE_STATE_CHANGED: 'tree.state.changed',
-
-    // View events
-    VIEW_OPENED: 'view.opened',
-    VIEW_CLOSED: 'view.closed',
-    VIEW_FOCUSED: 'view.focused',
-
-    // Panel events
-    PANEL_CREATED: 'panel.created',
-    PANEL_DISPOSED: 'panel.disposed',
-
-    // Webview events
-    WEBVIEW_MESSAGE_RECEIVED: 'webview.message.received',
-    WEBVIEW_MESSAGE_SENT: 'webview.message.sent',
-
-    // Tree view events
-    TREE_ITEM_SELECTED: 'tree.item.selected',
-    TREE_ITEM_EXPANDED: 'tree.item.expanded',
-    TREE_ITEM_COLLAPSED: 'tree.item.collapsed',
-    TREE_REFRESH_REQUESTED: 'tree.refresh.requested'
 } as const;
 
 // Event payload types
@@ -315,8 +281,105 @@ export interface MessageValidationFailedPayload {
     messageType: string;
 }
 
+// Event metrics and subscription tracking
+export interface EventMetrics {
+    publishCount: number;
+    subscriberCount: number;
+    lastPublished: Date | null;
+    avgFrequency: number;
+    hasSubscribers: boolean;
+}
+
+// Event subscription info
+export interface EventSubscription {
+    event: string;
+    handler: (...args: any[]) => void;
+    disposable: { dispose(): void };
+    subscribedAt: Date;
+}
+
 // Type helpers for event names
-export type DomainEventName = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];
-export type OrchEventName = (typeof ORCH_EVENTS)[keyof typeof ORCH_EVENTS];
-export type UIEventName = (typeof UI_EVENTS)[keyof typeof UI_EVENTS];
-export type EventName = DomainEventName | OrchEventName | UIEventName;
+export type EventName = (typeof EVENTS)[keyof typeof EVENTS];
+
+// Backward compatibility - DEPRECATED (use EVENTS instead)
+/** @deprecated Use EVENTS instead */
+export const DOMAIN_EVENTS = EVENTS;
+/** @deprecated Use EVENTS instead */
+export const AGENT_EVENTS = {
+    AGENT_CREATED: EVENTS.AGENT_CREATED,
+    AGENT_TERMINATED: EVENTS.AGENT_TERMINATED,
+    ALL_TERMINATED: EVENTS.AGENT_ALL_TERMINATED
+} as const;
+/** @deprecated Use EVENTS instead */
+export const TASK_EVENTS = {
+    TASK_CREATED: EVENTS.TASK_CREATED,
+    TASK_ASSIGNED: EVENTS.TASK_ASSIGNED,
+    TASK_COMPLETED: EVENTS.TASK_COMPLETED,
+    TASK_FAILED: EVENTS.TASK_FAILED
+} as const;
+/** @deprecated Use EVENTS instead */
+export const CONFIG_EVENTS = {
+    CONFIG_CHANGED: EVENTS.CONFIG_CHANGED,
+    CONFIG_UPDATED: EVENTS.CONFIG_UPDATED,
+    CONFIG_VALIDATION_FAILED: EVENTS.CONFIG_VALIDATION_FAILED,
+    CONFIG_API_ERROR: EVENTS.CONFIG_API_ERROR,
+    CONFIG_UPDATE_FAILED: EVENTS.CONFIG_UPDATE_FAILED,
+    CONFIG_BACKED_UP: EVENTS.CONFIG_BACKED_UP,
+    CONFIG_RESTORED: EVENTS.CONFIG_RESTORED
+} as const;
+/** @deprecated Use EVENTS instead */
+export const ORCH_EVENTS = {
+    MESSAGE_RECEIVED: EVENTS.ORCH_MESSAGE_RECEIVED,
+    CLIENT_CONNECTED: EVENTS.ORCH_CLIENT_CONNECTED,
+    CLIENT_DISCONNECTED: EVENTS.ORCH_CLIENT_DISCONNECTED,
+    SERVER_STARTED: EVENTS.ORCH_SERVER_STARTED,
+    SERVER_STOPPED: EVENTS.ORCH_SERVER_STOPPED,
+    SERVICE_STARTED: EVENTS.ORCH_SERVICE_STARTED,
+    SERVICE_STOPPED: EVENTS.ORCH_SERVICE_STOPPED,
+    CONNECTION_ESTABLISHED: EVENTS.ORCH_CONNECTION_ESTABLISHED,
+    CONNECTION_CLOSED: EVENTS.ORCH_CONNECTION_CLOSED,
+    LOGICAL_ID_REGISTERED: EVENTS.ORCH_LOGICAL_ID_REGISTERED,
+    LOGICAL_ID_UNREGISTERED: EVENTS.ORCH_LOGICAL_ID_UNREGISTERED,
+    MESSAGE_ROUTED: EVENTS.ORCH_MESSAGE_ROUTED,
+    MESSAGE_ACKNOWLEDGED: EVENTS.ORCH_MESSAGE_ACKNOWLEDGED,
+    MESSAGE_DELIVERED: EVENTS.ORCH_MESSAGE_DELIVERED,
+    MESSAGE_DELIVERY_FAILED: EVENTS.ORCH_MESSAGE_DELIVERY_FAILED,
+    MESSAGE_TO_DASHBOARD: EVENTS.ORCH_MESSAGE_TO_DASHBOARD,
+    MESSAGE_TO_AGENTS: EVENTS.ORCH_MESSAGE_TO_AGENTS,
+    MESSAGE_BROADCASTED: EVENTS.ORCH_MESSAGE_BROADCASTED,
+    MESSAGE_VALIDATION_FAILED: EVENTS.ORCH_MESSAGE_VALIDATION_FAILED,
+    MESSAGE_PERSISTENCE_FAILED: EVENTS.ORCH_MESSAGE_PERSISTENCE_FAILED,
+    MESSAGE_PERSISTED: EVENTS.ORCH_MESSAGE_PERSISTED,
+    MESSAGE_STORAGE_CLEANUP: EVENTS.ORCH_MESSAGE_STORAGE_CLEANUP,
+    AGENT_SPAWN_REQUESTED: EVENTS.ORCH_AGENT_SPAWN_REQUESTED,
+    TASK_ASSIGNMENT_REQUESTED: EVENTS.ORCH_TASK_ASSIGNMENT_REQUESTED,
+    AGENT_TERMINATION_REQUESTED: EVENTS.ORCH_AGENT_TERMINATION_REQUESTED,
+    STATUS_QUERY_REQUESTED: EVENTS.ORCH_STATUS_QUERY_REQUESTED,
+    AGENT_SPAWNED: EVENTS.ORCH_AGENT_SPAWNED,
+    AGENT_TERMINATED: EVENTS.ORCH_AGENT_TERMINATED
+} as const;
+/** @deprecated Use EVENTS instead */
+export const UI_EVENTS = {
+    UI_STATE_CHANGED: EVENTS.UI_STATE_CHANGED,
+    DASHBOARD_STATE_CHANGED: EVENTS.DASHBOARD_STATE_CHANGED,
+    TREE_STATE_CHANGED: EVENTS.TREE_STATE_CHANGED,
+    VIEW_OPENED: EVENTS.VIEW_OPENED,
+    VIEW_CLOSED: EVENTS.VIEW_CLOSED,
+    VIEW_FOCUSED: EVENTS.VIEW_FOCUSED,
+    PANEL_CREATED: EVENTS.PANEL_CREATED,
+    PANEL_DISPOSED: EVENTS.PANEL_DISPOSED,
+    WEBVIEW_MESSAGE_RECEIVED: EVENTS.WEBVIEW_MESSAGE_RECEIVED,
+    WEBVIEW_MESSAGE_SENT: EVENTS.WEBVIEW_MESSAGE_SENT,
+    TREE_ITEM_SELECTED: EVENTS.TREE_ITEM_SELECTED,
+    TREE_ITEM_EXPANDED: EVENTS.TREE_ITEM_EXPANDED,
+    TREE_ITEM_COLLAPSED: EVENTS.TREE_ITEM_COLLAPSED,
+    TREE_REFRESH_REQUESTED: EVENTS.TREE_REFRESH_REQUESTED
+} as const;
+
+// Legacy type aliases for backward compatibility
+/** @deprecated Use EventName instead */
+export type DomainEventName = EventName;
+/** @deprecated Use EventName instead */
+export type OrchEventName = EventName;
+/** @deprecated Use EventName instead */
+export type UIEventName = EventName;

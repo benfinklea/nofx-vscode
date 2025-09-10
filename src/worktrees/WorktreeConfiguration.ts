@@ -19,7 +19,7 @@ export interface WorktreeConfig {
         retryDelayMs: number;
         queueSize: number;
     };
-    
+
     // Caching settings
     cache: {
         enabled: boolean;
@@ -28,7 +28,7 @@ export interface WorktreeConfig {
         preloadOnStartup: boolean;
         compressionEnabled: boolean;
     };
-    
+
     // Pool settings
     pool: {
         enabled: boolean;
@@ -37,7 +37,7 @@ export interface WorktreeConfig {
         preAllocateOnStartup: boolean;
         maxPoolSize: number;
     };
-    
+
     // Health monitoring
     health: {
         enabled: boolean;
@@ -47,7 +47,7 @@ export interface WorktreeConfig {
         staleThresholdMs: number;
         healthCheckTimeoutMs: number;
     };
-    
+
     // Circuit breaker
     circuitBreaker: {
         enabled: boolean;
@@ -55,7 +55,7 @@ export interface WorktreeConfig {
         resetTimeoutMs: number;
         halfOpenRequests: number;
     };
-    
+
     // Resource limits
     resources: {
         maxMemoryMB: number;
@@ -63,7 +63,7 @@ export interface WorktreeConfig {
         maxCpuPercent: number;
         maxFileHandles: number;
     };
-    
+
     // Git settings
     git: {
         gcAggressive: boolean;
@@ -73,7 +73,7 @@ export interface WorktreeConfig {
         shallowClone: boolean;
         sparseCheckout: boolean;
     };
-    
+
     // Telemetry
     telemetry: {
         enabled: boolean;
@@ -81,7 +81,7 @@ export interface WorktreeConfig {
         exportIntervalMs: number;
         detailedMetrics: boolean;
     };
-    
+
     // Advanced features
     advanced: {
         useNativeGit: boolean;
@@ -100,26 +100,26 @@ export class WorktreeConfigurationManager {
     private static instance: WorktreeConfigurationManager;
     private config: WorktreeConfig;
     private configWatcher: vscode.Disposable | undefined;
-    
+
     private constructor() {
         this.config = this.loadConfiguration();
         this.watchConfiguration();
     }
-    
+
     static getInstance(): WorktreeConfigurationManager {
         if (!WorktreeConfigurationManager.instance) {
             WorktreeConfigurationManager.instance = new WorktreeConfigurationManager();
         }
         return WorktreeConfigurationManager.instance;
     }
-    
+
     /**
      * Get current configuration
      */
     getConfig(): WorktreeConfig {
         return this.config;
     }
-    
+
     /**
      * Update configuration
      */
@@ -127,28 +127,28 @@ export class WorktreeConfigurationManager {
         this.config = { ...this.config, ...updates };
         await this.saveConfiguration();
     }
-    
+
     /**
      * Load configuration from VS Code settings
      */
     private loadConfiguration(): WorktreeConfig {
         const vsConfig = vscode.workspace.getConfiguration('nofx.worktree');
         const profile = vsConfig.get<PerformanceProfile>('performanceProfile', 'balanced');
-        
+
         // Get base config from profile
         const baseConfig = this.getProfileConfig(profile);
-        
+
         // Override with user settings
         return this.mergeWithUserSettings(baseConfig, vsConfig);
     }
-    
+
     /**
      * Get configuration based on performance profile
      */
     private getProfileConfig(profile: PerformanceProfile): WorktreeConfig {
         const cpuCount = os.cpus().length;
         const totalMemory = os.totalmem() / (1024 * 1024); // MB
-        
+
         switch (profile) {
             case 'conservative':
                 return this.getConservativeConfig(cpuCount, totalMemory);
@@ -163,7 +163,7 @@ export class WorktreeConfigurationManager {
                 return this.getBalancedConfig(cpuCount, totalMemory);
         }
     }
-    
+
     /**
      * Conservative profile - minimal resource usage
      */
@@ -235,7 +235,7 @@ export class WorktreeConfigurationManager {
             }
         };
     }
-    
+
     /**
      * Balanced profile - good performance with reasonable resource usage
      */
@@ -307,7 +307,7 @@ export class WorktreeConfigurationManager {
             }
         };
     }
-    
+
     /**
      * Aggressive profile - maximum performance
      */
@@ -379,7 +379,7 @@ export class WorktreeConfigurationManager {
             }
         };
     }
-    
+
     /**
      * Extreme profile - no limits (use with caution)
      */
@@ -451,22 +451,19 @@ export class WorktreeConfigurationManager {
             }
         };
     }
-    
+
     /**
      * Merge base config with user settings
      */
-    private mergeWithUserSettings(
-        baseConfig: WorktreeConfig,
-        vsConfig: vscode.WorkspaceConfiguration
-    ): WorktreeConfig {
+    private mergeWithUserSettings(baseConfig: WorktreeConfig, vsConfig: vscode.WorkspaceConfiguration): WorktreeConfig {
         // Deep merge user settings
         const merged = { ...baseConfig };
-        
+
         // Performance settings
         if (vsConfig.has('performance.maxParallelOperations')) {
             merged.performance.maxParallelOperations = vsConfig.get('performance.maxParallelOperations')!;
         }
-        
+
         // Cache settings
         if (vsConfig.has('cache.enabled')) {
             merged.cache.enabled = vsConfig.get('cache.enabled')!;
@@ -474,7 +471,7 @@ export class WorktreeConfigurationManager {
         if (vsConfig.has('cache.ttlMs')) {
             merged.cache.ttlMs = vsConfig.get('cache.ttlMs')!;
         }
-        
+
         // Pool settings
         if (vsConfig.has('pool.enabled')) {
             merged.pool.enabled = vsConfig.get('pool.enabled')!;
@@ -482,26 +479,26 @@ export class WorktreeConfigurationManager {
         if (vsConfig.has('pool.size')) {
             merged.pool.size = vsConfig.get('pool.size')!;
         }
-        
+
         // Health settings
         if (vsConfig.has('health.autoRecoveryEnabled')) {
             merged.health.autoRecoveryEnabled = vsConfig.get('health.autoRecoveryEnabled')!;
         }
-        
+
         // Advanced settings
         if (vsConfig.has('advanced.experimentalFeatures')) {
             merged.advanced.experimentalFeatures = vsConfig.get('advanced.experimentalFeatures')!;
         }
-        
+
         return merged;
     }
-    
+
     /**
      * Save configuration to VS Code settings
      */
     private async saveConfiguration(): Promise<void> {
         const vsConfig = vscode.workspace.getConfiguration('nofx.worktree');
-        
+
         // Save key settings
         await vsConfig.update('performanceProfile', this.config.performance.profile, true);
         await vsConfig.update('performance.maxParallelOperations', this.config.performance.maxParallelOperations, true);
@@ -509,7 +506,7 @@ export class WorktreeConfigurationManager {
         await vsConfig.update('pool.enabled', this.config.pool.enabled, true);
         await vsConfig.update('health.autoRecoveryEnabled', this.config.health.autoRecoveryEnabled, true);
     }
-    
+
     /**
      * Watch for configuration changes
      */
@@ -521,7 +518,7 @@ export class WorktreeConfigurationManager {
             }
         });
     }
-    
+
     /**
      * Handle configuration changes
      */
@@ -531,14 +528,14 @@ export class WorktreeConfigurationManager {
             `Worktree configuration updated. Profile: ${this.config.performance.profile}`
         );
     }
-    
+
     /**
      * Get recommended configuration based on system resources
      */
     static getRecommendedProfile(): PerformanceProfile {
         const cpus = os.cpus().length;
         const memoryGB = os.totalmem() / (1024 * 1024 * 1024);
-        
+
         if (cpus >= 8 && memoryGB >= 16) {
             return 'aggressive';
         } else if (cpus >= 4 && memoryGB >= 8) {
@@ -547,13 +544,13 @@ export class WorktreeConfigurationManager {
             return 'conservative';
         }
     }
-    
+
     /**
      * Validate configuration
      */
     validateConfig(config: Partial<WorktreeConfig>): string[] {
         const errors: string[] = [];
-        
+
         if (config.performance) {
             if (config.performance.maxParallelOperations < 1) {
                 errors.push('maxParallelOperations must be at least 1');
@@ -562,29 +559,29 @@ export class WorktreeConfigurationManager {
                 errors.push('operationTimeoutMs must be at least 1000ms');
             }
         }
-        
+
         if (config.cache) {
             if (config.cache.maxEntries < 10) {
                 errors.push('cache.maxEntries must be at least 10');
             }
         }
-        
+
         if (config.pool) {
             if (config.pool.size > 100) {
                 errors.push('pool.size should not exceed 100');
             }
         }
-        
+
         return errors;
     }
-    
+
     /**
      * Export configuration
      */
     exportConfig(): string {
         return JSON.stringify(this.config, null, 2);
     }
-    
+
     /**
      * Import configuration
      */
@@ -592,18 +589,18 @@ export class WorktreeConfigurationManager {
         try {
             const imported = JSON.parse(configJson) as WorktreeConfig;
             const errors = this.validateConfig(imported);
-            
+
             if (errors.length > 0) {
                 throw new Error(`Invalid configuration: ${errors.join(', ')}`);
             }
-            
+
             this.config = imported;
             await this.saveConfiguration();
         } catch (error) {
             throw new Error(`Failed to import configuration: ${error}`);
         }
     }
-    
+
     /**
      * Dispose
      */

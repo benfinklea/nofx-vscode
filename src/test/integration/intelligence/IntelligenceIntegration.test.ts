@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
 import { TaskToolBridge, SubAgentType } from '../../../services/TaskToolBridge';
-import { SuperSmartConductor } from '../../../conductor/SuperSmartConductor';
-import { IntelligentConductor } from '../../../conductor/IntelligentConductor';
-import { ConductorTerminal } from '../../../conductor/ConductorTerminal';
+import { SmartConductor } from '../../../conductor/SmartConductor';
 import { AgentManager } from '../../../agents/AgentManager';
 import { AgentTemplateManager } from '../../../agents/AgentTemplateManager';
 import { TaskQueue } from '../../../tasks/TaskQueue';

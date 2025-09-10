@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
 import { randomBytes } from 'crypto';
-import { IWebviewHost, ILoggingService, WebviewHostFactory } from '../services/interfaces';
+import { IWebviewHost, ILogger, WebviewHostFactory } from '../services/interfaces';
 
 export class WebviewHost implements IWebviewHost {
     private panel: vscode.WebviewPanel;
-    private loggingService?: ILoggingService;
+    private loggingService?: ILogger;
     private subscriptions: vscode.Disposable[] = [];
     private nonce: string;
 
-    constructor(panel: vscode.WebviewPanel, loggingService?: ILoggingService) {
+    constructor(panel: vscode.WebviewPanel, loggingService?: ILogger) {
         this.panel = panel;
         this.loggingService = loggingService;
         this.nonce = this.generateNonce();
@@ -19,7 +19,7 @@ export class WebviewHost implements IWebviewHost {
         });
     }
 
-    static create(panel: vscode.WebviewPanel, loggingService?: ILoggingService): WebviewHost {
+    static create(panel: vscode.WebviewPanel, loggingService?: ILogger): WebviewHost {
         return new WebviewHost(panel, loggingService);
     }
 
@@ -135,6 +135,6 @@ export class WebviewHost implements IWebviewHost {
 }
 
 // Export the default factory function
-export const createWebviewHost: WebviewHostFactory = (panel: vscode.WebviewPanel, logging?: ILoggingService) => {
+export const createWebviewHost: WebviewHostFactory = (panel: vscode.WebviewPanel, logging?: ILogger) => {
     return WebviewHost.create(panel, logging);
 };

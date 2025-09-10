@@ -1,25 +1,19 @@
 import * as vscode from 'vscode';
-import {
-    IWorktreeService,
-    IConfigurationService,
-    INotificationService,
-    ILoggingService,
-    IErrorHandler
-} from './interfaces';
+import { IWorktreeService, IConfiguration, INotificationService, ILogger, IErrorHandler } from './interfaces';
 import { WorktreeManager } from '../worktrees/WorktreeManager';
 
 export class WorktreeService implements IWorktreeService {
     private worktreeManager?: WorktreeManager;
     private useWorktrees: boolean = false;
-    private loggingService?: ILoggingService;
+    private loggingService?: ILogger;
     private errorHandler?: IErrorHandler;
     private disposables: vscode.Disposable[] = [];
 
     constructor(
-        private configService: IConfigurationService,
+        private configService: IConfiguration,
         private notificationService: INotificationService,
         worktreeManager?: WorktreeManager,
-        loggingService?: ILoggingService,
+        loggingService?: ILogger,
         errorHandler?: IErrorHandler
     ) {
         this.loggingService = loggingService;

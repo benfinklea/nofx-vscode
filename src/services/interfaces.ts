@@ -1,51 +1,29 @@
 import * as vscode from 'vscode';
 import { ConductorViewState, DashboardViewState, AgentDTO, TaskDTO } from '../types/ui';
 import { Task, TaskStatus, TaskValidationError, Agent, TaskConfig } from '../agents/types';
+import { getAppStateStore } from '../state/AppStateStore';
+import * as selectors from '../state/selectors';
+import * as actions from '../state/actions';
+// Import focused interfaces from ../interfaces for local use
+import { IEventEmitter, IEventSubscriber, IEventPublisher } from '../interfaces/IEvent';
+import { ILogger as ISimpleLogger } from '../interfaces/ILogging';
+import { IAgentLifecycle, IAgentQuery } from '../interfaces/IAgent';
+import { ITaskManager as ISimpleTaskManager } from '../interfaces/ITask';
+import { IConfiguration as ISimpleConfiguration } from '../interfaces/IConfiguration';
 
-// Service tokens for type-safe dependency resolution
-export const SERVICE_TOKENS = {
-    ConfigurationService: Symbol('ConfigurationService'),
-    NotificationService: Symbol('NotificationService'),
-    LoggingService: Symbol('LoggingService'),
-    EventBus: Symbol('EventBus'),
-    ErrorHandler: Symbol('ErrorHandler'),
-    CommandService: Symbol('CommandService'),
-    TerminalManager: Symbol('TerminalManager'),
-    WorktreeService: Symbol('WorktreeService'),
-    AgentLifecycleManager: Symbol('AgentLifecycleManager'),
-    AgentManager: Symbol('AgentManager'),
-    TaskQueue: Symbol('TaskQueue'),
-    TaskStateMachine: Symbol('TaskStateMachine'),
-    PriorityTaskQueue: Symbol('PriorityTaskQueue'),
-    CapabilityMatcher: Symbol('CapabilityMatcher'),
-    TaskDependencyManager: Symbol('TaskDependencyManager'),
-    OrchestrationServer: Symbol('OrchestrationServer'),
-    ConnectionPoolService: Symbol('ConnectionPoolService'),
-    MessageRouter: Symbol('MessageRouter'),
-    MessageValidator: Symbol('MessageValidator'),
-    MessagePersistenceService: Symbol('MessagePersistenceService'),
-    MessageFlowDashboard: Symbol('MessageFlowDashboard'),
-    ExtensionContext: Symbol('ExtensionContext'),
-    OutputChannel: Symbol('OutputChannel'),
-    StatusBarItem: Symbol('StatusBarItem'),
-    AgentPersistence: Symbol('AgentPersistence'),
-    WorktreeManager: Symbol('WorktreeManager'),
-    UIStateManager: Symbol('UIStateManager'),
-    ConductorViewModel: Symbol('ConductorViewModel'),
-    DashboardViewModel: Symbol('DashboardViewModel'),
-    TreeStateManager: Symbol('TreeStateManager'),
-    TaskToolBridge: Symbol('TaskToolBridge'),
-    TerminalMonitor: Symbol('TerminalMonitor'),
-    AgentTreeViewHost: Symbol('AgentTreeViewHost'),
-    MetricsService: Symbol('MetricsService'),
-    ConfigurationValidator: Symbol('ConfigurationValidator'),
-    SessionPersistenceService: Symbol('SessionPersistenceService'),
-    AutoWorktreeManager: Symbol('AutoWorktreeManager'),
-    AgentNotificationService: Symbol('AgentNotificationService')
-} as const;
+// Re-export for convenience
+export { IEventEmitter, IEventSubscriber, IEventPublisher };
+export { IAgentLifecycle, IAgentQuery };
 
-// Configuration service for managing VS Code configuration
-export interface IConfigurationService {
+// Service tokens removed - ServiceLocator uses string-based registration
+
+// Legacy alias for compatibility
+export interface IConfigurationService extends IConfiguration {
+    // All methods inherited from IConfiguration
+}
+
+// Extended Configuration service for VS Code (if needed for backwards compatibility)
+export interface IConfiguration extends ISimpleConfiguration {
     get<T>(key: string, defaultValue?: T): T;
     getAll(): Record<string, any>;
     update(key: string, value: any, target?: vscode.ConfigurationTarget): Promise<void>;
@@ -114,7 +92,7 @@ export interface ILoggingService {
 
     // Configuration-aware logging
     isLevelEnabled(level: LogLevel): boolean;
-    setConfigurationService?(configService: IConfigurationService): void;
+    setConfigurationService?(configService: IConfiguration): void;
 
     // Channel management
     getChannel(name: string): vscode.OutputChannel;
@@ -129,9 +107,35 @@ export interface ILoggingService {
     dispose(): void;
 }
 
-// Event bus for centralized pub/sub communication
-export interface IEventBus {
-    publish(event: string, data?: any): void;
+// Legacy alias
+export interface ILogger {
+    trace(message: string, data?: any): void;
+    debug(message: string, data?: any): void;
+    agents(message: string, data?: any): void;
+    info(message: string, data?: any): void;
+    warn(message: string, data?: any): void;
+    error(message: string, data?: any): void;
+
+    // Configuration-aware logging
+    isLevelEnabled(level: LogLevel): boolean;
+    setConfigurationService?(configService: IConfiguration): void;
+
+    // Channel management
+    getChannel(name: string): vscode.OutputChannel;
+
+    // Utility methods
+    time(label: string): void;
+    timeEnd(label: string): void;
+
+    // Configuration change notification
+    onDidChangeConfiguration?(callback: () => void): vscode.Disposable;
+
+    dispose(): void;
+}
+
+// Combined interface for event bus (extends emitter, subscriber and publisher)
+export interface IEventBus extends IEventEmitter, IEventSubscriber, IEventPublisher {
+    // Core methods (already defined in base interfaces)
     subscribe(event: string, handler: (data?: any) => void): vscode.Disposable;
     unsubscribe(event: string, handler: Function): void;
 
@@ -141,7 +145,7 @@ export interface IEventBus {
     subscribePattern(pattern: string, handler: (event: string, data?: any) => void): vscode.Disposable;
 
     // Configuration methods
-    setLoggingService(logger: ILoggingService): void;
+    setLoggingService(logger: ILogger): void;
 
     dispose(): void;
 }
@@ -216,22 +220,11 @@ export type ServiceLifetime = 'singleton' | 'transient';
 // Service registration metadata
 export interface ServiceRegistration<T = any> {
     token: symbol;
-    factory: (container: IContainer) => T;
     lifetime: ServiceLifetime;
     instance?: T;
 }
 
-// Dependency injection container
-export interface IContainer {
-    register<T>(token: symbol, factory: (container: IContainer) => T, lifetime?: ServiceLifetime): void;
-    registerInstance<T>(token: symbol, instance: T): void;
-    resolve<T>(token: symbol): T;
-    resolveOptional<T>(token: symbol): T | undefined;
-    has(token: symbol): boolean;
-    setLoggingService(loggingService: ILoggingService): void;
-    createScope(): IContainer;
-    dispose(): Promise<void>;
-}
+// Legacy Container interface removed - replaced by ServiceLocator
 
 // Disposable pattern for services
 // NOTE: Service dispose() methods MUST be synchronous to ensure proper cleanup order
@@ -255,7 +248,6 @@ export interface ICommandHandler {
 }
 
 // Factory function type for creating services
-export type ServiceFactory<T> = (container: IContainer) => T;
 
 // Type helper for extracting service type from token
 export type ServiceType<T> = T extends symbol ? any : T;
@@ -297,10 +289,6 @@ export const CONFIG_KEYS = {
     PERSIST_AGENTS: 'persistAgents', // (future) Persist agent state
     LOG_LEVEL: 'logLevel', // (future) Logging level
     ORCHESTRATION_PORT: 'orchestrationPort', // (future) WebSocket server port
-    // Metrics configuration
-    ENABLE_METRICS: 'enableMetrics', // Enable metrics collection
-    METRICS_OUTPUT_LEVEL: 'metricsOutputLevel', // Metrics output detail level
-    METRICS_RETENTION_HOURS: 'metricsRetentionHours', // Metrics retention hours
     TEST_MODE: 'testMode', // Test mode flag
     CLAUDE_COMMAND_STYLE: 'claudeCommandStyle', // Claude command style
     // Orchestration service configuration
@@ -356,7 +344,7 @@ export interface IWebviewHost {
 }
 
 // Factory function type for creating webview hosts
-export type WebviewHostFactory = (panel: vscode.WebviewPanel, logging?: ILoggingService) => IWebviewHost;
+export type WebviewHostFactory = (panel: vscode.WebviewPanel, logging?: ILogger) => IWebviewHost;
 
 // Tree Data Provider interface for refresh capability
 export interface ITreeDataProviderWithRefresh {
@@ -417,7 +405,7 @@ export interface ITaskReader {
 }
 
 // Tree State Manager interface
-export interface ITreeStateManager {
+export interface IUIStateManager {
     setTeamName(name: string): void;
     getTeamName(): string;
     toggleSection(sectionId: string): void;
@@ -484,7 +472,7 @@ export interface ICapabilityMatcher {
 }
 
 // Task Queue interface for task management operations
-export interface ITaskQueue {
+export interface ITaskManager extends ISimpleTaskManager {
     // Core task operations
     addTask(config: TaskConfig): Task;
     getTask(taskId: string): Task | undefined;
@@ -648,44 +636,11 @@ export interface IMessagePersistenceService {
     dispose(): void;
 }
 
-// Metric types for performance monitoring
-export enum MetricType {
-    COUNTER = 'counter',
-    GAUGE = 'gauge',
-    HISTOGRAM = 'histogram',
-    TIMER = 'timer'
-}
-
 // Validation error interface
 export interface ValidationError {
     field: string;
     message: string;
     severity: 'error' | 'warning' | 'info';
-}
-
-// Metric data interface
-export interface MetricData {
-    name: string;
-    type: MetricType;
-    value: number;
-    tags?: Record<string, string>;
-    timestamp: Date;
-}
-
-// Metrics Service interface for performance monitoring
-export interface IMetricsService {
-    incrementCounter(name: string, tags?: Record<string, string>): void;
-    recordDuration(name: string, duration: number, tags?: Record<string, string>): void;
-    setGauge(name: string, value: number, tags?: Record<string, string>): void;
-    recordGauge(name: string, value: number, tags?: Record<string, string>): void; // Alias for setGauge
-    recordLoadBalancingMetric(name: string, value: number, tags?: Record<string, string>): void;
-    startTimer(name: string): string;
-    endTimer(timerId: string): void;
-    getMetrics(): MetricData[];
-    resetMetrics(): void;
-    exportMetrics(format?: 'json' | 'csv'): string;
-    getDashboardData(): Record<string, any>;
-    dispose(): void;
 }
 
 // Configuration Validator interface for schema-based validation
@@ -697,13 +652,6 @@ export interface IConfigurationValidator {
     getValidationErrors(): ValidationError[];
     dispose(): void;
 }
-
-// Configuration keys for metrics - map to CONFIG_KEYS to avoid duplication
-export const METRICS_CONFIG_KEYS = {
-    ENABLE_METRICS: CONFIG_KEYS.ENABLE_METRICS,
-    METRICS_OUTPUT_LEVEL: CONFIG_KEYS.METRICS_OUTPUT_LEVEL,
-    METRICS_RETENTION_HOURS: CONFIG_KEYS.METRICS_RETENTION_HOURS
-} as const;
 
 // Task Tool Bridge interface for sub-agent management
 export interface ITaskToolBridge {
@@ -739,12 +687,33 @@ export interface IMessageRouter {
 }
 
 // Session Persistence Service interface for managing agent sessions
-export interface ISessionPersistenceService {
+export interface IPersistenceService {
     createSession(agent: any, workingDirectory?: string): Promise<any>;
     restoreSession(sessionId: string, options: any): Promise<any | null>;
     archiveSession(sessionId: string): Promise<void>;
     getSessionSummaries(): Promise<any[]>;
     getActiveSession(agentId: string): Promise<any | null>;
     updateSession(sessionId: string, updates: Partial<any>): Promise<void>;
+    dispose(): void;
+}
+
+// Unified persistence service interface
+export interface IPersistenceService {
+    // Agent lifecycle
+    saveAgent(agent: any): Promise<void>;
+    loadAgents(): Promise<any[]>;
+    removeAgent(agentId: string): Promise<void>;
+
+    // Session management
+    createSession(agent: any): Promise<any>;
+    addMessage(sessionId: string, message: any): Promise<void>;
+    startTask(sessionId: string, task: any): Promise<string>;
+    completeTask(sessionId: string, taskId: string, success?: boolean): Promise<void>;
+    archiveSession(sessionId: string): Promise<void>;
+    getActiveSessions(): Promise<any[]>;
+
+    // Utility
+    clearAllData(): Promise<void>;
+    getStorageStats(): Promise<{ agents: number; sessions: number; storageVersion: string }>;
     dispose(): void;
 }

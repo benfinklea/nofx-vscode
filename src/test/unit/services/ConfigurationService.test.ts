@@ -31,7 +31,9 @@ import { ConfigurationService } from '../../../services/ConfigurationService';
 import { IConfigurationValidator, IEventBus, ValidationError } from '../../../services/interfaces';
 import { createMockEventBus, setupVSCodeMocks } from './../../helpers/mockFactories';
 import { CONFIG_EVENTS } from '../../../services/EventConstants';
-
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';
 describe('ConfigurationService', () => {
     let configurationService: ConfigurationService;
     let mockValidator: any;

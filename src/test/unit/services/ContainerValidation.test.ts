@@ -13,14 +13,14 @@ import { MessageValidator } from '../../../services/MessageValidator';
 import { MetricsService } from '../../../services/MetricsService';
 import { TerminalManager } from '../../../services/TerminalManager';
 import { UIStateManager } from '../../../services/UIStateManager';
-import { TreeStateManager } from '../../../services/TreeStateManager';
+import { UIStateManager } from '../../../services/UIStateManager';
 import { WorktreeService } from '../../../services/WorktreeService';
 import { ConnectionPoolService } from '../../../services/ConnectionPoolService';
 import { AgentLifecycleManager } from '../../../services/AgentLifecycleManager';
 import { CommandService } from '../../../services/CommandService';
 import { AgentManager } from '../../../agents/AgentManager';
 import { AgentTemplateManager } from '../../../agents/AgentTemplateManager';
-import { AgentPersistence } from '../../../persistence/AgentPersistence';
+import { PersistenceService } from '../../../services/PersistenceService';
 import { TaskQueue } from '../../../tasks/TaskQueue';
 import { TaskStateMachine } from '../../../tasks/TaskStateMachine';
 import { TaskDependencyManager } from '../../../tasks/TaskDependencyManager';
@@ -31,7 +31,9 @@ import { WorktreeManager } from '../../../worktrees/WorktreeManager';
 import { ConductorViewModel } from '../../../viewModels/ConductorViewModel';
 import { DashboardViewModel } from '../../../viewModels/DashboardViewModel';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,
@@ -224,10 +226,10 @@ describe('Container Validation', () => {
                 c => new UIStateManager(c.resolve(SERVICE_TOKENS.EventBus)),
                 true
             );
-            container.register(SERVICE_TOKENS.TreeStateManager, () => new TreeStateManager(), true);
+            container.register(SERVICE_TOKENS.UIStateManager, () => new UIStateManager(), true);
 
             expect(container.resolve(SERVICE_TOKENS.UIStateManager)).toBeInstanceOf(UIStateManager);
-            expect(container.resolve(SERVICE_TOKENS.TreeStateManager)).toBeInstanceOf(TreeStateManager);
+            expect(container.resolve(SERVICE_TOKENS.UIStateManager)).toBeInstanceOf(UIStateManager);
         });
     });
 
@@ -323,9 +325,9 @@ describe('Container Validation', () => {
             );
 
             container.register(
-                SERVICE_TOKENS.AgentPersistence,
+                SERVICE_TOKENS.PersistenceService,
                 c =>
-                    new AgentPersistence(
+                    new PersistenceService(
                         c.resolve(SERVICE_TOKENS.ExtensionContext),
                         c.resolve(SERVICE_TOKENS.LoggingService)
                     ),
@@ -334,7 +336,7 @@ describe('Container Validation', () => {
 
             expect(container.resolve(SERVICE_TOKENS.AgentManager)).toBeInstanceOf(AgentManager);
             expect(container.resolve(SERVICE_TOKENS.AgentTemplateManager)).toBeInstanceOf(AgentTemplateManager);
-            expect(container.resolve(SERVICE_TOKENS.AgentPersistence)).toBeInstanceOf(AgentPersistence);
+            expect(container.resolve(SERVICE_TOKENS.PersistenceService)).toBeInstanceOf(PersistenceService);
         });
 
         it('should register task-related services', () => {

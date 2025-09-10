@@ -102,15 +102,13 @@ describe('SystemHealthMonitor', () => {
     describe('initialization', () => {
         it('should initialize successfully', () => {
             expect(monitor).toBeDefined();
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                'SystemHealthMonitor: Initializing'
-            );
+            expect(mockLoggingService.info).toHaveBeenCalledWith('SystemHealthMonitor: Initializing');
         });
 
         it('should register default components', () => {
             const health = monitor.getSystemHealth();
             const componentNames = health.components.map(c => c.name);
-            
+
             expect(componentNames).toContain('NaturalLanguageService');
             expect(componentNames).toContain('TerminalCommandRouter');
             expect(componentNames).toContain('AgentNotificationService');
@@ -120,15 +118,15 @@ describe('SystemHealthMonitor', () => {
 
         it('should start health checks automatically', () => {
             jest.useFakeTimers();
-            
+
             const newMonitor = new SystemHealthMonitor(mockLoggingService, mockEventBus);
-            
+
             jest.advanceTimersByTime(15000); // HEALTH_CHECK_INTERVAL
-            
+
             // Should have performed health checks
             const health = newMonitor.getSystemHealth();
             expect(health.components.length).toBeGreaterThan(0);
-            
+
             newMonitor.dispose();
             jest.useRealTimers();
         });
@@ -143,7 +141,7 @@ describe('SystemHealthMonitor', () => {
     describe('registerService', () => {
         it('should register NaturalLanguageService', () => {
             monitor.registerService('NaturalLanguageService', mockNLService);
-            
+
             expect(mockLoggingService.debug).toHaveBeenCalledWith(
                 'Registered service for monitoring: NaturalLanguageService'
             );
@@ -151,7 +149,7 @@ describe('SystemHealthMonitor', () => {
 
         it('should register TerminalCommandRouter', () => {
             monitor.registerService('TerminalCommandRouter', mockRouter);
-            
+
             expect(mockLoggingService.debug).toHaveBeenCalledWith(
                 'Registered service for monitoring: TerminalCommandRouter'
             );
@@ -159,7 +157,7 @@ describe('SystemHealthMonitor', () => {
 
         it('should register AgentNotificationService', () => {
             monitor.registerService('AgentNotificationService', mockNotificationService);
-            
+
             expect(mockLoggingService.debug).toHaveBeenCalledWith(
                 'Registered service for monitoring: AgentNotificationService'
             );
@@ -167,10 +165,8 @@ describe('SystemHealthMonitor', () => {
 
         it('should handle unknown service names gracefully', () => {
             monitor.registerService('UnknownService', {});
-            
-            expect(mockLoggingService.debug).toHaveBeenCalledWith(
-                'Registered service for monitoring: UnknownService'
-            );
+
+            expect(mockLoggingService.debug).toHaveBeenCalledWith('Registered service for monitoring: UnknownService');
         });
     });
 
@@ -182,13 +178,13 @@ describe('SystemHealthMonitor', () => {
 
         it('should check NaturalLanguageService health', async () => {
             await monitor.forceHealthCheck();
-            
+
             expect(mockNLService.getHealthStatus).toHaveBeenCalled();
         });
 
         it('should check TerminalCommandRouter health', async () => {
             await monitor.forceHealthCheck();
-            
+
             expect(mockRouter.getHealthStatus).toHaveBeenCalled();
         });
 
@@ -208,23 +204,22 @@ describe('SystemHealthMonitor', () => {
             });
 
             await monitor.forceHealthCheck();
-            
+
             expect(mockEventBus.subscribe).toHaveBeenCalledWith(
                 expect.stringMatching(/^health\.check\.\d+$/),
                 expect.any(Function)
             );
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                expect.stringMatching(/^health\.check\.\d+$/),
-                { test: true }
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith(expect.stringMatching(/^health\.check\.\d+$/), {
+                test: true
+            });
         });
 
         it('should check VS Code API health', async () => {
             await monitor.forceHealthCheck();
-            
+
             const health = monitor.getSystemHealth();
             const vscodeComponent = health.components.find(c => c.name === 'VSCodeAPI');
-            
+
             expect(vscodeComponent).toBeDefined();
             expect(vscodeComponent?.isHealthy).toBe(true);
         });
@@ -238,10 +233,8 @@ describe('SystemHealthMonitor', () => {
             });
 
             await monitor.forceHealthCheck();
-            
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                'Component NaturalLanguageService became unhealthy'
-            );
+
+            expect(mockLoggingService.warn).toHaveBeenCalledWith('Component NaturalLanguageService became unhealthy');
             expect(mockEventBus.publish).toHaveBeenCalledWith(
                 'component.unhealthy',
                 expect.objectContaining({ component: 'NaturalLanguageService' })
@@ -257,16 +250,14 @@ describe('SystemHealthMonitor', () => {
             });
 
             await monitor.forceHealthCheck();
-            
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                'Component TerminalCommandRouter became unhealthy'
-            );
+
+            expect(mockLoggingService.warn).toHaveBeenCalledWith('Component TerminalCommandRouter became unhealthy');
         });
 
         it('should detect system health degradation', async () => {
             // All components healthy first
             await monitor.forceHealthCheck();
-            
+
             // Make a component unhealthy
             mockNLService.getHealthStatus.mockReturnValue({
                 isHealthy: false,
@@ -274,12 +265,10 @@ describe('SystemHealthMonitor', () => {
                 lastSuccess: new Date(),
                 cacheSize: 0
             });
-            
+
             await monitor.forceHealthCheck();
-            
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                expect.stringContaining('System health degraded')
-            );
+
+            expect(mockLoggingService.warn).toHaveBeenCalledWith(expect.stringContaining('System health degraded'));
             expect(mockEventBus.publish).toHaveBeenCalledWith(
                 'system.health.degraded',
                 expect.objectContaining({ unhealthyCount: expect.any(Number) })
@@ -295,7 +284,7 @@ describe('SystemHealthMonitor', () => {
                 cacheSize: 0
             });
             await monitor.forceHealthCheck();
-            
+
             // Restore health
             mockNLService.getHealthStatus.mockReturnValue({
                 isHealthy: true,
@@ -304,12 +293,9 @@ describe('SystemHealthMonitor', () => {
                 cacheSize: 10
             });
             await monitor.forceHealthCheck();
-            
+
             expect(mockLoggingService.info).toHaveBeenCalledWith('System health restored');
-            expect(mockEventBus.publish).toHaveBeenCalledWith(
-                'system.health.restored',
-                {}
-            );
+            expect(mockEventBus.publish).toHaveBeenCalledWith('system.health.restored', {});
         });
 
         it('should handle errors during health check', async () => {
@@ -318,26 +304,23 @@ describe('SystemHealthMonitor', () => {
             });
 
             await monitor.forceHealthCheck();
-            
-            expect(mockLoggingService.error).toHaveBeenCalledWith(
-                'Error during health check:',
-                expect.any(Error)
-            );
+
+            expect(mockLoggingService.error).toHaveBeenCalledWith('Error during health check:', expect.any(Error));
         });
 
         it('should warn about slow health checks', async () => {
             // Mock slow health check
             mockNLService.getHealthStatus.mockImplementation(() => {
                 const start = Date.now();
-                while (Date.now() - start < 1100) { /* spin */ }
+                while (Date.now() - start < 1100) {
+                    /* spin */
+                }
                 return { isHealthy: true, failureCount: 0, lastSuccess: new Date(), cacheSize: 0 };
             });
 
             await monitor.forceHealthCheck();
-            
-            expect(mockLoggingService.warn).toHaveBeenCalledWith(
-                expect.stringMatching(/Health check took \d+ms/)
-            );
+
+            expect(mockLoggingService.warn).toHaveBeenCalledWith(expect.stringMatching(/Health check took \d+ms/));
         });
     });
 
@@ -356,10 +339,8 @@ describe('SystemHealthMonitor', () => {
             });
 
             await monitor.forceHealthCheck();
-            
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                'Attempting recovery for NaturalLanguageService'
-            );
+
+            expect(mockLoggingService.info).toHaveBeenCalledWith('Attempting recovery for NaturalLanguageService');
             expect(mockNLService.reset).toHaveBeenCalled();
         });
 
@@ -374,7 +355,7 @@ describe('SystemHealthMonitor', () => {
             // First recovery attempt
             await monitor.forceHealthCheck();
             expect(mockNLService.reset).toHaveBeenCalledTimes(1);
-            
+
             // Immediate second check should not trigger recovery (cooldown)
             await monitor.forceHealthCheck();
             expect(mockNLService.reset).toHaveBeenCalledTimes(1);
@@ -411,9 +392,9 @@ describe('SystemHealthMonitor', () => {
                 lastSuccess: new Date(),
                 cacheSize: 0
             });
-            
+
             await monitor.forceHealthCheck();
-            
+
             // Component recovers
             mockNLService.getHealthStatus.mockReturnValue({
                 isHealthy: true,
@@ -424,12 +405,10 @@ describe('SystemHealthMonitor', () => {
             mockNLService.reset.mockImplementation(() => {
                 // Successful recovery
             });
-            
+
             await monitor.forceHealthCheck();
-            
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                'Successfully recovered NaturalLanguageService'
-            );
+
+            expect(mockLoggingService.info).toHaveBeenCalledWith('Successfully recovered NaturalLanguageService');
         });
     });
 
@@ -452,7 +431,7 @@ describe('SystemHealthMonitor', () => {
 
         it('should reload window when user chooses', async () => {
             (vscode.window.showErrorMessage as jest.Mock).mockResolvedValue('Reload Window');
-            
+
             // Trigger critical failure
             for (let i = 0; i < 6; i++) {
                 mockNLService.getHealthStatus.mockImplementation(() => {
@@ -462,15 +441,13 @@ describe('SystemHealthMonitor', () => {
             }
 
             await new Promise(resolve => setTimeout(resolve, 100));
-            
-            expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-                'workbench.action.reloadWindow'
-            );
+
+            expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.action.reloadWindow');
         });
 
         it('should disable extension when user chooses', async () => {
             (vscode.window.showErrorMessage as jest.Mock).mockResolvedValue('Disable Extension');
-            
+
             // Trigger critical failure
             for (let i = 0; i < 6; i++) {
                 mockNLService.getHealthStatus.mockImplementation(() => {
@@ -480,7 +457,7 @@ describe('SystemHealthMonitor', () => {
             }
 
             await new Promise(resolve => setTimeout(resolve, 100));
-            
+
             expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
                 'workbench.extensions.action.disableExtension',
                 'nofx.nofx'
@@ -490,10 +467,7 @@ describe('SystemHealthMonitor', () => {
 
     describe('error event listeners', () => {
         it('should listen for system.error events', () => {
-            expect(mockEventBus.subscribe).toHaveBeenCalledWith(
-                'system.error',
-                expect.any(Function)
-            );
+            expect(mockEventBus.subscribe).toHaveBeenCalledWith('system.error', expect.any(Function));
         });
 
         it('should increment critical failures on system error', () => {
@@ -506,12 +480,12 @@ describe('SystemHealthMonitor', () => {
             });
 
             const newMonitor = new SystemHealthMonitor(mockLoggingService, mockEventBus);
-            
+
             errorHandler({ error: 'Test error' });
-            
+
             const health = newMonitor.getSystemHealth();
             expect(health.criticalFailures).toBe(1);
-            
+
             newMonitor.dispose();
         });
 
@@ -525,25 +499,22 @@ describe('SystemHealthMonitor', () => {
             });
 
             const newMonitor = new SystemHealthMonitor(mockLoggingService, mockEventBus);
-            
+
             failedHandler({ component: 'TestComponent' });
-            
+
             const health = newMonitor.getSystemHealth();
             const component = health.components.find(c => c.name === 'TestComponent');
             expect(component).toBeUndefined(); // Component not registered, so not in list
-            
+
             newMonitor.dispose();
         });
 
         it('should handle unhandled promise rejections', () => {
             if (unhandledRejectionHandler) {
                 unhandledRejectionHandler('Test rejection', Promise.reject());
-                
-                expect(mockLoggingService.error).toHaveBeenCalledWith(
-                    'Unhandled promise rejection:',
-                    'Test rejection'
-                );
-                
+
+                expect(mockLoggingService.error).toHaveBeenCalledWith('Unhandled promise rejection:', 'Test rejection');
+
                 const health = monitor.getSystemHealth();
                 expect(health.criticalFailures).toBeGreaterThan(0);
             }
@@ -553,7 +524,7 @@ describe('SystemHealthMonitor', () => {
     describe('getSystemHealth', () => {
         it('should return complete health status', () => {
             const health = monitor.getSystemHealth();
-            
+
             expect(health).toHaveProperty('isHealthy');
             expect(health).toHaveProperty('components');
             expect(health).toHaveProperty('criticalFailures');
@@ -564,7 +535,7 @@ describe('SystemHealthMonitor', () => {
 
         it('should include all registered components', () => {
             const health = monitor.getSystemHealth();
-            
+
             expect(health.components.length).toBe(5); // 5 default components
             health.components.forEach(component => {
                 expect(component).toHaveProperty('name');
@@ -585,10 +556,10 @@ describe('SystemHealthMonitor', () => {
                 cacheSize: 0
             });
             await monitor.forceHealthCheck();
-            
+
             // Reset
             monitor.reset();
-            
+
             const health = monitor.getSystemHealth();
             expect(health.isHealthy).toBe(true);
             expect(health.criticalFailures).toBe(0);
@@ -597,10 +568,8 @@ describe('SystemHealthMonitor', () => {
                 expect(component.isHealthy).toBe(true);
                 expect(component.failureCount).toBe(0);
             });
-            
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                'Resetting system health monitor'
-            );
+
+            expect(mockLoggingService.info).toHaveBeenCalledWith('Resetting system health monitor');
         });
     });
 
@@ -608,14 +577,12 @@ describe('SystemHealthMonitor', () => {
         it('should stop health monitoring', () => {
             jest.useFakeTimers();
             const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
-            
+
             monitor.stop();
-            
+
             expect(clearIntervalSpy).toHaveBeenCalled();
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                'SystemHealthMonitor stopped'
-            );
-            
+            expect(mockLoggingService.info).toHaveBeenCalledWith('SystemHealthMonitor stopped');
+
             jest.useRealTimers();
         });
     });
@@ -623,11 +590,11 @@ describe('SystemHealthMonitor', () => {
     describe('dispose', () => {
         it('should clean up all resources', () => {
             const stopSpy = jest.spyOn(monitor, 'stop');
-            
+
             monitor.dispose();
-            
+
             expect(stopSpy).toHaveBeenCalled();
-            
+
             const health = monitor.getSystemHealth();
             expect(health.components.length).toBe(0);
             expect(health.recoveryAttempts.size).toBe(0);
@@ -638,20 +605,20 @@ describe('SystemHealthMonitor', () => {
         it('should handle missing EventBus', async () => {
             const monitorWithoutEventBus = new SystemHealthMonitor(mockLoggingService);
             await monitorWithoutEventBus.forceHealthCheck();
-            
+
             const health = monitorWithoutEventBus.getSystemHealth();
             const eventBusComponent = health.components.find(c => c.name === 'EventBus');
             expect(eventBusComponent?.isHealthy).toBe(false);
-            
+
             monitorWithoutEventBus.dispose();
         });
 
         it('should handle EventBus test event timeout', async () => {
             mockEventBus.subscribe.mockImplementation(() => ({ dispose: jest.fn() }));
             // Don't call the callback - simulate timeout
-            
+
             await monitor.forceHealthCheck();
-            
+
             const health = monitor.getSystemHealth();
             const eventBusComponent = health.components.find(c => c.name === 'EventBus');
             expect(eventBusComponent?.isHealthy).toBe(false);
@@ -661,13 +628,10 @@ describe('SystemHealthMonitor', () => {
             mockEventBus.publish.mockImplementation(() => {
                 throw new Error('EventBus error');
             });
-            
+
             await monitor.forceHealthCheck();
-            
-            expect(mockLoggingService.error).toHaveBeenCalledWith(
-                'EventBus health check failed:',
-                expect.any(Error)
-            );
+
+            expect(mockLoggingService.error).toHaveBeenCalledWith('EventBus health check failed:', expect.any(Error));
         });
     });
 
@@ -675,30 +639,29 @@ describe('SystemHealthMonitor', () => {
         it('should handle missing VS Code APIs', async () => {
             const originalWindow = (vscode as any).window;
             (vscode as any).window = undefined;
-            
+
             await monitor.forceHealthCheck();
-            
+
             const health = monitor.getSystemHealth();
             const vscodeComponent = health.components.find(c => c.name === 'VSCodeAPI');
             expect(vscodeComponent?.isHealthy).toBe(false);
-            
+
             (vscode as any).window = originalWindow;
         });
 
         it('should handle VS Code API check exceptions', async () => {
             const originalWindow = (vscode as any).window;
             Object.defineProperty(vscode, 'window', {
-                get: () => { throw new Error('VS Code API error'); },
+                get: () => {
+                    throw new Error('VS Code API error');
+                },
                 configurable: true
             });
-            
+
             await monitor.forceHealthCheck();
-            
-            expect(mockLoggingService.error).toHaveBeenCalledWith(
-                'VS Code API check failed:',
-                expect.any(Error)
-            );
-            
+
+            expect(mockLoggingService.error).toHaveBeenCalledWith('VS Code API check failed:', expect.any(Error));
+
             Object.defineProperty(vscode, 'window', {
                 value: originalWindow,
                 configurable: true

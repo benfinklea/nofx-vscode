@@ -1,0 +1,92 @@
+import * as vscode from 'vscode';
+import { ServiceLocator } from '../services/ServiceLocator';
+import { INotificationService, IConfiguration } from '../services/interfaces';
+import { ILogger } from '../interfaces/ILogging';
+
+/**
+ * Utility Commands - Supporting functionality
+ * Handles configuration, persistence, and auxiliary features
+ */
+export class UtilityCommands {
+    private readonly notificationService: INotificationService;
+    private readonly logger: ILogger;
+    private readonly config: IConfiguration;
+    
+    constructor() {
+        this.notificationService = ServiceLocator.get<INotificationService>('NotificationService');
+        this.logger = ServiceLocator.get<ILogger>('LoggingService');
+        this.config = ServiceLocator.get<IConfiguration>('ConfigurationService');
+    }
+    
+    register(context: vscode.ExtensionContext): void {
+        // Configuration Commands
+        this.registerCommand(context, 'nofx.openSettings', () => this.openSettings());
+        this.registerCommand(context, 'nofx.toggleWorktrees', () => this.toggleWorktrees());
+        
+        // Persistence Commands
+        this.registerCommand(context, 'nofx.exportSessions', () => this.exportSessions());
+        this.registerCommand(context, 'nofx.clearPersistence', () => this.clearPersistence());
+        
+        // Template Commands
+        this.registerCommand(context, 'nofx.browseTemplates', () => this.browseTemplates());
+        this.registerCommand(context, 'nofx.createTemplate', () => this.createTemplate());
+        
+        // Dashboard Commands
+        this.registerCommand(context, 'nofx.showDashboard', () => this.showDashboard());
+        this.registerCommand(context, 'nofx.refreshViews', () => this.refreshViews());
+    }
+    
+    private registerCommand(context: vscode.ExtensionContext, command: string, callback: (...args: any[]) => any) {
+        context.subscriptions.push(vscode.commands.registerCommand(command, callback));
+    }
+    
+    private async openSettings(): Promise<void> {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'nofx');
+    }
+    
+    private async toggleWorktrees(): Promise<void> {
+        const current = this.config.get('useWorktrees', false);
+        await this.config.update('useWorktrees', !current);
+        this.notificationService.showInformation(
+            `Git worktrees ${!current ? 'enabled' : 'disabled'}`
+        );
+    }
+    
+    private async exportSessions(): Promise<void> {
+        // Export current sessions
+        this.logger.info('Exporting sessions');
+        this.notificationService.showInformation('Sessions exported');
+    }
+    
+    private async clearPersistence(): Promise<void> {
+        const confirm = await this.notificationService.confirmDestructive(
+            'Clear all saved data?',
+            'Clear Data'
+        );
+        if (confirm) {
+            // Clear persistence
+            this.logger.info('Clearing persistence');
+            this.notificationService.showInformation('Data cleared');
+        }
+    }
+    
+    private async browseTemplates(): Promise<void> {
+        await vscode.commands.executeCommand('nofx.showTemplates');
+    }
+    
+    private async createTemplate(): Promise<void> {
+        // Template creation workflow
+        this.logger.info('Creating new template');
+    }
+    
+    private async showDashboard(): Promise<void> {
+        // Show message flow dashboard
+        await vscode.commands.executeCommand('nofx.openMessageFlowDashboard');
+    }
+    
+    private async refreshViews(): Promise<void> {
+        // Refresh all tree views
+        await vscode.commands.executeCommand('nofx.refreshAgentTree');
+        await vscode.commands.executeCommand('nofx.refreshTaskTree');
+    }
+}

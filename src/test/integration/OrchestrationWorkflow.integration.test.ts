@@ -23,7 +23,9 @@ import {
 import { ORCH_EVENTS } from '../../services/EventConstants';
 import { createTestContainer, createMockAgent, waitForEvent, measureTime } from '../setup';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../state/AppStateStore';
+import * as selectors from '../../state/selectors';
+import * as actions from '../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,

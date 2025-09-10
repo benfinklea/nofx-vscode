@@ -5,13 +5,23 @@ import * as fsSync from 'fs';
 import { execSync } from 'child_process';
 import { WorktreeManager } from '../../../worktrees/WorktreeManager';
 import { Agent } from '../../../agents/types';
-
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';
 // Mock logging service
 class MockLoggingService {
-    debug(message: string, ...args: any[]): void { console.log('[DEBUG]', message, ...args); }
-    info(message: string, ...args: any[]): void { console.log('[INFO]', message, ...args); }
-    warn(message: string, ...args: any[]): void { console.log('[WARN]', message, ...args); }
-    error(message: string, ...args: any[]): void { console.log('[ERROR]', message, ...args); }
+    debug(message: string, ...args: any[]): void {
+        console.log('[DEBUG]', message, ...args);
+    }
+    info(message: string, ...args: any[]): void {
+        console.log('[INFO]', message, ...args);
+    }
+    warn(message: string, ...args: any[]): void {
+        console.log('[WARN]', message, ...args);
+    }
+    error(message: string, ...args: any[]): void {
+        console.log('[ERROR]', message, ...args);
+    }
 }
 
 // Mock notification service
@@ -20,27 +30,27 @@ class MockNotificationService {
         console.log('[NOTIFICATION]', message, actions);
         return actions[0]; // Always pick first action for testing
     }
-    
+
     async showWarning(message: string, ...actions: string[]): Promise<string | undefined> {
         console.log('[WARNING]', message, actions);
         return actions[0];
     }
-    
+
     async showError(message: string, ...actions: string[]): Promise<string | undefined> {
         console.log('[ERROR]', message, actions);
         return undefined;
     }
 }
 
-describe('WorktreeManager Robustness Tests', function() {
+describe('WorktreeManager Robustness Tests', function () {
     this.timeout(30000); // 30 second timeout for git operations
-    
+
     let tempDir: string;
     let workspaceDir: string;
     let worktreeManager: WorktreeManager;
     let mockLogger: MockLoggingService;
     let mockNotification: MockNotificationService;
-    
+
     const testAgent: Agent = {
         id: 'test-agent-123',
         name: 'Test Agent',
@@ -61,23 +71,23 @@ describe('WorktreeManager Robustness Tests', function() {
         // Create temporary workspace
         tempDir = path.join(__dirname, `temp-workspace-${Date.now()}`);
         workspaceDir = path.join(tempDir, 'test-repo');
-        
+
         await fs.mkdir(workspaceDir, { recursive: true });
-        
+
         // Initialize git repository
         execSync('git init', { cwd: workspaceDir });
         execSync('git config user.name "Test User"', { cwd: workspaceDir });
         execSync('git config user.email "test@example.com"', { cwd: workspaceDir });
-        
+
         // Create initial commit
         await fs.writeFile(path.join(workspaceDir, 'README.md'), '# Test Repository');
         execSync('git add README.md', { cwd: workspaceDir });
         execSync('git commit -m "Initial commit"', { cwd: workspaceDir });
-        
+
         mockLogger = new MockLoggingService();
         mockNotification = new MockNotificationService();
         worktreeManager = new WorktreeManager(workspaceDir, mockLogger, mockNotification);
-        
+
         // Wait for initialization to complete
         await new Promise(resolve => setTimeout(resolve, 1000));
     });
@@ -87,7 +97,7 @@ describe('WorktreeManager Robustness Tests', function() {
             // Clean up worktrees before removing directory
             await worktreeManager.cleanupOrphanedWorktrees();
             worktreeManager.dispose();
-            
+
             // Remove temp directory
             if (fsSync.existsSync(tempDir)) {
                 await fs.rm(tempDir, { recursive: true, force: true });
@@ -114,12 +124,15 @@ describe('WorktreeManager Robustness Tests', function() {
                 if (results[i].status === 'fulfilled') {
                     const worktreePath = (results[i] as PromiseFulfilledResult<string>).value;
                     assert.ok(fsSync.existsSync(worktreePath), `Worktree should exist for ${agents[i].name}`);
-                    
+
                     // Verify marker file
                     const markerPath = path.join(worktreePath, '.nofx-agent');
                     assert.ok(fsSync.existsSync(markerPath), `Marker file should exist for ${agents[i].name}`);
                 } else {
-                    console.log(`Agent ${agents[i].name} creation failed (acceptable in concurrent test):`, (results[i] as PromiseRejectedResult).reason);
+                    console.log(
+                        `Agent ${agents[i].name} creation failed (acceptable in concurrent test):`,
+                        (results[i] as PromiseRejectedResult).reason
+                    );
                 }
             }
         });
@@ -165,7 +178,7 @@ describe('WorktreeManager Robustness Tests', function() {
 
         it('should handle removal of non-existent worktree gracefully', async () => {
             const nonExistentAgent = { ...testAgent, id: 'non-existent-agent' };
-            
+
             // Should not throw
             await worktreeManager.removeWorktreeForAgent(nonExistentAgent.id);
         });
@@ -203,7 +216,10 @@ describe('WorktreeManager Robustness Tests', function() {
             await worktreeManager.removeWorktreeForAgent(testAgent.id);
 
             // Verify directory was cleaned up
-            assert.ok(!fsSync.existsSync(worktreePath), 'Worktree directory should be removed even with git corruption');
+            assert.ok(
+                !fsSync.existsSync(worktreePath),
+                'Worktree directory should be removed even with git corruption'
+            );
         });
     });
 
@@ -211,7 +227,7 @@ describe('WorktreeManager Robustness Tests', function() {
         it('should identify and clean orphaned worktrees', async () => {
             // Create a worktree
             const worktreePath = await worktreeManager.createWorktreeForAgent(testAgent);
-            
+
             // Simulate orphaning by clearing the internal state
             (worktreeManager as any).worktrees.clear();
 
@@ -225,7 +241,7 @@ describe('WorktreeManager Robustness Tests', function() {
         it('should handle corrupted marker files during cleanup', async () => {
             // Create a worktree
             const worktreePath = await worktreeManager.createWorktreeForAgent(testAgent);
-            
+
             // Corrupt the marker file
             const markerPath = path.join(worktreePath, '.nofx-agent');
             await fs.writeFile(markerPath, 'invalid json content');
@@ -245,7 +261,7 @@ describe('WorktreeManager Robustness Tests', function() {
         it('should persist and recover worktree state across restarts', async () => {
             // Create a worktree
             const originalPath = await worktreeManager.createWorktreeForAgent(testAgent);
-            
+
             // Get current stats
             const stats = await worktreeManager.getWorktreeStats();
             assert.strictEqual(stats.activeWorktrees, 1, 'Should have one active worktree');
@@ -268,7 +284,7 @@ describe('WorktreeManager Robustness Tests', function() {
         it('should handle corrupted state file gracefully', async () => {
             // Create a worktree first
             await worktreeManager.createWorktreeForAgent(testAgent);
-            
+
             // Corrupt the state file
             const stateFile = path.join(path.dirname(workspaceDir), '.nofx-worktrees', '.worktree-state.json');
             if (fsSync.existsSync(stateFile)) {
@@ -291,7 +307,7 @@ describe('WorktreeManager Robustness Tests', function() {
         it('should detect missing worktree directories', async () => {
             // Create a worktree
             const worktreePath = await worktreeManager.createWorktreeForAgent(testAgent);
-            
+
             // Manually remove the directory but keep state
             await fs.rm(worktreePath, { recursive: true, force: true });
 
@@ -306,7 +322,7 @@ describe('WorktreeManager Robustness Tests', function() {
         it('should recover from error states when possible', async () => {
             // Create a worktree
             const worktreePath = await worktreeManager.createWorktreeForAgent(testAgent);
-            
+
             // Manually set error state
             const state = worktreeManager.getWorktreeState(testAgent.id);
             if (state) {
@@ -319,7 +335,11 @@ describe('WorktreeManager Robustness Tests', function() {
 
             // Should be recovered
             const recoveredState = worktreeManager.getWorktreeState(testAgent.id);
-            assert.strictEqual(recoveredState?.status, 'active', 'Should recover from error state when directory exists');
+            assert.strictEqual(
+                recoveredState?.status,
+                'active',
+                'Should recover from error state when directory exists'
+            );
             assert.strictEqual(recoveredState?.errorCount, 0, 'Error count should be reset');
         });
     });
@@ -348,7 +368,10 @@ describe('WorktreeManager Robustness Tests', function() {
 
             // System should be in a clean state
             const allStates = worktreeManager.getAllWorktreeStates();
-            console.log('States after emergency recovery:', allStates.map(s => ({ id: s.agentId, status: s.status })));
+            console.log(
+                'States after emergency recovery:',
+                allStates.map(s => ({ id: s.agentId, status: s.status }))
+            );
         });
     });
 
@@ -356,9 +379,9 @@ describe('WorktreeManager Robustness Tests', function() {
         it('should handle disk full scenarios gracefully', async () => {
             // This test would ideally simulate disk full conditions
             // For now, we test the error handling path
-            
+
             const invalidAgent = { ...testAgent, name: '/invalid/path/name' };
-            
+
             try {
                 await worktreeManager.createWorktreeForAgent(invalidAgent);
                 // If it doesn't throw, that's okay - git might handle it
@@ -371,10 +394,10 @@ describe('WorktreeManager Robustness Tests', function() {
         it('should handle network interruptions during git operations', async () => {
             // This would ideally test network failures during git operations
             // For now, we test timeout and retry behavior is in place
-            
+
             // The retry mechanism should be tested by the implementation
             // Here we just verify the system can recover from transient failures
-            
+
             const worktreePath = await worktreeManager.createWorktreeForAgent(testAgent);
             assert.ok(fsSync.existsSync(worktreePath), 'Should create worktree despite potential transient issues');
         });

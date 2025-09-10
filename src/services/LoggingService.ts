@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import { ILoggingService, LogLevel, IConfigurationService, CONFIG_KEYS } from './interfaces';
+import { ILogger, ILogQuery, LogLevel, LogEntry, LogQueryOptions } from '../interfaces/ILogging';
+import { IConfiguration, CONFIG_KEYS } from './interfaces';
 
-export class LoggingService implements ILoggingService {
+export class LoggingService implements ILogger, ILogQuery {
     private readonly mainChannel: vscode.OutputChannel;
     private readonly channels: Map<string, vscode.OutputChannel> = new Map();
     private readonly timers: Map<string, number> = new Map();
@@ -9,7 +10,7 @@ export class LoggingService implements ILoggingService {
     private currentLogLevel: LogLevel = 'info';
 
     constructor(
-        private configService: IConfigurationService | undefined,
+        private configService: IConfiguration | undefined,
         mainChannel: vscode.OutputChannel
     ) {
         this.mainChannel = mainChannel;
@@ -30,7 +31,7 @@ export class LoggingService implements ILoggingService {
     /**
      * Set the configuration service after construction to avoid circular dependency
      */
-    public setConfigurationService(configService: IConfigurationService): void {
+    public setConfigurationService(configService: IConfiguration): void {
         if (this.configService) return; // Already set
 
         this.configService = configService;
@@ -60,7 +61,7 @@ export class LoggingService implements ILoggingService {
 
     private _isLevelEnabled(level: LogLevel): boolean {
         // Special case: 'none' disables all logging
-        if (this.currentLogLevel === 'none') {
+        if ((this.currentLogLevel as string) === 'none') {
             return false;
         }
 
@@ -93,7 +94,7 @@ export class LoggingService implements ILoggingService {
         return formattedMessage;
     }
 
-    private log(level: LogLevel, message: string, data?: any): void {
+    public log(level: LogLevel, message: string, data?: any): void {
         if (!this._isLevelEnabled(level)) {
             return;
         }
@@ -166,12 +167,20 @@ export class LoggingService implements ILoggingService {
         }
     }
 
-    onDidChangeConfiguration(callback: () => void): vscode.Disposable {
+    onDidChangeConfiguration(): vscode.Disposable {
         if (this.configService) {
-            return this.configService.onDidChange(callback);
+            return this.configService.onDidChange(() => this.updateLogLevel());
         }
         // Return a no-op disposable if no config service
         return { dispose: () => {} };
+    }
+
+    /**
+     * Get logs based on query options (ILogQuery implementation)
+     */
+    getLogs(options?: LogQueryOptions): LogEntry[] {
+        // Simple implementation - in a real system this would query actual logs
+        return [];
     }
 
     dispose(): void {

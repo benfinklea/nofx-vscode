@@ -717,7 +717,9 @@ export enum TaskReassignmentReason {
     /** Performance optimization */
     PERFORMANCE_OPTIMIZATION = 'performance-optimization',
     /** Capacity optimization */
-    CAPACITY_OPTIMIZATION = 'capacity-optimization'
+    CAPACITY_OPTIMIZATION = 'capacity-optimization',
+    /** Load balancing */
+    LOAD_BALANCING = 'load-balancing'
 }
 
 /**

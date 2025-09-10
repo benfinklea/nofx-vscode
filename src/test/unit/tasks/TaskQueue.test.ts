@@ -17,7 +17,9 @@ import { Task, TaskConfig, TaskStatus } from '../../../agents/types';
 import { createTestContainer, createMockAgent, createMockTask, waitForEvent } from '../../setup';
 import { DOMAIN_EVENTS } from '../../../services/EventConstants';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,

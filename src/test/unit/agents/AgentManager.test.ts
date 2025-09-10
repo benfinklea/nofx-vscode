@@ -42,7 +42,7 @@ jest.mock('vscode', () => ({
     }
 }));
 
-jest.mock('../../../persistence/AgentPersistence');
+jest.mock('../../../services/PersistenceService');
 
 import * as vscode from 'vscode';
 import { AgentManager } from '../../../agents/AgentManager';
@@ -66,8 +66,10 @@ import {
     createMockNotificationService,
     createMockTerminal
 } from './../../helpers/mockFactories';
-import { AgentPersistence } from '../../../persistence/AgentPersistence';
-
+import { PersistenceService } from '../../../services/PersistenceService';
+import { getAppStateStore } from '../../../state/AppStateStore';
+import * as selectors from '../../../state/selectors';
+import * as actions from '../../../state/actions';
 describe('AgentManager', () => {
     let agentManager: AgentManager;
     let mockContext: vscode.ExtensionContext;
@@ -81,7 +83,7 @@ describe('AgentManager', () => {
     let mockErrorHandler: jest.Mocked<IErrorHandler>;
     let mockMetricsService: jest.Mocked<IMetricsService>;
     let mockTerminal: any;
-    let mockPersistence: jest.Mocked<AgentPersistence>;
+    let mockPersistence: jest.Mocked<PersistenceService>;
 
     beforeEach(() => {
         jest.clearAllMocks();

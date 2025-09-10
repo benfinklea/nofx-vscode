@@ -13,7 +13,9 @@ import { CommandService } from '../../services/CommandService';
 import { setupMockWorkspace, clearMockWorkspace } from './setup';
 import { TestHarness } from './testHarness';
 import {
-    createMockConfigurationService,
+import { getAppStateStore } from '../../state/AppStateStore';
+import * as selectors from '../../state/selectors';
+import * as actions from '../../state/actions';    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,
@@ -489,8 +491,8 @@ describe('Command Smoke Tests', () => {
 
     describe('Command Cleanup', () => {
         test('Clear persistence command should clean up data', async () => {
-            // Resolve AgentPersistence from container and spy on clearAll
-            const agentPersistence = container.resolveOptional<any>(SERVICE_TOKENS.AgentPersistence);
+            // Resolve PersistenceService from container and spy on clearAll
+            const agentPersistence = container.resolveOptional<any>(SERVICE_TOKENS.PersistenceService);
             let clearAllSpy: jest.SpyInstance;
 
             if (agentPersistence) {
@@ -501,7 +503,7 @@ describe('Command Smoke Tests', () => {
                     clearAll: jest.fn().mockResolvedValue(undefined),
                     loadAgents: jest.fn().mockResolvedValue([])
                 };
-                container.registerInstance(SERVICE_TOKENS.AgentPersistence, mockPersistence);
+                container.registerInstance(SERVICE_TOKENS.PersistenceService, mockPersistence);
                 clearAllSpy = mockPersistence.clearAll;
             }
 

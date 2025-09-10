@@ -345,18 +345,24 @@ describe('NaturalLanguageService', () => {
         it('should handle catastrophic failure gracefully', () => {
             // Force a catastrophic failure by mocking pattern matching to throw
             const patterns = (service as any).patterns;
-            (service as any).patterns = [{
-                pattern: /test/,
-                converter: () => { throw new Error('Catastrophic error'); },
-                description: 'test',
-                examples: [],
-                confidence: 1
-            }];
+            (service as any).patterns = [
+                {
+                    pattern: /test/,
+                    converter: () => {
+                        throw new Error('Catastrophic error');
+                    },
+                    description: 'test',
+                    examples: [],
+                    confidence: 1
+                }
+            ];
 
             const result = service.parseNaturalLanguage('test');
             expect(result.command).toBeNull();
             expect(result.error).toBe('Natural language service encountered an error');
-            expect(result.suggestions).toContain('Try using JSON format: {"type": "spawn", "role": "frontend-specialist"}');
+            expect(result.suggestions).toContain(
+                'Try using JSON format: {"type": "spawn", "role": "frontend-specialist"}'
+            );
 
             // Restore patterns
             (service as any).patterns = patterns;
@@ -366,29 +372,26 @@ describe('NaturalLanguageService', () => {
     describe('caching', () => {
         it('should cache successful parses', () => {
             const input = 'add a frontend dev';
-            
+
             // First call
             const result1 = service.parseNaturalLanguage(input);
             expect(result1.isFromCache).toBeUndefined();
-            
+
             // Second call should be from cache
             const result2 = service.parseNaturalLanguage(input);
             expect(result2.isFromCache).toBe(true);
             expect(result2.command).toEqual(result1.command);
-            expect(mockLoggingService.debug).toHaveBeenCalledWith(
-                'Returning cached command for input:',
-                input
-            );
+            expect(mockLoggingService.debug).toHaveBeenCalledWith('Returning cached command for input:', input);
         });
 
         it('should limit cache size', () => {
             const CACHE_SIZE = 100;
-            
+
             // Fill cache beyond limit
             for (let i = 0; i < CACHE_SIZE + 10; i++) {
                 service.parseNaturalLanguage(`{"type": "test", "id": ${i}}`);
             }
-            
+
             // Check cache size doesn't exceed limit
             const healthStatus = service.getHealthStatus();
             expect(healthStatus.cacheSize).toBeLessThanOrEqual(CACHE_SIZE);
@@ -401,7 +404,7 @@ describe('NaturalLanguageService', () => {
             for (let i = 0; i < 3; i++) {
                 service.parseNaturalLanguage('unmatched command ' + i);
             }
-            
+
             const health = service.getHealthStatus();
             expect(health.failureCount).toBe(3);
             expect(health.isHealthy).toBe(true);
@@ -409,12 +412,12 @@ describe('NaturalLanguageService', () => {
 
         it('should mark service unhealthy after MAX_FAILURES', () => {
             const MAX_FAILURES = 5;
-            
+
             // Force failures beyond threshold
             for (let i = 0; i < MAX_FAILURES + 1; i++) {
                 service.parseNaturalLanguage('unmatched command ' + i);
             }
-            
+
             const health = service.getHealthStatus();
             expect(health.failureCount).toBe(MAX_FAILURES + 1);
             expect(health.isHealthy).toBe(false);
@@ -427,13 +430,13 @@ describe('NaturalLanguageService', () => {
             // Force some failures
             service.parseNaturalLanguage('unmatched command');
             service.parseNaturalLanguage('unmatched command 2');
-            
+
             let health = service.getHealthStatus();
             expect(health.failureCount).toBe(2);
-            
+
             // Successful parse should reset
             service.parseNaturalLanguage('add a frontend dev');
-            
+
             health = service.getHealthStatus();
             expect(health.failureCount).toBe(0);
             expect(health.isHealthy).toBe(true);
@@ -443,7 +446,7 @@ describe('NaturalLanguageService', () => {
             const beforeParse = new Date();
             service.parseNaturalLanguage('add a frontend dev');
             const afterParse = new Date();
-            
+
             const health = service.getHealthStatus();
             expect(health.lastSuccess.getTime()).toBeGreaterThanOrEqual(beforeParse.getTime());
             expect(health.lastSuccess.getTime()).toBeLessThanOrEqual(afterParse.getTime());
@@ -456,21 +459,19 @@ describe('NaturalLanguageService', () => {
             for (let i = 0; i < 10; i++) {
                 service.parseNaturalLanguage('unmatched ' + i);
             }
-            
+
             let health = service.getHealthStatus();
             expect(health.isHealthy).toBe(false);
             expect(health.failureCount).toBeGreaterThan(5);
-            
+
             // Reset
             service.reset();
-            
+
             health = service.getHealthStatus();
             expect(health.isHealthy).toBe(true);
             expect(health.failureCount).toBe(0);
             expect(health.cacheSize).toBe(0);
-            expect(mockLoggingService.info).toHaveBeenCalledWith(
-                'NaturalLanguageService reset to healthy state'
-            );
+            expect(mockLoggingService.info).toHaveBeenCalledWith('NaturalLanguageService reset to healthy state');
         });
     });
 
@@ -489,43 +490,42 @@ describe('NaturalLanguageService', () => {
         it('should handle errors when getting examples', () => {
             // Mock patterns to be invalid
             (service as any).patterns = null;
-            
+
             const examples = service.getExamples();
             expect(examples).toContain('add a frontend dev');
             expect(examples).toContain('assign task to agent-1');
             expect(examples).toContain("what's everyone doing?");
-            expect(mockLoggingService.error).toHaveBeenCalledWith(
-                'Error getting examples:',
-                expect.anything()
-            );
+            expect(mockLoggingService.error).toHaveBeenCalledWith('Error getting examples:', expect.anything());
         });
     });
 
     describe('confirmInterpretation', () => {
         it('should show confirmation dialog and return true for Yes', async () => {
             (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue('Yes');
-            
-            const result = await service.confirmInterpretation(
-                'Spawn a new agent',
-                { type: 'spawn', role: 'frontend-specialist' }
-            );
-            
+
+            const result = await service.confirmInterpretation('Spawn a new agent', {
+                type: 'spawn',
+                role: 'frontend-specialist'
+            });
+
             expect(result).toBe(true);
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
                 expect.stringContaining('I understood: Spawn a new agent'),
                 { modal: false },
-                'Yes', 'No', 'Show JSON'
+                'Yes',
+                'No',
+                'Show JSON'
             );
         });
 
         it('should return false for No', async () => {
             (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue('No');
-            
-            const result = await service.confirmInterpretation(
-                'Spawn a new agent',
-                { type: 'spawn', role: 'frontend-specialist' }
-            );
-            
+
+            const result = await service.confirmInterpretation('Spawn a new agent', {
+                type: 'spawn',
+                role: 'frontend-specialist'
+            });
+
             expect(result).toBe(false);
         });
 
@@ -533,17 +533,18 @@ describe('NaturalLanguageService', () => {
             (vscode.window.showInformationMessage as jest.Mock)
                 .mockResolvedValueOnce('Show JSON')
                 .mockResolvedValueOnce('Execute');
-            
-            const result = await service.confirmInterpretation(
-                'Spawn a new agent',
-                { type: 'spawn', role: 'frontend-specialist' }
-            );
-            
+
+            const result = await service.confirmInterpretation('Spawn a new agent', {
+                type: 'spawn',
+                role: 'frontend-specialist'
+            });
+
             expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(2);
             expect(vscode.window.showInformationMessage).toHaveBeenLastCalledWith(
                 expect.stringContaining('JSON Command:'),
                 { modal: true },
-                'Execute', 'Cancel'
+                'Execute',
+                'Cancel'
             );
         });
 
@@ -551,12 +552,12 @@ describe('NaturalLanguageService', () => {
             (vscode.window.showInformationMessage as jest.Mock)
                 .mockResolvedValueOnce('Show JSON')
                 .mockResolvedValueOnce('Cancel');
-            
-            const result = await service.confirmInterpretation(
-                'Spawn a new agent',
-                { type: 'spawn', role: 'frontend-specialist' }
-            );
-            
+
+            const result = await service.confirmInterpretation('Spawn a new agent', {
+                type: 'spawn',
+                role: 'frontend-specialist'
+            });
+
             expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(2);
         });
     });
@@ -633,9 +634,9 @@ describe('NaturalLanguageService', () => {
         it('should provide suggestions with status keyword', () => {
             const result = service.parseNaturalLanguage('status check');
             expect(result.suggestions).toBeDefined();
-            expect(result.suggestions?.some(s => 
-                s.includes('status') || s.includes('doing') || s.includes('show')
-            )).toBe(true);
+            expect(
+                result.suggestions?.some(s => s.includes('status') || s.includes('doing') || s.includes('show'))
+            ).toBe(true);
         });
 
         it('should limit suggestions to 3', () => {
