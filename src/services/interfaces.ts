@@ -189,6 +189,8 @@ export interface ITerminalManager {
     initializeAgentTerminal(agent: any, workingDirectory?: string): Promise<void>;
     createEphemeralTerminal(name: string): vscode.Terminal;
     performHealthCheck(agentId: string): Promise<{ healthy: boolean; issues: string[] }>;
+    updateAgentStatus(agentId: string, agentConfig: any, newStatus: string): void;
+    refreshAllExitedTerminalIcons(): void;
     onTerminalClosed: vscode.Event<vscode.Terminal>;
     dispose(): void;
 }

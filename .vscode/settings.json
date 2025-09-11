@@ -1,4 +1,1 @@
-{
-    "nofx.claudeSkipPermissions": true,
-    "nofx.aiProvider": "claude"
-}
+{"nofx.testMode": true}

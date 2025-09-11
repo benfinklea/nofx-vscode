@@ -614,13 +614,27 @@ export class EnterpriseAgentManager implements IAgentReader {
         const aiPath = this.configService.getAiPath();
         this.loggingService?.info(`AI path: ${aiPath}`);
 
-        // Try to restore agents from persistence
-        const restoredCount = await this.restoreAgentsFromPersistence();
+        // Log available agents but don't auto-restore
+        const savedAgents = await this.persistence?.loadAgentState() || [];
+        if (savedAgents.length > 0) {
+            const maxAgents = Number(this.configService?.get('maxAgents')) || 3;
+            const recentAgents = savedAgents
+                .sort((a, b) => {
+                    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return timeB - timeA;
+                })
+                .slice(0, maxAgents);
+            
+            this.loggingService?.info(`Found ${savedAgents.length} saved agents. ${recentAgents.length} most recent available for restoration.`);
+            // Don't auto-restore - let user decide via "Restore Previous Session" command
+        }
+        
         this.metrics.updateAgentCounts({
             total: this.agents.size,
             active: this.getActiveAgents().length,
             failed: 0,
-            restored: restoredCount
+            restored: 0  // No auto-restoration
         });
 
         // Show setup dialog if requested
@@ -793,18 +807,22 @@ export class EnterpriseAgentManager implements IAgentReader {
             throw new DependencyNotSetError('AgentLifecycleManager not available');
         }
 
-        // Import template manager to create dynamic template
-        const { AgentTemplateManager } = await import('./AgentTemplateManager');
+        // Import unified NofX Agent Factory
+        const { NofxAgentFactory } = await import('./NofxAgentFactory');
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
         if (!workspaceFolder) {
             throw new AgentSpawnError('No workspace folder available for smart agent creation');
         }
 
-        const templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
+        const agentFactory = NofxAgentFactory.getInstance(workspaceFolder.uri.fsPath);
 
-        // Create dynamic template using SmartTemplateFactory
-        const smartTemplate = templateManager.createDynamicTemplate(config.smartConfig as any);
+        // Create dynamic template using NofxAgentFactory
+        const smartTemplate = agentFactory.createAgent({
+            coreType: 'fullstack', // Default to fullstack
+            customName: config.name,
+            customInstructions: config.smartConfig?.toString() || 'Enterprise smart agent'
+        });
 
         // Convert SmartAgentSpawnConfig to AgentConfig
         const agentConfig: AgentConfig = {
@@ -1133,6 +1151,10 @@ export class EnterpriseAgentManager implements IAgentReader {
                 return 0;
             }
 
+            // Get max agents from configuration
+            const maxAgents = Number(this.configService?.get('maxAgents')) || 3;
+            this.loggingService?.debug(`Max agents configured: ${maxAgents}`);
+
             const savedAgents = await this.persistence.loadAgentState();
             this.loggingService?.info(`Found ${savedAgents.length} saved agent(s)`);
 
@@ -1143,17 +1165,30 @@ export class EnterpriseAgentManager implements IAgentReader {
                 return 0;
             }
 
-            // Ask user if they want to restore
+            // Sort by creation time (most recent first) and limit to maxAgents
+            const sortedAgents = savedAgents
+                .sort((a, b) => {
+                    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return timeB - timeA; // Most recent first
+                })
+                .slice(0, maxAgents); // Limit to maxAgents
+
+            this.loggingService?.info(
+                `Selected ${sortedAgents.length} most recent agents (limited by maxAgents: ${maxAgents})`
+            );
+
+            // Ask user if they want to restore the most recent team
             const restore = userRequested
                 ? 'Yes, Restore'
                 : await this.notificationService?.showInformation(
-                      `Found ${savedAgents.length} saved agent(s). Restore them?`,
-                      'Yes, Restore',
+                      `Restore most recent team? (${sortedAgents.length} agents from ${savedAgents.length} total saved)`,
+                      'Yes, Restore Recent',
                       'No, Start Fresh'
                   );
 
-            if (restore === 'Yes, Restore' || userRequested) {
-                return await this.performAgentRestore(savedAgents);
+            if (restore === 'Yes, Restore Recent' || restore === 'Yes, Restore' || userRequested) {
+                return await this.performAgentRestore(sortedAgents, maxAgents);
             }
 
             return 0;
@@ -1164,25 +1199,51 @@ export class EnterpriseAgentManager implements IAgentReader {
         }
     }
 
-    private async performAgentRestore(savedAgents: any[]): Promise<number> {
-        // Import template manager to load actual templates
-        const { AgentTemplateManager } = await import('../agents/AgentTemplateManager');
+    private async performAgentRestore(savedAgents: any[], maxAgents: number): Promise<number> {
+        // Use unified NofxAgentFactory instead of AgentTemplateManager
+        const { NofxAgentFactory } = await import('../agents/NofxAgentFactory');
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        const templateManager = workspaceFolder ? new AgentTemplateManager(workspaceFolder.uri.fsPath) : null;
+        const agentFactory = workspaceFolder ? NofxAgentFactory.getInstance(workspaceFolder.uri.fsPath) : null;
 
         let restoredCount = 0;
         const errors: { agentName: string; error: any }[] = [];
 
         for (const savedAgent of savedAgents) {
+            // Check if we've hit the max agents limit
+            if (this.agents.size >= maxAgents) {
+                this.loggingService?.warn(`Reached max agents limit (${maxAgents}), stopping restoration`);
+                break;
+            }
             try {
-                // Load the actual template if it's just a string ID
+                // Load the actual template using unified factory
                 let template = savedAgent.template;
-                if (typeof savedAgent.template === 'string' && templateManager) {
-                    this.loggingService?.debug(`Loading template ${savedAgent.template} for agent ${savedAgent.name}`);
-                    template = await templateManager.getTemplate(savedAgent.template);
-                    if (!template) {
-                        this.loggingService?.warn(`Template ${savedAgent.template} not found, using ID as fallback`);
-                        template = savedAgent.template;
+                if (typeof savedAgent.template === 'string' && agentFactory) {
+                    this.loggingService?.debug(
+                        `Loading template ${savedAgent.template} for agent ${savedAgent.name} using NofxAgentFactory`
+                    );
+                    
+                    // Try to create using core agent types first
+                    const coreType = agentFactory.getCoreAgentType(savedAgent.template);
+                    if (coreType) {
+                        // Use core agent type
+                        template = agentFactory.createAgent({
+                            coreType: savedAgent.template,
+                            customName: savedAgent.name
+                        });
+                        this.loggingService?.debug(`Created template using core type: ${savedAgent.template}`);
+                    } else {
+                        // Fall back to legacy templates
+                        const legacyTemplates = await agentFactory.loadLegacyTemplates();
+                        const legacyTemplate = legacyTemplates.find(t => t.id === savedAgent.template);
+                        if (legacyTemplate) {
+                            template = legacyTemplate;
+                            this.loggingService?.debug(`Found legacy template: ${savedAgent.template}`);
+                        } else {
+                            this.loggingService?.warn(
+                                `Template ${savedAgent.template} not found in core types or legacy templates, using ID as fallback`
+                            );
+                            template = savedAgent.template;
+                        }
                     }
                 }
 

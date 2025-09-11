@@ -2,6 +2,132 @@
 
 This file provides comprehensive guidance to Claude Code (claude.ai/code) when working with the NofX VS Code extension.
 
+## 🚨 MANDATORY FIRST STEP - REQUIRED READING
+**BEFORE making ANY changes, you MUST read these files to understand the complete system:**
+
+### ✅ **ABSOLUTELY REQUIRED** (Read these or your changes will likely break things):
+1. **`SYSTEM_ARCHITECTURE.md`** - Complete system inventory, what exists, what NOT to create
+2. **`README.md`** - Project overview, setup, key concepts
+3. **`docs/development/DEVELOPER_GUIDE.md`** - Development workflow and patterns
+4. **`docs/architecture/THE_PHILOSOPHY_OF_NOFX.md`** - **CRITICAL** - Project philosophy and core principles that guide all decisions
+
+### 📋 **HIGHLY RECOMMENDED** (Read based on your task):
+5. **`docs/templates/AGENT_TEMPLATES.md`** - If working with agents
+6. **`docs/testing/TESTING_GUIDE.md`** - If writing tests or fixing bugs
+7. **`docs/audits/COMMAND_AUDIT.md`** - If working with commands
+8. **`docs/audits/SERVICE_AUDIT.md`** - If working with services
+9. **`docs/implementation/guides/ENTERPRISE_IMPLEMENTATION_GUIDE.md`** - For enterprise features
+10. **`docs/architecture/MULTI_AGENT_ANALYSIS.md`** - For agent coordination work
+
+### 🎯 **TASK-SPECIFIC** (Read if relevant):
+- **Working with Git worktrees?** → `docs/architecture/WORKTREE_ANALYSIS.md`
+- **WebSocket/orchestration work?** → `docs/architecture/WEBSOCKET_ANALYSIS.md`
+- **Configuration changes?** → `docs/audits/CONFIG_AUDIT.md`
+- **Task management?** → `docs/audits/TASK_SYSTEM_AUDIT.md`
+- **Persistence/storage?** → `docs/audits/PERSISTENCE_AUDIT.md`
+- **Performance work?** → `docs/testing/reports/PERFORMANCE_TEST_REPORT.md`
+- **Adding new templates?** → `docs/templates/TEMPLATE_ANALYSIS.md`
+
+### ⚠️ **WARNING: Skip Reading at Your Own Risk**
+If you don't read the required files, you will likely:
+- ❌ Recreate existing systems (waste time)
+- ❌ Break existing functionality
+- ❌ Miss critical architectural patterns
+- ❌ Create incompatible code
+- ❌ Duplicate work that's already done
+
+**DO NOT create systems that already exist. ENHANCE existing ones instead.**
+
+## 📝 Documentation Guidelines
+
+### Creating New Documentation
+**NEVER create markdown files in the root directory.** The root should only contain:
+- `README.md` - Main project readme
+- `CLAUDE.md` - This file (Claude instructions)
+- `SYSTEM_ARCHITECTURE.md` - System overview
+- `CONTRIBUTING.md` - Contribution guidelines
+
+### Where to Put New Documentation
+
+**Use the organized `docs/` structure:**
+
+```
+docs/
+├── development/     # Developer guides, build, debugging, troubleshooting
+├── testing/        # Testing guides and test reports
+├── architecture/   # System design, analysis, philosophy
+├── audits/        # System audits and reviews
+├── implementation/ # Implementation guides and status reports
+├── templates/     # Agent template documentation
+└── archive/       # Historical/completed/outdated docs
+```
+
+### Documentation Placement Rules
+
+**Development Documentation** → `docs/development/`
+- Build guides, debugging instructions, developer setup
+- Example: `docs/development/NEW_FEATURE_SETUP.md`
+
+**Testing Documentation** → `docs/testing/` or `docs/testing/reports/`
+- Test guides, coverage reports, performance analysis
+- Example: `docs/testing/INTEGRATION_TEST_GUIDE.md`
+- Reports: `docs/testing/reports/NEW_COVERAGE_REPORT.md`
+
+**Architecture Documentation** → `docs/architecture/`
+- System design, analysis, architectural decisions
+- Example: `docs/architecture/NEW_SUBSYSTEM_DESIGN.md`
+
+**Audit Documentation** → `docs/audits/`
+- Code audits, system reviews, analysis reports
+- Example: `docs/audits/SECURITY_AUDIT_2024.md`
+
+**Implementation Documentation** → `docs/implementation/`
+- Status reports: `docs/implementation/status/PHASE_XX_STATUS.md`
+- Guides: `docs/implementation/guides/MIGRATION_GUIDE.md`
+- Enterprise: `docs/implementation/enterprise/ENTERPRISE_FEATURE.md`
+
+**Template Documentation** → `docs/templates/`
+- Agent templates, template analysis
+- Example: `docs/templates/NEW_AGENT_TYPE.md`
+
+**Temporary/Outdated Documentation** → `docs/archive/`
+- Completed features: `docs/archive/completed-features/`
+- Old phases: `docs/archive/old-phases/`
+- Outdated docs: `docs/archive/outdated/`
+
+### Documentation Best Practices
+
+1. **Check existing docs first** - Don't duplicate existing documentation
+2. **Use descriptive filenames** - `FEATURE_ANALYSIS.md` not `analysis.md`
+3. **Update docs/README.md** - Add navigation for new major docs
+4. **Link related docs** - Cross-reference relevant documentation
+5. **Use consistent formatting** - Follow existing markdown patterns
+
+### Examples
+
+**❌ DON'T DO THIS:**
+```bash
+# Creating files in root
+touch AUTHENTICATION_GUIDE.md
+touch PERFORMANCE_ANALYSIS.md
+touch BUG_FIXES.md
+```
+
+**✅ DO THIS:**
+```bash
+# Organized in proper directories
+touch docs/development/AUTHENTICATION_GUIDE.md
+touch docs/testing/reports/PERFORMANCE_ANALYSIS.md
+touch docs/archive/completed-features/BUG_FIXES_Q3.md
+```
+
+**When in doubt, ask yourself:**
+- Is this a developer guide? → `docs/development/`
+- Is this a test report? → `docs/testing/reports/`
+- Is this system analysis? → `docs/architecture/` or `docs/audits/`
+- Is this implementation status? → `docs/implementation/status/`
+- Is this historical/completed? → `docs/archive/`
+
 ## 🎸 Project Overview
 
 NofX is a VS Code extension that orchestrates multiple AI agents (Claude instances) to work collaboratively on development tasks. It features a sophisticated conductor system that can manage agents, assign tasks, and coordinate complex workflows through a unified terminal-based interface.
@@ -489,3 +615,4 @@ lsof -i :7777
 
 *This extension orchestrates the future of AI-assisted development. When multiple AI agents work together, amazing things happen! 🎸*
 - when your compile, also install into cursor
+- I'm running cursor, not vs-code.

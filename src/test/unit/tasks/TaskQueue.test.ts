@@ -9,17 +9,16 @@ import {
     ITaskStateMachine,
     IPriorityTaskQueue,
     ICapabilityMatcher,
-    ITaskDependencyManager,
-    IMetricsService,
-    SERVICE_TOKENS
+    ITaskDependencyManager
 } from '../../../services/interfaces';
 import { Task, TaskConfig, TaskStatus } from '../../../agents/types';
 import { createTestContainer, createMockAgent, createMockTask, waitForEvent } from '../../setup';
 import { DOMAIN_EVENTS } from '../../../services/EventConstants';
-import {
 import { getAppStateStore } from '../../../state/AppStateStore';
 import * as selectors from '../../../state/selectors';
-import * as actions from '../../../state/actions';    createMockConfigurationService,
+import * as actions from '../../../state/actions';
+import {
+    createMockConfigurationService,
     createMockLoggingService,
     createMockEventBus,
     createMockNotificationService,
@@ -42,7 +41,6 @@ describe('TaskQueue', () => {
     let mockPriorityQueue: jest.Mocked<IPriorityTaskQueue>;
     let mockCapabilityMatcher: jest.Mocked<ICapabilityMatcher>;
     let mockDependencyManager: jest.Mocked<ITaskDependencyManager>;
-    let mockMetricsService: jest.Mocked<IMetricsService>;
 
     beforeEach(() => {
         const mockWorkspace = { getConfiguration: jest.fn().mockReturnValue({ get: jest.fn(), update: jest.fn() }) };
@@ -105,6 +103,66 @@ describe('TaskQueue', () => {
 
         mockConfigService = createMockConfigurationService();
 
+        // Create mock agent manager
+        agentManager = {
+            getAvailableAgents: jest.fn(() => []),
+            getAgent: jest.fn(),
+            executeTask: jest.fn(),
+            onAgentUpdate: jest.fn(),
+            getAgentTerminal: jest.fn(),
+            updateAgentLoad: jest.fn(),
+            getAgentCapacity: jest.fn(() => ({ currentLoad: 0, maxCapacity: 5 }))
+        } as any;
+
+        // Create mock state machine
+        mockTaskStateMachine = {
+            transition: jest.fn(() => []),
+            getCurrentState: jest.fn(),
+            canTransition: jest.fn(() => true),
+            getValidTransitions: jest.fn(() => []),
+            setTaskReader: jest.fn(),
+            dispose: jest.fn()
+        };
+
+        // Create mock priority queue
+        mockPriorityQueue = {
+            enqueue: jest.fn(),
+            dequeue: jest.fn(),
+            dequeueReady: jest.fn(),
+            peek: jest.fn(),
+            isEmpty: jest.fn(() => false),
+            size: jest.fn(() => 0),
+            contains: jest.fn(() => false),
+            remove: jest.fn(),
+            toArray: jest.fn(() => []),
+            moveToReady: jest.fn(),
+            updatePriority: jest.fn(),
+            computeEffectivePriority: jest.fn(),
+            dispose: jest.fn()
+        };
+
+        // Create mock capability matcher
+        mockCapabilityMatcher = {
+            findBestAgent: jest.fn(),
+            rankAgents: jest.fn(() => []),
+            calculateMatchScore: jest.fn(() => 0.5),
+            dispose: jest.fn()
+        };
+
+        // Create mock dependency manager
+        mockDependencyManager = {
+            addDependency: jest.fn(() => true),
+            removeDependency: jest.fn(),
+            validateDependencies: jest.fn(() => []),
+            checkConflicts: jest.fn(() => []),
+            getReadyTasks: jest.fn(() => []),
+            getDependentTasks: jest.fn(() => []),
+            getSoftDependents: jest.fn(() => []),
+            resolveConflict: jest.fn(() => true),
+            addSoftDependency: jest.fn(),
+            dispose: jest.fn()
+        };
+
         // Create TaskQueue instance
         taskQueue = new TaskQueue(
             agentManager,
@@ -116,8 +174,7 @@ describe('TaskQueue', () => {
             mockTaskStateMachine,
             mockPriorityQueue,
             mockCapabilityMatcher,
-            mockDependencyManager,
-            mockMetricsService
+            mockDependencyManager
         );
     });
 
@@ -141,10 +198,6 @@ describe('TaskQueue', () => {
             expect(task.description).toBe('A test task description');
             expect(task.priority).toBe('high');
             expect(task.status).toBe('validated');
-            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('tasks_created', {
-                priority: 'high',
-                hasDependencies: 'false'
-            });
         });
 
         it('should validate task configuration and throw on invalid config', () => {
@@ -302,7 +355,7 @@ describe('TaskQueue', () => {
 
             expect(result).toBe(true);
             expect(mockTaskStateMachine.transition).toHaveBeenCalledWith(task, 'completed');
-            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('tasks_completed', expect.any(Object));
+            // Metrics service removed
         });
 
         it('should return false for non-existent task', () => {
@@ -311,9 +364,7 @@ describe('TaskQueue', () => {
             const result = taskQueue.completeTask('non-existent');
 
             expect(result).toBe(false);
-            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('tasks_completion_failed', {
-                reason: 'task_not_found'
-            });
+            // Metrics service removed
         });
 
         it('should handle transition errors', () => {
@@ -326,9 +377,7 @@ describe('TaskQueue', () => {
             const result = taskQueue.completeTask('task-1');
 
             expect(result).toBe(false);
-            expect(mockMetricsService.incrementCounter).toHaveBeenCalledWith('tasks_completion_failed', {
-                reason: 'transition_error'
-            });
+            // Metrics service removed
         });
     });
 

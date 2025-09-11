@@ -541,7 +541,7 @@ describe('ConfigurationService', () => {
             mockConfiguration.get.mockReturnValue(true);
             const skipPerms = configurationService.isClaudeSkipPermissions();
             expect(skipPerms).toBe(true);
-            expect(mockConfiguration.get).toHaveBeenCalledWith('claudeSkipPermissions', false);
+            expect(mockConfiguration.get).toHaveBeenCalledWith('claudeSkipPermissions', true);
         });
 
         it('should get templates path', () => {

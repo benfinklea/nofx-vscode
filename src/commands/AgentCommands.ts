@@ -3,6 +3,7 @@ import { ICommandHandler, ICommandService, INotificationService, IConfiguration 
 import { PickItem } from '../types/ui';
 import { AgentManager } from '../agents/AgentManager';
 import { ServiceLocator } from '../services/ServiceLocator';
+import { NofxAgentFactory, CoreAgentType, AgentSpecialization } from '../agents/NofxAgentFactory';
 
 export class AgentCommands implements ICommandHandler {
     private readonly agentManager: AgentManager;
@@ -22,11 +23,14 @@ export class AgentCommands implements ICommandHandler {
     register(): void {
         // Register all agent-related commands
         this.commandService.register('nofx.addAgent', this.addAgent.bind(this));
+        this.commandService.register('nofx.createCustomAgent', this.createCustomAgent.bind(this));
         this.commandService.register('nofx.deleteAgent', this.deleteAgent.bind(this));
         this.commandService.register('nofx.editAgent', this.editAgent.bind(this));
         this.commandService.register('nofx.focusAgentTerminal', this.focusAgentTerminal.bind(this));
         this.commandService.register('nofx.restoreAgents', this.restoreAgents.bind(this));
         this.commandService.register('nofx.restoreAgentFromSession', this.restoreAgentFromSession.bind(this));
+        this.commandService.register('nofx.saveAgents', this.saveAgents.bind(this));
+        this.commandService.register('nofx.refreshTerminalIcons', this.refreshTerminalIcons.bind(this));
         this.commandService.register('nofx.clearAgents', this.clearAgents.bind(this));
         this.commandService.register(
             'nofx.createAgentFromNaturalLanguage',
@@ -79,95 +83,149 @@ export class AgentCommands implements ICommandHandler {
         vscode.window.showInformationMessage('[NofX] addIndividualAgent() called');
 
         try {
-            // Import template manager
-            console.log('[NofX Debug] Importing AgentTemplateManager...');
-            const { AgentTemplateManager } = await import('../agents/AgentTemplateManager');
-            console.log('[NofX Debug] AgentTemplateManager imported successfully');
-
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             if (!workspaceFolder) {
                 await this.notificationService.showError('No workspace folder open');
                 return;
             }
 
-            console.log('[NofX Debug] Creating AgentTemplateManager...');
-            const templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
-            console.log('[NofX Debug] AgentTemplateManager created, getting templates...');
-            const templates = await templateManager.getTemplates();
-            console.log('[NofX Debug] Got templates:', {
-                count: templates.length,
-                ids: templates.map(t => t.id),
-                backendSpecialistExists: templates.some(t => t.id === 'backend-specialist')
+            // Use unified NofxAgentFactory
+            const factory = NofxAgentFactory.getInstance(workspaceFolder.uri.fsPath);
+            
+            // Get core agent types
+            const coreTypes = factory.getCoreAgentTypes();
+            console.log('[NofX Debug] Got core agent types:', {
+                count: coreTypes.length,
+                types: coreTypes.map(t => t.id)
             });
 
-            // Check the backend-specialist template specifically
-            const backendTemplate = templates.find(t => t.id === 'backend-specialist');
-            if (backendTemplate) {
-                console.log('[NofX Debug] Backend template details:', {
-                    hasSystemPrompt: !!backendTemplate.systemPrompt,
-                    hasDetailedPrompt: !!backendTemplate.detailedPrompt,
-                    systemPromptLength: backendTemplate.systemPrompt?.length || 0,
-                    detailedPromptLength: backendTemplate.detailedPrompt?.length || 0,
-                    keys: Object.keys(backendTemplate)
-                });
-            }
+            // Load legacy templates for backward compatibility
+            const legacyTemplates = await factory.loadLegacyTemplates();
+            
+            // Combine core types and legacy templates
+            const allOptions: PickItem<{type: 'core' | 'legacy', id: string}>[] = [
+                // Core agent types
+                ...coreTypes.map(coreType => ({
+                    label: `🎯 ${coreType.icon} ${coreType.name}`,
+                    description: `Modern ${coreType.name} with ${coreType.coreSkills.slice(0, 3).join(', ')}`,
+                    value: { type: 'core' as const, id: coreType.id }
+                })),
+                // Legacy templates (if any)
+                ...legacyTemplates.map(template => ({
+                    label: `📄 ${template.icon || '⚡'} ${template.name}`,
+                    description: `Legacy: ${Array.isArray(template.capabilities) 
+                        ? template.capabilities.slice(0, 3).join(', ')
+                        : 'Custom agent'}`,
+                    value: { type: 'legacy' as const, id: template.id }
+                }))
+            ];
 
-            const items: PickItem<string>[] = templates.map(template => ({
-                label: `${template.icon} ${template.name}`,
-                description: Array.isArray(template.capabilities)
-                    ? template.capabilities.slice(0, 3).join(', ')
-                    : 'Custom agent',
-                value: template.id
-            }));
-
-            const selected = await this.notificationService.showQuickPick(items, {
-                placeHolder: 'Select an agent template'
+            const selected = await this.notificationService.showQuickPick(allOptions, {
+                placeHolder: 'Select an agent type'
             });
 
             if (!selected) {
                 return;
             }
 
-            const templateId = selected.value;
-            console.log('[NofX Debug] Selected template ID:', templateId);
+            const selection = selected.value;
+            console.log('[NofX Debug] Selected:', selection);
 
-            const template = templates.find(t => t.id === templateId);
-            console.log('[NofX Debug] Found template:', {
-                found: !!template,
-                hasSystemPrompt: !!template?.systemPrompt,
-                hasDetailedPrompt: !!template?.detailedPrompt,
-                systemPromptLength: template?.systemPrompt?.length || 0,
-                detailedPromptLength: template?.detailedPrompt?.length || 0
-            });
-
-            if (!template) {
-                vscode.window.showErrorMessage('[NofX] Template not found!');
-                return;
-            }
-
-            // Get agent name
-            const agentName = await this.notificationService.showInputBox({
-                prompt: 'Enter agent name',
-                value: template.name,
-                validateInput: (value: string): string | undefined => {
-                    if (!value || value.trim().length === 0) {
-                        return 'Agent name is required';
-                    }
-                    return undefined;
+            let template: any;
+            
+            if (selection.type === 'core') {
+                // Handle core agent type
+                const coreType = factory.getCoreAgentType(selection.id);
+                if (!coreType) {
+                    await this.notificationService.showError('Core agent type not found');
+                    return;
                 }
-            });
 
-            if (!agentName) {
-                return;
+                // Show specialization options
+                const specializations = factory.getSpecializations(selection.id);
+                let selectedSpecialization: AgentSpecialization | undefined;
+                
+                if (specializations.length > 0) {
+                    const specOptions: PickItem<string>[] = [
+                        { label: `🎯 General ${coreType.name}`, description: 'Use base configuration', value: 'none' },
+                        ...specializations.map(spec => ({
+                            label: `⭐ ${spec.name}`,
+                            description: spec.description,
+                            value: spec.id
+                        }))
+                    ];
+
+                    const specSelection = await this.notificationService.showQuickPick(specOptions, {
+                        placeHolder: 'Choose specialization'
+                    });
+
+                    if (!specSelection) return;
+                    
+                    if (specSelection.value !== 'none') {
+                        selectedSpecialization = specializations.find(s => s.id === specSelection.value);
+                    }
+                }
+
+                // Get agent name
+                const defaultName = selectedSpecialization ? selectedSpecialization.name : coreType.name;
+                const agentName = await this.notificationService.showInputBox({
+                    prompt: 'Enter agent name',
+                    value: defaultName,
+                    validateInput: (value: string): string | undefined => {
+                        if (!value || value.trim().length === 0) {
+                            return 'Agent name is required';
+                        }
+                        return undefined;
+                    }
+                });
+
+                if (!agentName) return;
+
+                // Generate template using factory
+                template = factory.createAgent({
+                    coreType: selection.id,
+                    specialization: selectedSpecialization?.id,
+                    customName: agentName
+                });
+
+            } else {
+                // Handle legacy template
+                const legacyTemplate = legacyTemplates.find(t => t.id === selection.id);
+                if (!legacyTemplate) {
+                    await this.notificationService.showError('Legacy template not found');
+                    return;
+                }
+
+                const agentName = await this.notificationService.showInputBox({
+                    prompt: 'Enter agent name',
+                    value: legacyTemplate.name,
+                    validateInput: (value: string): string | undefined => {
+                        if (!value || value.trim().length === 0) {
+                            return 'Agent name is required';
+                        }
+                        return undefined;
+                    }
+                });
+
+                if (!agentName) return;
+                
+                template = { ...legacyTemplate, name: agentName };
             }
+
+            console.log('[NofX Debug] Generated template:', {
+                name: template.name,
+                hasSystemPrompt: !!template.systemPrompt,
+                systemPromptLength: template.systemPrompt?.length || 0
+            });
 
             // Create the agent (AgentManager handles worktrees internally)
             const agent = await this.agentManager.spawnAgent({
-                name: agentName,
-                type: template?.id ?? 'general',
+                name: template.name,
+                type: template.id,
                 template
             });
-            await this.notificationService.showInformation(`Agent "${agentName}" created successfully`);
+            await this.notificationService.showInformation(`Agent "${template.name}" created successfully`);
+            
         } catch (error) {
             console.error('[NofX Debug] Error in addIndividualAgent:', error);
             vscode.window.showErrorMessage(
@@ -229,34 +287,51 @@ export class AgentCommands implements ICommandHandler {
             return;
         }
 
-        // Import required modules
-        const { AgentTemplateManager } = await import('../agents/AgentTemplateManager');
-
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
             await this.notificationService.showError('No workspace folder open');
             return;
         }
 
-        const templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
+        // Use unified NofxAgentFactory
+        const factory = NofxAgentFactory.getInstance(workspaceFolder.uri.fsPath);
         const preset = selected.value;
         const teamAgents = preset.agents;
 
-        // Create agents (AgentManager handles worktrees internally)
+        // Create agents using factory
         let createdCount = 0;
         for (const templateId of teamAgents) {
-            const template = await templateManager.getTemplate(templateId);
-            if (template) {
-                try {
+            try {
+                // Try to create using core agent types first
+                const coreType = factory.getCoreAgentType(templateId);
+                let template: any;
+                
+                if (coreType) {
+                    // Use core agent type
+                    template = factory.createAgent({
+                        coreType: templateId,
+                        customName: coreType.name
+                    });
+                } else {
+                    // Fall back to legacy templates
+                    const legacyTemplates = await factory.loadLegacyTemplates();
+                    const legacyTemplate = legacyTemplates.find(t => t.id === templateId);
+                    if (legacyTemplate) {
+                        template = legacyTemplate;
+                    }
+                }
+
+                if (template) {
                     await this.agentManager.spawnAgent({
                         name: template.name,
-                        type: template.id ?? 'general',
+                        type: template.id,
                         template
                     });
                     createdCount++;
-                } catch (error) {
-                    // Error handling is done by the notification service in the calling context
                 }
+            } catch (error) {
+                console.warn(`Failed to create agent ${templateId}:`, error);
+                // Continue with other agents
             }
         }
 
@@ -469,6 +544,54 @@ export class AgentCommands implements ICommandHandler {
         }
     }
 
+    private async saveAgents(): Promise<void> {
+        try {
+            const agents = this.agentManager.getActiveAgents();
+            console.log(`[AgentCommands] Manual save requested for ${agents.length} agents`);
+            
+            if (agents.length === 0) {
+                await this.notificationService.showInformation('No agents to save');
+                return;
+            }
+
+            // Trigger the agent manager's save functionality
+            await this.agentManager.saveAgentState();
+            await this.notificationService.showInformation(
+                `✅ Saved ${agents.length} agent${agents.length === 1 ? '' : 's'} to .nofx/agents.json`
+            );
+            console.log(`[AgentCommands] Successfully saved ${agents.length} agents`);
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[AgentCommands] Failed to save agents:', error);
+            await this.notificationService.showError(`Failed to save agents: ${err.message}`);
+        }
+    }
+
+    private async refreshTerminalIcons(): Promise<void> {
+        try {
+            console.log('[AgentCommands] Refreshing terminal icons to remove warning triangles');
+            
+            // Get the terminal manager from service locator
+            const terminalManager = ServiceLocator.tryGet('TerminalManager') as any;
+            
+            if (!terminalManager || typeof terminalManager.refreshAllExitedTerminalIcons !== 'function') {
+                await this.notificationService.showWarning('Terminal icon refresh not available');
+                return;
+            }
+
+            // Refresh all exited terminal icons
+            terminalManager.refreshAllExitedTerminalIcons();
+            
+            await this.notificationService.showInformation('✨ Terminal icons refreshed - warning triangles removed!');
+            console.log('[AgentCommands] Terminal icon refresh completed');
+            
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[AgentCommands] Failed to refresh terminal icons:', error);
+            await this.notificationService.showError(`Failed to refresh terminal icons: ${err.message}`);
+        }
+    }
+
     private async clearAgents(): Promise<void> {
         const agents = this.agentManager.getActiveAgents();
         if (agents.length === 0) {
@@ -522,42 +645,22 @@ export class AgentCommands implements ICommandHandler {
                 return;
             }
 
-            // Import template manager to find best matching template
-            const { AgentTemplateManager } = await import('../agents/AgentTemplateManager');
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             if (!workspaceFolder) {
                 await this.notificationService.showError('No workspace folder open');
                 return;
             }
 
-            const templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
-            const templates = await templateManager.getTemplates();
-
-            // Find best matching template based on capabilities
-            let bestTemplate = templates[0]; // Default to first template
-            let bestScore = 0;
-
-            for (const template of templates) {
-                const capabilities = template.capabilities || [];
-                let score = 0;
-
-                // Calculate match score based on overlapping capabilities
-                for (const cap of agentConfig.capabilities || []) {
-                    if (capabilities.some(c => c.toLowerCase().includes(cap.toLowerCase()))) {
-                        score++;
-                    }
-                }
-
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestTemplate = template;
-                }
-            }
+            // Use unified NofxAgentFactory for natural language processing
+            const factory = NofxAgentFactory.getInstance(workspaceFolder.uri.fsPath);
+            
+            // Create agent from natural language description
+            const template = await factory.createAgentFromDescription(description);
 
             // Get agent name
             const agentName = await this.notificationService.showInputBox({
                 prompt: 'Enter a name for your agent',
-                value: agentConfig.suggestedName || bestTemplate.name,
+                value: agentConfig.suggestedName || template.name,
                 validateInput: (value: string): string | undefined => {
                     if (!value || value.trim().length === 0) {
                         return 'Agent name is required';
@@ -570,22 +673,143 @@ export class AgentCommands implements ICommandHandler {
                 return;
             }
 
-            // Create the agent with custom system prompt
-            const customPrompt = `${bestTemplate.systemPrompt}\n\nAdditional context from user: ${description}`;
+            // Update template with custom name
+            template.name = agentName;
 
             const agent = await this.agentManager.spawnAgent({
                 name: agentName,
-                type: bestTemplate.id ?? 'general',
-                template: {
-                    ...bestTemplate,
-                    systemPrompt: customPrompt
-                }
+                type: template.id,
+                template
             });
 
             await this.notificationService.showInformation(`Agent "${agentName}" created from your description`);
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             await this.notificationService.showError(`Failed to create agent: ${err.message}`);
+        }
+    }
+
+    private async createCustomAgent(): Promise<void> {
+        try {
+            console.log('[NofX Debug] createCustomAgent called');
+
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                await this.notificationService.showError('No workspace folder open');
+                return;
+            }
+
+            // Use unified NofxAgentFactory
+            const factory = NofxAgentFactory.getInstance(workspaceFolder.uri.fsPath);
+
+            // Step 1: Select core agent type
+            const coreAgents = factory.getCoreAgentTypes();
+            const coreAgentItems: PickItem<string>[] = coreAgents.map(agent => ({
+                label: `${agent.icon} ${agent.name}`,
+                description: `${agent.primaryDomains.join(', ')} specialist`,
+                value: agent.id
+            }));
+
+            const selectedCore = await this.notificationService.showQuickPick(coreAgentItems, {
+                title: 'Select Core Agent Type',
+                placeHolder: 'Choose the base type for your custom agent'
+            });
+
+            if (!selectedCore) return;
+
+            // Step 2: Get agent name
+            const agentName = await this.notificationService.showInputBox({
+                prompt: 'Enter agent name',
+                placeHolder: 'e.g., React UI Specialist, API Development Expert',
+            });
+
+            if (!agentName) return;
+
+            // Step 3: Select specialization (optional)
+            const specializations = factory.getSpecializations(selectedCore.value);
+            let selectedSpecialization: AgentSpecialization | undefined;
+            
+            if (specializations.length > 0) {
+                const specItems: PickItem<string>[] = [
+                    { label: '$(settings) Custom Specialization', value: 'custom', description: 'Define your own specialization' },
+                    { label: '$(star) General', value: 'none', description: 'Use base configuration without specialization' },
+                    ...specializations.map(spec => ({
+                        label: `$(star) ${spec.name}`,
+                        value: spec.id,
+                        description: spec.description
+                    }))
+                ];
+
+                const selectedSpec = await this.notificationService.showQuickPick(specItems, {
+                    title: 'Choose Specialization',
+                    placeHolder: 'Select a specialization or create custom'
+                });
+
+                if (!selectedSpec) return;
+
+                if (selectedSpec.value === 'custom') {
+                    // Custom specialization flow - simplified for now
+                    const projectContext = await this.notificationService.showInputBox({
+                        prompt: 'Project context (optional)',
+                        placeHolder: 'e.g., Working on VS Code extension with TypeScript',
+                    });
+
+                    const customInstructions = await this.notificationService.showInputBox({
+                        prompt: 'Custom instructions (optional)',
+                        placeHolder: 'e.g., Focus on testing React components with Jest',
+                    });
+
+                    // Create agent with custom configuration
+                    const template = factory.createAgent({
+                        coreType: selectedCore.value,
+                        customName: agentName,
+                        projectContext: projectContext || undefined,
+                        customInstructions: customInstructions || undefined
+                    });
+
+                    const agent = await this.agentManager.spawnAgent({
+                        name: agentName,
+                        type: template.id,
+                        template
+                    });
+
+                    await this.notificationService.showInformation(
+                        `✅ Custom agent "${agentName}" created successfully!`
+                    );
+                    return;
+                } else if (selectedSpec.value !== 'none') {
+                    selectedSpecialization = specializations.find(s => s.id === selectedSpec.value);
+                }
+            }
+
+            // Step 4: Generate the agent template
+            const template = factory.createAgent({
+                coreType: selectedCore.value,
+                specialization: selectedSpecialization?.id,
+                customName: agentName
+            });
+
+            console.log('[NofX Debug] Generated agent template:', {
+                name: template.name,
+                systemPromptLength: template.systemPrompt.length,
+                specialization: selectedSpecialization?.name
+            });
+
+            // Step 5: Create the agent
+            const agent = await this.agentManager.spawnAgent({
+                name: agentName,
+                type: template.id,
+                template
+            });
+
+            await this.notificationService.showInformation(
+                `✅ Custom agent "${agentName}" created successfully!`
+            );
+
+        } catch (error) {
+            console.error('[NofX Debug] createCustomAgent error:', error);
+            const err = error instanceof Error ? error : new Error(String(error));
+            await this.notificationService.showError(`Failed to create custom agent: ${err.message}`);
         }
     }
 

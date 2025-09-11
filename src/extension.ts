@@ -73,7 +73,7 @@ import { TreeViewHost } from './ui/TreeViewHost';
 
 // Command handlers
 import { AgentCommands } from './commands/AgentCommands';
-// TaskCommands removed - over-engineered
+import { TaskCommands } from './commands/TaskCommands';
 import { ConductorCommands } from './commands/ConductorCommands';
 import { OrchestrationCommands } from './commands/OrchestrationCommands';
 // PersistenceCommands removed - redundant session commands
@@ -451,7 +451,19 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // Set initial context for UI
         const commandService = ServiceLocator.get<ICommandService>('CommandService');
-        await commandService.execute('setContext', 'nofx.hasAgents', agentManager.getActiveAgents().length > 0);
+        try {
+            const hasAgents = agentManager.getActiveAgents().length > 0;
+            console.log(`[Extension] Setting nofx.hasAgents context to: ${hasAgents}`);
+            await commandService.execute('setContext', 'nofx.hasAgents', hasAgents);
+            
+            // Also set through VS Code directly as a fallback
+            await vscode.commands.executeCommand('setContext', 'nofx.hasAgents', hasAgents);
+            console.log(`[Extension] Context set successfully. Agent count: ${agentManager.getActiveAgents().length}`);
+        } catch (error) {
+            console.error('[Extension] Failed to set context:', error);
+            // Force set to false as fallback
+            await vscode.commands.executeCommand('setContext', 'nofx.hasAgents', false);
+        }
 
         // ConnectionPoolService removed - WebSocket orchestration simplified
 
@@ -631,8 +643,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // Update context when agents change
         agentManager.onAgentUpdate(() => {
-            const hasAgents = agentManager.getActiveAgents().length > 0;
-            commandService.execute('setContext', 'nofx.hasAgents', hasAgents);
+            try {
+                const hasAgents = agentManager.getActiveAgents().length > 0;
+                console.log(`[Extension] Agent update triggered. Setting nofx.hasAgents to: ${hasAgents}`);
+                commandService.execute('setContext', 'nofx.hasAgents', hasAgents);
+                // Fallback to direct VS Code command
+                vscode.commands.executeCommand('setContext', 'nofx.hasAgents', hasAgents);
+            } catch (error) {
+                console.error('[Extension] Failed to update context on agent change:', error);
+                vscode.commands.executeCommand('setContext', 'nofx.hasAgents', false);
+            }
         });
 
         // Register command handlers
@@ -640,12 +660,17 @@ export async function activate(context: vscode.ExtensionContext) {
         agentCommands.register();
         context.subscriptions.push({ dispose: () => agentCommands.dispose() });
 
-        // TaskCommands removed - over-engineered for current needs
+        const taskCommands = new TaskCommands();
+        taskCommands.register();
+        context.subscriptions.push({ dispose: () => taskCommands.dispose() });
 
+        console.log('[Extension] Creating ConductorCommands...');
         const conductorCommands = new ConductorCommands(ServiceLocator);
         conductorCommands.setAgentProvider(agentProvider);
+        console.log('[Extension] Registering ConductorCommands...');
         conductorCommands.register();
         context.subscriptions.push({ dispose: () => conductorCommands.dispose() });
+        console.log('[Extension] ConductorCommands setup complete');
 
         const orchestrationCommands = new OrchestrationCommands(ServiceLocator);
         if (directCommunicationService) {
@@ -739,7 +764,26 @@ export async function activate(context: vscode.ExtensionContext) {
             ServiceLocator.register('StatusBarItem', mockStatusBarItem);
         }
 
-        // Auto-start if configured (skip in test mode)
+        // Auto-start conductor for always-on orchestration (skip in test mode)
+        if (!isTestMode) {
+            try {
+                console.log('[NofX Debug] Auto-starting NofX Conductor...');
+                const { NofXConductor } = require('./conductor/NofXConductor');
+                const conductor = new NofXConductor(context);
+                ServiceLocator.register('NofXConductor', conductor);
+                
+                // Initialize conductor (will auto-start for current workspace)
+                await conductor.initialize();
+                
+                console.log('[NofX Debug] NofX Conductor auto-started successfully');
+            } catch (error: any) {
+                console.error('[NofX Debug] Failed to auto-start NofX Conductor:', error);
+                loggingService.warn('Failed to auto-start NofX Conductor', error);
+                // Don't fail extension activation if conductor fails to start
+            }
+        }
+
+        // Legacy auto-start if configured
         if (!isTestMode && config.get(CONFIG_KEYS.AUTO_START, false)) {
             await commandService.execute('nofx.quickStartChat');
         }
@@ -891,6 +935,12 @@ export async function deactivate(): Promise<void> {
     const directCommunicationService = ServiceLocator.tryGet<DirectCommunicationService>('OrchestrationServer');
     if (directCommunicationService) {
         await directCommunicationService.stop();
+    }
+
+    // Dispose NofX Conductor if it was auto-started
+    const conductor = ServiceLocator.tryGet('NofXConductor');
+    if (conductor && typeof conductor === 'object' && conductor !== null && 'dispose' in conductor) {
+        await (conductor as any).dispose();
     }
 
     // Get agent manager and dispose it properly

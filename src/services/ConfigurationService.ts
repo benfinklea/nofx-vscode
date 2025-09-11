@@ -4,7 +4,11 @@ import * as vscode from 'vscode';
 const CONFIG_KEYS = {
     AI_PROVIDER: 'aiProvider',
     MAX_AGENTS: 'maxAgents',
-    AI_PATH: 'aiPath'
+    AI_PATH: 'aiPath',
+    CLAUDE_SKIP_PERMISSIONS: 'claudeSkipPermissions',
+    CLAUDE_INITIALIZATION_DELAY: 'claudeInitializationDelay',
+    AGENT_SPAWN_DELAY: 'agentSpawnDelay',
+    SHOW_AGENT_TERMINAL_ON_SPAWN: 'showAgentTerminalOnSpawn'
 } as const;
 
 // Hard-coded defaults for removed settings
@@ -28,6 +32,12 @@ export interface IConfiguration {
     getAiProvider(): string;
     getMaxAgents(): number;
     getAiPath(): string;
+    
+    // Configurable settings
+    isClaudeSkipPermissions(): boolean;
+    getClaudeInitializationDelay(): number;
+    getAgentSpawnDelay(): number;
+    isShowAgentTerminalOnSpawn(): boolean;
 
     // Auto-detected/hard-coded getters
     isUseWorktrees(): boolean;
@@ -35,9 +45,6 @@ export interface IConfiguration {
     getTemplatesPath(): string;
     isPersistAgents(): boolean;
     getLogLevel(): string;
-    isShowAgentTerminalOnSpawn(): boolean;
-    getClaudeInitializationDelay(): number;
-    getAgentSpawnDelay(): number;
 }
 
 export class ConfigurationService implements IConfiguration {
@@ -82,9 +89,22 @@ export class ConfigurationService implements IConfiguration {
         return this.get(CONFIG_KEYS.AI_PATH, '');
     }
 
+    // Configurable settings (use CONFIG_KEYS)
     isClaudeSkipPermissions(): boolean {
-        // Default to false for safety - don't skip permissions by default
-        return this.get('claudeSkipPermissions', false);
+        // Default to true to include --dangerously-skip-permissions flag by default
+        return this.get(CONFIG_KEYS.CLAUDE_SKIP_PERMISSIONS, true);
+    }
+
+    getClaudeInitializationDelay(): number {
+        return this.get(CONFIG_KEYS.CLAUDE_INITIALIZATION_DELAY, DEFAULTS.CLAUDE_INITIALIZATION_DELAY);
+    }
+
+    getAgentSpawnDelay(): number {
+        return this.get(CONFIG_KEYS.AGENT_SPAWN_DELAY, DEFAULTS.AGENT_SPAWN_DELAY);
+    }
+
+    isShowAgentTerminalOnSpawn(): boolean {
+        return this.get(CONFIG_KEYS.SHOW_AGENT_TERMINAL_ON_SPAWN, DEFAULTS.SHOW_AGENT_TERMINAL_ON_SPAWN);
     }
 
     async update(
@@ -105,11 +125,34 @@ export class ConfigurationService implements IConfiguration {
 
     // Auto-detected/hard-coded getters (return constants)
     isUseWorktrees(): boolean {
-        // Auto-detect git worktree support
+        // Auto-detect git worktree support AND verify we're in a git repository
         try {
-            require('child_process').execSync('git worktree --help', { stdio: 'ignore' });
-            return true;
-        } catch {
+            const { execSync } = require('child_process');
+            
+            console.log('[ConfigurationService] Checking worktree availability...');
+            
+            // First check if git worktree command exists
+            execSync('git worktree --help', { stdio: 'ignore' });
+            console.log('[ConfigurationService] Git worktree command available');
+            
+            // Then check if we're actually in a git repository
+            const vscode = require('vscode');
+            const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+            console.log(`[ConfigurationService] Workspace path: ${workspacePath}`);
+            
+            if (workspacePath) {
+                execSync('git rev-parse --git-dir', { 
+                    cwd: workspacePath, 
+                    stdio: 'ignore' 
+                });
+                console.log('[ConfigurationService] Git repository confirmed');
+                return true;
+            }
+            
+            console.log('[ConfigurationService] No workspace path available');
+            return false;
+        } catch (error) {
+            console.log('[ConfigurationService] Worktree check failed:', error instanceof Error ? error.message : String(error));
             return false;
         }
     }
@@ -130,17 +173,6 @@ export class ConfigurationService implements IConfiguration {
         return DEFAULTS.LOG_LEVEL;
     }
 
-    isShowAgentTerminalOnSpawn(): boolean {
-        return DEFAULTS.SHOW_AGENT_TERMINAL_ON_SPAWN;
-    }
-
-    getClaudeInitializationDelay(): number {
-        return DEFAULTS.CLAUDE_INITIALIZATION_DELAY;
-    }
-
-    getAgentSpawnDelay(): number {
-        return DEFAULTS.AGENT_SPAWN_DELAY;
-    }
 
     dispose(): void {
         this.disposables.forEach(d => d.dispose());

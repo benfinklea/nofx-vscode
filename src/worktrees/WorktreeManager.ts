@@ -513,13 +513,15 @@ export class WorktreeManager {
      */
     static isWorktreeAvailable(workspacePath: string): boolean {
         console.log(`[NofX Debug] Checking Git worktree availability for: ${workspacePath}`);
+        console.log(`[NofX Debug] Working directory exists: ${fs.existsSync(workspacePath)}`);
 
         try {
             // Check if we're in a git repository
             console.log(`[NofX Debug] Testing: git rev-parse --git-dir in ${workspacePath}`);
             const gitDir = execSync('git rev-parse --git-dir', {
                 cwd: workspacePath,
-                encoding: 'utf-8'
+                encoding: 'utf-8',
+                stdio: ['pipe', 'pipe', 'pipe']
             }).trim();
             console.log(`[NofX Debug] Git directory found: ${gitDir}`);
 
@@ -527,7 +529,8 @@ export class WorktreeManager {
             console.log(`[NofX Debug] Testing: git worktree -h in ${workspacePath}`);
             execSync('git worktree -h', {
                 cwd: workspacePath,
-                encoding: 'utf-8'
+                encoding: 'utf-8',
+                stdio: ['pipe', 'pipe', 'pipe']
             });
             console.log(`[NofX Debug] Git worktree command available`);
 
@@ -535,7 +538,7 @@ export class WorktreeManager {
             return true;
         } catch (error) {
             console.log(
-                `[NofX Debug] Git worktree not available:`,
+                `[NofX Debug] Git worktree not available for path "${workspacePath}":`,
                 error instanceof Error ? error.message : String(error)
             );
             return false;

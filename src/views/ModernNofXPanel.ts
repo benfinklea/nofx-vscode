@@ -115,7 +115,7 @@ export class ModernNofXPanel implements vscode.WebviewViewProvider {
             await this.notificationService.showInformation(`[DEBUG] Spawning ${agentType} from sidebar...`);
 
             // Import template manager
-            const { AgentTemplateManager } = await import('../agents/AgentTemplateManager');
+            const { NofxAgentFactory } = await import('../agents/NofxAgentFactory');
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
             if (!workspaceFolder) {
@@ -124,8 +124,11 @@ export class ModernNofXPanel implements vscode.WebviewViewProvider {
             }
 
             // Load the actual template
-            const templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
-            const template = await templateManager.getTemplate(agentType);
+            const agentFactory = NofxAgentFactory.getInstance(workspaceFolder.uri.fsPath);
+            const template = agentFactory.createAgent({
+                coreType: agentType,
+                customName: agentName
+            });
 
             console.log('[NofX Sidebar Debug] Template loaded:', {
                 agentType,

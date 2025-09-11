@@ -65,19 +65,16 @@ export class TerminalManager implements ITerminalManager {
     }
 
     createTerminal(agentId: string, agentConfig: any): vscode.Terminal {
-        // Use terminal icon from template, config, or fallback
-        const terminalIcon =
-            agentConfig.template?.terminalIcon ??
-            agentConfig.terminalIcon ??
-            (agentConfig.type === 'conductor' ? 'terminal' : 'robot');
+        // Get colorful icon and color based on agent type
+        const { icon, color } = this.getAgentIconAndColor(agentConfig);
 
         // Get the user's default shell or use bash as fallback
         const shellPath = vscode.env.shell || '/bin/bash';
 
-        // Create a dedicated terminal for this agent with explicit shell
+        // Create a dedicated terminal for this agent with colorful icon
         const terminal = vscode.window.createTerminal({
             name: `🤖 ${agentConfig.name}`, // Add robot emoji prefix to show dual indication
-            iconPath: new vscode.ThemeIcon(terminalIcon),
+            iconPath: new vscode.ThemeIcon(icon, color),
             shellPath: shellPath,
             shellArgs: [], // Empty array for default shell args
             env: {
@@ -115,6 +112,247 @@ export class TerminalManager implements ITerminalManager {
 
             this.loggingService?.debug(`Terminal disposed for agent ${agentId}`);
         }
+    }
+
+    private getAgentIconAndColor(agentConfig: any): { icon: string; color: vscode.ThemeColor } {
+        // Get icon based on agent type
+        const icon = this.getAgentTypeIcon(agentConfig);
+        
+        // Get color based on visual status (dynamic)
+        const color = this.getStatusColor(agentConfig.visualStatus || agentConfig.status || 'IDLE');
+        
+        return { icon, color };
+    }
+
+    private getAgentTypeIcon(agentConfig: any): string {
+        // Icon based on agent type/specialization
+        const agentType = agentConfig.type || agentConfig.template?.id || 'default';
+        
+        switch (agentType) {
+            case 'frontend-specialist':
+            case 'frontend':
+                return 'paintbrush';
+            case 'backend-specialist':
+            case 'backend':
+                return 'server';
+            case 'fullstack-developer':
+            case 'fullstack':
+                return 'layers';
+            case 'testing-specialist':
+            case 'testing':
+                return 'beaker';
+            case 'devops-engineer':
+            case 'devops':
+                return 'cloud';
+            case 'ai-ml-specialist':
+            case 'ai-ml':
+                return 'robot';
+            case 'database-architect':
+            case 'database':
+                return 'database';
+            case 'security-expert':
+            case 'security':
+                return 'shield';
+            case 'mobile-developer':
+            case 'mobile':
+                return 'device-mobile';
+            case 'conductor':
+                return 'organization';
+            default:
+                return 'person';
+        }
+    }
+
+    private getStatusColor(status: string): vscode.ThemeColor {
+        // Dynamic colors based on agent status
+        switch (status.toUpperCase()) {
+            case 'IDLE':
+            case 'ONLINE':
+                return new vscode.ThemeColor('charts.green');    // 🟢 Green - Ready for work
+            
+            case 'WORKING':
+            case 'BUSY':
+                return new vscode.ThemeColor('charts.blue');     // 🔵 Blue - Actively working
+            
+            case 'WAITING':
+                return new vscode.ThemeColor('charts.yellow');   // 🟡 Yellow - Needs user input
+            
+            case 'ERROR':
+            case 'OFFLINE':
+                return new vscode.ThemeColor('errorForeground'); // 🔴 Red - Broken/failed
+            
+            default:
+                return new vscode.ThemeColor('foreground');      // Default color
+        }
+    }
+
+    /**
+     * Refreshes terminal icon after Claude session ends to remove warning triangle
+     */
+    refreshTerminalIcon(agentId: string, agentConfig: any): void {
+        const existingTerminal = this.terminals.get(agentId);
+        if (!existingTerminal) {
+            return;
+        }
+
+        // Only refresh if terminal has exited (has warning triangle)
+        if (existingTerminal.exitStatus === undefined) {
+            return; // Terminal still running, no need to refresh
+        }
+
+        console.log(`[TerminalManager] Refreshing terminal icon for ${agentConfig.name} to remove warning triangle`);
+        
+        // Get new icon with "idle" state
+        const { icon, color } = this.getAgentIconAndColor(agentConfig);
+        
+        // Create a replacement terminal with fresh icon (no warning triangle)
+        const newTerminal = vscode.window.createTerminal({
+            name: `💤 ${agentConfig.name}`, // Change emoji to indicate idle state
+            iconPath: new vscode.ThemeIcon(icon, color),
+            shellPath: vscode.env.shell || '/bin/bash',
+            env: {
+                NOFX_AGENT_ID: agentId,
+                NOFX_AGENT_TYPE: agentConfig.type,
+                NOFX_AGENT_NAME: agentConfig.name,
+                NOFX_AGENT_STATE: 'idle'
+            }
+        });
+
+        // Replace the old terminal
+        this.terminals.set(agentId, newTerminal);
+        
+        // Dispose the old terminal (this removes the warning triangle one)
+        try {
+            existingTerminal.dispose();
+        } catch (error) {
+            console.warn('[TerminalManager] Error disposing old terminal:', error);
+        }
+
+        this.loggingService?.debug(`Terminal icon refreshed for agent ${agentConfig.name}`);
+    }
+
+    /**
+     * Updates agent visual status and refreshes terminal icon color
+     */
+    updateAgentStatus(agentId: string, agentConfig: any, newStatus: string): void {
+        const terminal = this.terminals.get(agentId);
+        if (!terminal) {
+            console.warn(`[TerminalManager] No terminal found for agent ${agentId}`);
+            return;
+        }
+
+        console.log(`[TerminalManager] Updating agent ${agentConfig.name} status: ${newStatus}`);
+        
+        // Update the agent config with new visual status
+        agentConfig.visualStatus = newStatus.toUpperCase();
+        
+        // Get new icon and color
+        const { icon, color } = this.getAgentIconAndColor(agentConfig);
+        
+        // Get status emoji for terminal name
+        const statusEmoji = this.getStatusEmoji(newStatus);
+        
+        // Create replacement terminal with new color
+        const newTerminal = vscode.window.createTerminal({
+            name: `${statusEmoji} ${agentConfig.name}`,
+            iconPath: new vscode.ThemeIcon(icon, color),
+            shellPath: vscode.env.shell || '/bin/bash',
+            env: {
+                NOFX_AGENT_ID: agentId,
+                NOFX_AGENT_TYPE: agentConfig.type,
+                NOFX_AGENT_NAME: agentConfig.name,
+                NOFX_AGENT_STATUS: newStatus.toUpperCase()
+            }
+        });
+
+        // Replace the old terminal
+        this.terminals.set(agentId, newTerminal);
+        
+        // Dispose the old terminal
+        try {
+            terminal.dispose();
+        } catch (error) {
+            console.warn('[TerminalManager] Error disposing old terminal during status update:', error);
+        }
+
+        this.loggingService?.debug(`Terminal status updated for agent ${agentConfig.name}: ${newStatus}`);
+    }
+
+    private getStatusEmoji(status: string): string {
+        switch (status.toUpperCase()) {
+            case 'IDLE':
+            case 'ONLINE':
+                return '🟢'; // Green circle - ready
+            case 'WORKING':
+            case 'BUSY':
+                return '🔵'; // Blue circle - working
+            case 'WAITING':
+                return '🟡'; // Yellow circle - waiting
+            case 'ERROR':
+            case 'OFFLINE':
+                return '🔴'; // Red circle - error
+            default:
+                return '🤖'; // Default robot
+        }
+    }
+
+    /**
+     * Refreshes icons for all terminals that have exited (removes warning triangles)
+     */
+    refreshAllExitedTerminalIcons(): void {
+        const agentManager = require('../agents/AgentManager');
+        
+        for (const [agentId, terminal] of this.terminals.entries()) {
+            // Only refresh terminals that have exited (showing warning triangle)
+            if (terminal.exitStatus !== undefined) {
+                try {
+                    // Get agent config to determine proper icon
+                    const agent = agentManager?.getAgent?.(agentId);
+                    if (agent) {
+                        this.refreshTerminalIcon(agentId, agent);
+                    }
+                } catch (error) {
+                    console.warn(`[TerminalManager] Could not refresh icon for agent ${agentId}:`, error);
+                }
+            }
+        }
+    }
+
+    /**
+     * Enhances system prompt with status reporting capabilities
+     */
+    private enhancePromptWithStatusReporting(originalPrompt: string, agent: any): string {
+        const statusInstructions = ` Status commands: echo "NOFX_STATUS:WORKING" (start), echo "NOFX_STATUS:IDLE" (done), echo "NOFX_STATUS:WAITING" (questions), echo "NOFX_STATUS:ERROR" (errors).`;
+
+        const fullPrompt = originalPrompt + statusInstructions;
+        
+        // Ensure total prompt stays under command line limits (2500 chars max)
+        const maxPromptLength = 2500;
+        if (fullPrompt.length > maxPromptLength) {
+            console.log(`[TerminalManager] Truncating prompt from ${fullPrompt.length} to ${maxPromptLength} characters`);
+            let truncated = fullPrompt.substring(0, maxPromptLength - statusInstructions.length);
+            
+            // Ensure we don't cut off in the middle of a quote or leave unclosed quotes
+            // Find the last complete sentence or safe breaking point
+            const safeBreakPoints = ['. ', '.\n', '!\n', '?\n', '\n\n'];
+            let lastSafeBreak = -1;
+            
+            for (const breakPoint of safeBreakPoints) {
+                const pos = truncated.lastIndexOf(breakPoint);
+                if (pos > lastSafeBreak) {
+                    lastSafeBreak = pos + breakPoint.length;
+                }
+            }
+            
+            // If we found a safe break point, use it; otherwise just truncate cleanly
+            if (lastSafeBreak > maxPromptLength * 0.8) { // Only use if it's not too short
+                truncated = truncated.substring(0, lastSafeBreak);
+            }
+            
+            return truncated + statusInstructions;
+        }
+
+        return fullPrompt;
     }
 
     async initializeAgentTerminal(agent: any, workingDirectory?: string): Promise<void> {
@@ -281,7 +519,8 @@ export class TerminalManager implements ITerminalManager {
                 );
 
                 // Use ONLY the short systemPrompt to launch Claude (not the detailed one)
-                const simplePrompt = agent.template.systemPrompt;
+                // Enhanced with status reporting capabilities
+                const simplePrompt = this.enhancePromptWithStatusReporting(agent.template.systemPrompt, agent);
 
                 // Log the launch strategy
                 this.loggingService?.info(`Starting agent: ${agent.name} (${agent.type})`);

@@ -58,9 +58,9 @@ export class WorktreeService implements IWorktreeService {
         } else {
             this.loggingService?.warn('Git worktrees requested but not available in this repository');
             console.log(`[NofX Debug] Git worktrees NOT available for workspace: ${workspaceFolder.uri.fsPath}`);
-            this.notificationService.showWarning(
-                'Git worktrees are enabled but this is not a Git repository. Agents will use the main workspace.'
-            );
+            // Only show warning if we're actually trying to use worktrees but they're truly unavailable
+            // Skip the warning for now to avoid false positives - worktrees will just be disabled
+            this.loggingService?.debug('Worktrees unavailable - agents will use main workspace');
         }
     }
 

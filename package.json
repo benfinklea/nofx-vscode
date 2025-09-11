@@ -50,6 +50,12 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "nofx.createCustomAgent",
+        "title": "Create Custom Agent",
+        "category": "NofX",
+        "icon": "$(star)"
+      },
+      {
         "command": "nofx.dashboard",
         "title": "Open Dashboard",
         "category": "NofX",
@@ -78,6 +84,18 @@
         "title": "Export Sessions",
         "category": "NofX",
         "icon": "$(save)"
+      },
+      {
+        "command": "nofx.saveAgents",
+        "title": "Save Agent State",
+        "category": "NofX",
+        "icon": "$(save-as)"
+      },
+      {
+        "command": "nofx.refreshTerminalIcons",
+        "title": "Refresh Terminal Icons",
+        "category": "NofX",
+        "icon": "$(refresh)"
       },
       {
         "command": "nofx.startConductor",
@@ -126,6 +144,48 @@
         "title": "Clear All Agents",
         "category": "NofX",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "nofx.openConductorTerminal",
+        "title": "Open Conductor Terminal",
+        "category": "NofX",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "nofx.quickStartChat",
+        "title": "Quick Start Chat",
+        "category": "NofX",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "nofx.openConductorChat",
+        "title": "Open Conductor Chat",
+        "category": "NofX",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "nofx.openSimpleConductor",
+        "title": "Open Simple Conductor",
+        "category": "NofX",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "nofx.openConductorPanel",
+        "title": "Open Conductor Panel",
+        "category": "NofX",
+        "icon": "$(panel)"
+      },
+      {
+        "command": "nofx.startSmartTeam",
+        "title": "Start Smart Team",
+        "category": "NofX",
+        "icon": "$(organization)"
+      },
+      {
+        "command": "nofx.spawnSmartAgent",
+        "title": "Spawn Smart Agent",
+        "category": "NofX",
+        "icon": "$(sparkle)"
       }
     ],
     "menus": {
@@ -139,6 +199,16 @@
           "command": "nofx.createAgentFromNaturalLanguage",
           "when": "view == nofx.agents",
           "group": "navigation@2"
+        },
+        {
+          "command": "nofx.saveAgents",
+          "when": "view == nofx.agents",
+          "group": "navigation@3"
+        },
+        {
+          "command": "nofx.refreshTerminalIcons",
+          "when": "view == nofx.agents",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -247,6 +317,30 @@
           "type": "string",
           "default": "",
           "description": "Custom AI CLI path (when provider=custom)"
+        },
+        "nofx.claudeSkipPermissions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add --dangerously-skip-permissions flag to Claude commands"
+        },
+        "nofx.claudeInitializationDelay": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 60,
+          "description": "Delay in seconds before initializing Claude agent"
+        },
+        "nofx.agentSpawnDelay": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 500,
+          "maximum": 10000,
+          "description": "Delay in milliseconds between agent spawns"
+        },
+        "nofx.showAgentTerminalOnSpawn": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show agent terminal immediately when spawned"
         }
       }
     },

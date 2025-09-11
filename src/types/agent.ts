@@ -1,8 +1,8 @@
 // Re-export agent types from the agents module
 export { Agent, AgentStatus, AgentConfig } from '../agents/types';
 
-// Re-export AgentTemplate from AgentTemplateManager
-export { AgentTemplate } from '../agents/AgentTemplateManager';
+// Re-export AgentTemplate from NofxAgentFactory
+export { AgentTemplate } from '../agents/NofxAgentFactory';
 
 // Additional agent-related types for testing
 export interface AgentCapabilities {

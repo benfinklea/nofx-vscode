@@ -466,8 +466,23 @@ export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader 
 
         this.loggingService?.info(`AgentManager initialized. AI path: ${aiPath}`);
 
-        // TEMP: Disabled automatic agent restoration to prevent infinite loop
-        // await this.restoreAgentsFromPersistence();
+        // Log that we have agents available but don't auto-restore
+        const savedAgents = await this.persistence?.loadAgentState() || [];
+        if (savedAgents.length > 0) {
+            const maxAgents = Number(this.configService?.get('maxAgents')) || 3;
+            const recentAgents = savedAgents
+                .sort((a, b) => {
+                    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return timeB - timeA;
+                })
+                .slice(0, maxAgents);
+            
+            console.log(`[AgentManager] Found ${savedAgents.length} saved agents. ${recentAgents.length} most recent available for restoration.`);
+            // Don't auto-restore - let user decide via "Restore Previous Session" command
+        } else {
+            console.log('[AgentManager] No saved agents found.');
+        }
 
         // Only show setup dialog if explicitly requested (e.g., when starting conductor)
         if (showSetupDialog) {
@@ -515,6 +530,10 @@ export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader 
             return 0;
         }
 
+        // Get max agents from configuration
+        const maxAgents = Number(this.configService?.get('maxAgents')) || 3;
+        this.loggingService?.debug(`Max agents configured: ${maxAgents}`);
+
         const savedAgents = await this.persistence.loadAgentState();
         this.loggingService?.info(`Found ${savedAgents.length} saved agent(s)`);
 
@@ -525,36 +544,67 @@ export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader 
             return 0;
         }
 
-        // Ask user if they want to restore
+        // Sort by creation time (most recent first) and limit to maxAgents
+        const sortedAgents = savedAgents
+            .sort((a, b) => {
+                const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return timeB - timeA; // Most recent first
+            })
+            .slice(0, maxAgents); // Limit to maxAgents
+
+        this.loggingService?.info(
+            `Selected ${sortedAgents.length} most recent agents (limited by maxAgents: ${maxAgents})`
+        );
+
+        // Ask user if they want to restore the most recent team
         const restore = userRequested
             ? 'Yes, Restore'
             : await this.notificationService?.showInformation(
-                  `Found ${savedAgents.length} saved agent(s). Restore them?`,
-                  'Yes, Restore',
+                  `Restore most recent team? (${sortedAgents.length} agents from ${savedAgents.length} total saved)`,
+                  'Yes, Restore Recent',
                   'No, Start Fresh'
               );
 
-        if (restore === 'Yes, Restore' || userRequested) {
-            // Import template manager to load actual templates
-            const { AgentTemplateManager } = await import('../agents/AgentTemplateManager');
+        if (restore === 'Yes, Restore Recent' || restore === 'Yes, Restore' || userRequested) {
+            // Use unified NofxAgentFactory instead of AgentTemplateManager
+            const { NofxAgentFactory } = await import('../agents/NofxAgentFactory');
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            const templateManager = workspaceFolder ? new AgentTemplateManager(workspaceFolder.uri.fsPath) : null;
+            const agentFactory = workspaceFolder ? NofxAgentFactory.getInstance(workspaceFolder.uri.fsPath) : null;
 
             let restoredCount = 0;
-            for (const savedAgent of savedAgents) {
+            for (const savedAgent of sortedAgents) {
                 try {
-                    // Load the actual template if it's just a string ID
+                    // Load the actual template using unified factory
                     let template = savedAgent.template;
-                    if (typeof savedAgent.template === 'string' && templateManager) {
+                    
+                    if (typeof savedAgent.template === 'string' && agentFactory) {
                         this.loggingService?.debug(
-                            `Loading template ${savedAgent.template} for agent ${savedAgent.name}`
+                            `Loading template ${savedAgent.template} for agent ${savedAgent.name} using NofxAgentFactory`
                         );
-                        template = await templateManager.getTemplate(savedAgent.template);
-                        if (!template) {
-                            this.loggingService?.warn(
-                                `Template ${savedAgent.template} not found, using ID as fallback`
-                            );
-                            template = savedAgent.template;
+                        
+                        // Try to create using core agent types first
+                        const coreType = agentFactory.getCoreAgentType(savedAgent.template);
+                        if (coreType) {
+                            // Use core agent type
+                            template = agentFactory.createAgent({
+                                coreType: savedAgent.template,
+                                customName: savedAgent.name
+                            });
+                            this.loggingService?.debug(`Created template using core type: ${savedAgent.template}`);
+                        } else {
+                            // Fall back to legacy templates
+                            const legacyTemplates = await agentFactory.loadLegacyTemplates();
+                            const legacyTemplate = legacyTemplates.find(t => t.id === savedAgent.template);
+                            if (legacyTemplate) {
+                                template = legacyTemplate;
+                                this.loggingService?.debug(`Found legacy template: ${savedAgent.template}`);
+                            } else {
+                                this.loggingService?.warn(
+                                    `Template ${savedAgent.template} not found in core types or legacy templates, using ID as fallback`
+                                );
+                                template = savedAgent.template;
+                            }
                         }
                     }
 
@@ -564,21 +614,41 @@ export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader 
                         type: savedAgent.type,
                         template: template
                     };
+                    
+                    console.log(`[AgentManager] Restoring agent: ${savedAgent.name} (${savedAgent.type})`);
+                    console.log(`[AgentManager] Agent template contains system prompt: ${!!template?.systemPrompt}`);
+                    if (template?.systemPrompt) {
+                        console.log(`[AgentManager] System prompt preview: ${template.systemPrompt.substring(0, 150)}...`);
+                    }
+
+                    // Check if we've hit the max agents limit
+                    if (this.agents.size >= maxAgents) {
+                        this.loggingService?.warn(`Reached max agents limit (${maxAgents}), stopping restoration`);
+                        break;
+                    }
 
                     const agent = await this.spawnAgent(config, savedAgent.id);
 
                     // Restore state
                     agent.status = savedAgent.status === 'working' ? 'idle' : savedAgent.status; // Reset working to idle
                     agent.tasksCompleted = savedAgent.tasksCompleted || 0;
+                    
+                    console.log(`[AgentManager] Agent ${savedAgent.name} restored with status: ${agent.status}`);
 
                     // Restore session context if available
                     const sessionContext = await this.persistence.getAgentContextSummary(savedAgent.id);
                     if (sessionContext) {
+                        console.log(`[AgentManager] Loading session context for ${savedAgent.name}`);
                         const terminal = this.terminalManager?.getTerminal(agent.id);
                         if (terminal) {
                             terminal.sendText('# Restored from previous session');
                             terminal.sendText(`# ${sessionContext.split('\n').slice(0, 5).join('\n# ')}`);
+                            console.log(`[AgentManager] Session context sent to terminal for ${savedAgent.name}`);
+                        } else {
+                            console.log(`[AgentManager] No terminal found for ${savedAgent.name} to send session context`);
                         }
+                    } else {
+                        console.log(`[AgentManager] No session context found for ${savedAgent.name}`);
                     }
 
                     restoredCount++;
@@ -603,6 +673,110 @@ export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader 
     async spawnAgent(config: AgentConfig, restoredId?: string): Promise<Agent> {
         this.loggingService?.agents(`AgentManager: Spawning agent '${config.name}' (type: ${config.type})`);
         this.loggingService?.trace('AgentManager: Agent config:', config);
+
+        // USE UNIFIED NOFX AGENT FACTORY
+        const { NofxAgentFactory } = await import('./NofxAgentFactory');
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        const agentFactory = workspaceFolder ? NofxAgentFactory.getInstance(workspaceFolder.uri.fsPath) : NofxAgentFactory.getInstance();
+
+        // Convert config type to core agent type
+        let coreType = config.type;
+        if (config.type === 'frontend-specialist') coreType = 'frontend';
+        else if (config.type === 'backend-specialist') coreType = 'backend';
+        else if (config.type === 'fullstack-developer') coreType = 'fullstack';
+        else if (config.type === 'testing-specialist') coreType = 'testing';
+        else if (config.type === 'devops-engineer') coreType = 'devops';
+
+        // Create agent template using unified factory
+        const template = agentFactory.createAgent({
+            coreType,
+            customName: config.name,
+            projectContext: await this.analyzeProjectContext(),
+            customInstructions: config.customInstructions || "Part of NofX.dev team - await instructions."
+        });
+
+        // Convert template to AgentConfig and spawn using legacy method (but with new template)
+        const legacyConfig: AgentConfig = {
+            name: config.name,
+            type: config.type,
+            template: template,
+            autoStart: config.autoStart,
+            context: config.context,
+            customInstructions: config.customInstructions
+        };
+
+        return this.spawnAgentLegacy(legacyConfig, restoredId);
+    }
+
+    /**
+     * Analyze current project to provide context for dynamic prompts
+     */
+    private async analyzeProjectContext(): Promise<string> {
+        try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                return "No workspace detected";
+            }
+
+            let context = `Project: ${workspaceFolder.name}`;
+            
+            // Read package.json to detect frameworks and project type
+            try {
+                const packageJsonPath = vscode.Uri.joinPath(workspaceFolder.uri, 'package.json');
+                const packageJsonData = await vscode.workspace.fs.readFile(packageJsonPath);
+                const packageJson = JSON.parse(packageJsonData.toString());
+                
+                // Detect project type from dependencies
+                const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+                const frameworks = [];
+                
+                if (deps.react || deps['@types/react']) frameworks.push('React');
+                if (deps.vue || deps['@vue/core']) frameworks.push('Vue');
+                if (deps.angular || deps['@angular/core']) frameworks.push('Angular');
+                if (deps.express) frameworks.push('Express');
+                if (deps.next || deps['next']) frameworks.push('Next.js');
+                if (deps.typescript || deps['@types/node']) frameworks.push('TypeScript');
+                if (deps.jest || deps.mocha) frameworks.push('Testing');
+                if (deps.vscode || packageJson.engines?.vscode) frameworks.push('VS Code Extension');
+                if (deps.electron) frameworks.push('Electron');
+                
+                if (frameworks.length > 0) {
+                    context += ` | Tech Stack: ${frameworks.join(', ')}`;
+                }
+                
+                if (packageJson.description) {
+                    context += ` | Description: ${packageJson.description.substring(0, 100)}`;
+                }
+            } catch (packageError) {
+                // package.json not found or invalid - not an error
+            }
+            
+            // Detect file structure patterns
+            try {
+                const files = await vscode.workspace.fs.readDirectory(workspaceFolder.uri);
+                const directories = files.filter(([_, type]) => type === vscode.FileType.Directory).map(([name]) => name);
+                
+                if (directories.includes('src')) context += ' | Has src/';
+                if (directories.includes('test') || directories.includes('tests')) context += ' | Has tests/';
+                if (directories.includes('docs')) context += ' | Has docs/';
+                if (directories.includes('scripts')) context += ' | Has scripts/';
+                if (directories.includes('public')) context += ' | Has public/';
+                if (directories.includes('dist') || directories.includes('build')) context += ' | Has build output/';
+            } catch (fsError) {
+                // File system access error - continue without structure info
+            }
+            
+            return context;
+        } catch (error) {
+            return "Unable to analyze project context";
+        }
+    }
+
+    /**
+     * LEGACY METHOD - kept for backward compatibility but redirects to dynamic system
+     */
+    async spawnAgentLegacy(config: AgentConfig, restoredId?: string): Promise<Agent> {
+        this.loggingService?.agents(`AgentManager: Spawning LEGACY agent '${config.name}' (type: ${config.type})`);
 
         // Log to orchestration logger
         this.orchestrationLogger?.agentSpawned(config.name, config.type, restoredId || 'pending');
@@ -698,6 +872,9 @@ export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader 
 
             // Save agent state after adding
             await this.saveAgentState();
+            
+            // 🟢 Set initial visual status to IDLE (Green icon)
+            this.setAgentIdle(agent.id);
 
             this.loggingService?.info(`Agent ${config.name} ready. Total agents: ${this.agents.size}`);
             this.loggingService?.debug(
@@ -731,18 +908,17 @@ export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader 
 
         // AgentLifecycleManager is optional now (merged into AgentManager)
 
-        // Import template manager to create dynamic template
-        const { AgentTemplateManager } = await import('./AgentTemplateManager');
+        // Use unified NofX Agent Factory for template creation
+        const { NofxAgentFactory } = await import('./NofxAgentFactory');
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        const agentFactory = workspaceFolder ? NofxAgentFactory.getInstance(workspaceFolder.uri.fsPath) : NofxAgentFactory.getInstance();
 
-        if (!workspaceFolder) {
-            throw new Error('No workspace folder available for smart agent creation');
-        }
-
-        const templateManager = new AgentTemplateManager(workspaceFolder.uri.fsPath);
-
-        // Create dynamic template using SmartTemplateFactory
-        const smartTemplate = templateManager.createDynamicTemplate(config.smartConfig as any);
+        // Create dynamic template using NofxAgentFactory
+        const smartTemplate = agentFactory.createAgent({
+            coreType: 'fullstack', // Default to fullstack
+            customName: config.name,
+            customInstructions: config.smartConfig?.toString() || 'Smart agent'
+        });
 
         // Convert SmartAgentSpawnConfig to AgentConfig
         const agentConfig: AgentConfig = {
@@ -852,6 +1028,9 @@ export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader 
                     // Update agent status
                     agent.status = 'working';
                     agent.currentTask = task;
+                    
+                    // 🔵 Set visual status to WORKING (Blue icon)
+                    this.setAgentWorking(agentId);
 
                     // Add task start time for health monitoring
                     (task as any).startTime = Date.now();
@@ -1022,6 +1201,9 @@ export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader 
         agent.status = 'idle';
         agent.currentTask = null;
         agent.tasksCompleted++;
+        
+        // 🟢 Set visual status to IDLE (Green icon)
+        this.setAgentIdle(agentId);
 
         // Stop task monitoring for inactivity alerts
         if (this.agentLifecycleManager) {
@@ -1284,14 +1466,20 @@ export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader 
         }));
     }
 
-    private async saveAgentState() {
-        if (!this.persistence) return;
+    public async saveAgentState() {
+        if (!this.persistence) {
+            console.log('[AgentManager] No persistence available - agents will not be saved');
+            return;
+        }
 
         try {
             const agents = Array.from(this.agents.values());
+            console.log(`[AgentManager] Saving state for ${agents.length} agents to persistence`);
             await this.persistence.saveAgentState(agents);
+            console.log(`[AgentManager] Successfully saved ${agents.length} agents to .nofx/agents.json`);
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[AgentManager] Failed to save agent state:', error);
             this.errorHandler?.handleError(err, 'saveAgentState');
         }
     }
@@ -1305,6 +1493,70 @@ export class AgentManager implements IAgentLifecycle, IAgentQuery, IAgentReader 
             const err = error instanceof Error ? error : new Error(String(error));
             this.errorHandler?.handleError(err, 'saveAgentSession');
         }
+    }
+
+    /**
+     * Updates agent visual status and triggers terminal icon update
+     */
+    public updateAgentVisualStatus(agentId: string, newStatus: 'IDLE' | 'WORKING' | 'WAITING' | 'ERROR'): void {
+        const agent = this.agents.get(agentId);
+        if (!agent) {
+            console.warn(`[AgentManager] Agent ${agentId} not found for status update`);
+            return;
+        }
+
+        console.log(`[AgentManager] Updating ${agent.name} visual status: ${newStatus}`);
+        
+        // Update agent's visual status
+        agent.visualStatus = newStatus;
+        
+        // Update terminal icon color through TerminalManager
+        if (this.terminalManager && typeof this.terminalManager.updateAgentStatus === 'function') {
+            this.terminalManager.updateAgentStatus(agentId, agent, newStatus);
+        }
+
+        // Fire agent update event
+        this._onAgentUpdate.fire();
+        
+        // Save state
+        this.saveAgentState();
+    }
+
+    /**
+     * Sets agent to WORKING status when task starts
+     */
+    public setAgentWorking(agentId: string): void {
+        this.updateAgentVisualStatus(agentId, 'WORKING');
+    }
+
+    /**
+     * Sets agent to IDLE status when task completes
+     */
+    public setAgentIdle(agentId: string): void {
+        this.updateAgentVisualStatus(agentId, 'IDLE');
+    }
+
+    /**
+     * Sets agent to WAITING status when needing user input
+     */
+    public setAgentWaiting(agentId: string): void {
+        this.updateAgentVisualStatus(agentId, 'WAITING');
+    }
+
+    /**
+     * Sets agent to ERROR status when something goes wrong
+     */
+    public setAgentError(agentId: string): void {
+        this.updateAgentVisualStatus(agentId, 'ERROR');
+    }
+
+    /**
+     * Batch update multiple agent statuses
+     */
+    public updateMultipleAgentStatuses(updates: Array<{agentId: string, status: 'IDLE' | 'WORKING' | 'WAITING' | 'ERROR'}>): void {
+        updates.forEach(update => {
+            this.updateAgentVisualStatus(update.agentId, update.status);
+        });
     }
 
     // Health monitoring public methods - delegated to MonitoringService
